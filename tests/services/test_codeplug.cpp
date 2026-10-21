@@ -85,16 +85,18 @@ TEST_CASE("plus offset, simplex, digital, custom tone and bad records")
     CHECK_FALSE(dmm::services::decodeChannel(r).has_value());
 }
 
-TEST_CASE("settings: squelch, zones, timeout and the key lock")
+TEST_CASE("settings: squelch, zones, timeout, key lock, battery save and backlight")
 {
     std::vector<std::uint8_t> b(0x100, 0);
     b[0x02] = 1; // auto key lock
     b[0x04] = 4; // 120 s
     b[0x09] = 2;
     b[0x0A] = 9; // out of range: default
+    b[0x0B] = 2; // battery save, short sleep
     b[0x15] = 1; // side A in VFO
     b[0x1F] = 3;
     b[0x20] = 7;
+    b[0x27] = 7; // backlight 1 min
     b[0x2C] = 1;
     b[0x37] = 2;    // menu exit 15 s
     b[0xBE] = 0x0B; // knob, keypad, side
@@ -112,9 +114,15 @@ TEST_CASE("settings: squelch, zones, timeout and the key lock")
     CHECK(s.keyLock.side);
     CHECK_FALSE(s.keyLock.forced);
     CHECK(s.keyLock.autoLockMs == 15'000);
+    CHECK(s.batterySave == 2);
+    CHECK(s.backlightS == 60);
     b[0x02] = 0;
+    b[0x0B] = 7;  // out of range: on
+    b[0x27] = 99; // out of range: always on
     b[0xBE] = 0x10;
     const auto t = dmm::services::decodeSettings(b);
+    CHECK(t.batterySave == 1);
+    CHECK(t.backlightS == 0);
     CHECK(t.keyLock.autoLockMs == 0);
     CHECK(t.keyLock.forced);
     CHECK_FALSE(t.keyLock.keypad);

@@ -4,6 +4,7 @@
 #include "dmm/services/codeplug.h"
 
 #include <algorithm>
+#include <iterator>
 
 namespace dmm::services {
 
@@ -138,6 +139,9 @@ CodeplugSettings decodeSettings(std::span<const std::uint8_t> b)
     // Auto key lock follows the menu exit time: 5 s steps from 5 s.
     const unsigned exitSteps = b[0x37] > 11 ? 11 : b[0x37];
     s.keyLock.autoLockMs = b[0x02] != 0 ? (exitSteps + 1) * 5000 : 0;
+    s.batterySave = b[0x0B] <= 2 ? b[0x0B] : 1;
+    constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
+    s.backlightS = b[0x27] < std::size(BacklightTimes) ? BacklightTimes[b[0x27]] : 0;
     return s;
 }
 
