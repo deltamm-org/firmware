@@ -49,6 +49,7 @@ in `ARM_GNU_TOOLCHAIN`.
 - Personal data: names other than in copyright notices, callsigns, DMR
   IDs, locations, channel or zone names and frequencies from a real
   codeplug, calibration values, backup dumps, serial numbers, keys.
+  Callsigns may appear only in `CREDITS.md`.
 - Files under a copyleft licence.
 
 ## Comment style

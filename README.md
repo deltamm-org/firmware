@@ -142,8 +142,9 @@ for the console commands.
 | `tests/` | Host unit tests |
 | `docs/hw-tests/` | One hardware checklist per release |
 
-`ARCHITECTURE.md` describes how the parts fit together, and `AGENTS.md`
-lists the coding and commit rules.
+`ARCHITECTURE.md` describes how the parts fit together, `AGENTS.md`
+lists the coding and commit rules, and `CREDITS.md` thanks the people who
+helped.
 
 ## Disclaimer
 
