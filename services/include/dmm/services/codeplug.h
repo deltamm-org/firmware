@@ -101,7 +101,8 @@ public:
     virtual bool zoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name) = 0;
     /// The zone's channel indices in order; returns how many.
     virtual std::size_t zoneChannels(std::uint8_t zone, std::span<std::uint16_t> out) = 0;
-    /// The channel last selected in @p zone on side A or B, or NoChannel.
+    /// The position in @p zone's channel list last selected on side A or
+    /// B, or NoChannel.
     virtual std::uint16_t zoneSelection(std::uint8_t zone, bool sideB) = 0;
 
 protected:

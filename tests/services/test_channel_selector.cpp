@@ -87,7 +87,7 @@ FakeCodeplug sample()
     cp.zones[3] = {20};
     cp.names[0] = "Local";
     cp.names[3] = "Far";
-    cp.selectionA[0] = 11;
+    cp.selectionA[0] = 1;
     return cp;
 }
 
@@ -108,6 +108,22 @@ TEST_CASE("starts on the main side's zone and its last channel")
     CHECK(name(sel) == "RPT");
     CHECK(sel.position() == 2);
     CHECK(sel.zoneSize() == 3);
+}
+
+TEST_CASE("the last selection is a position in the zone's list")
+{
+    FakeCodeplug cp = sample();
+    cp.zones[0] = {12, 0, 10, 11};
+    cp.addChannel(0, 145'000'000, "ZERO");
+    cp.selectionA[0] = 0;
+    ChannelSelector sel(cp);
+    REQUIRE(sel.load());
+    CHECK(name(sel) == "UHF");
+
+    cp.selectionA[0] = 9;
+    ChannelSelector beyond(cp);
+    REQUIRE(beyond.load());
+    CHECK(name(beyond) == "UHF");
 }
 
 TEST_CASE("channels step and wrap within the zone, skipping unreadable ones")

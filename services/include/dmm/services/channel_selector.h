@@ -61,7 +61,7 @@ public:
     bool memoryMode();
 
 private:
-    bool loadZone(std::uint8_t zone, std::uint16_t prefer);
+    bool loadZone(std::uint8_t zone, std::uint16_t position);
     bool loadChannel();
 
     CodeplugSource &m_codeplug;

@@ -20,7 +20,7 @@ bool ChannelSelector::load()
     return zoneOk;
 }
 
-bool ChannelSelector::loadZone(std::uint8_t zone, std::uint16_t prefer)
+bool ChannelSelector::loadZone(std::uint8_t zone, std::uint16_t position)
 {
     if (!m_codeplug.zoneInUse(zone)) {
         return false;
@@ -32,12 +32,7 @@ bool ChannelSelector::loadZone(std::uint8_t zone, std::uint16_t prefer)
     m_zone = zone;
     m_count = n;
     m_codeplug.zoneName(zone, std::span<char, NameBytes>(m_zoneName));
-    m_position = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        if (m_channels[i] == prefer) {
-            m_position = i;
-        }
-    }
+    m_position = position < n ? position : 0;
     if (!m_vfo) {
         return loadChannel() || step(1);
     }
