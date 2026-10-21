@@ -13,6 +13,7 @@
 #include "dmm/services/codeplug.h"
 #include "dmm/services/input.h"
 #include "dmm/services/log.h"
+#include "dmm/services/power.h"
 #include "dmm/version.h"
 
 #include <iterator>
@@ -329,6 +330,8 @@ enum class MenuItem : std::uint8_t
     Squelch,
     Power,
     Backlight,
+    BacklightTime,
+    BatterySave,
     KeyLock,
     AutoLock,
     Count,
@@ -342,6 +345,7 @@ enum class MenuGroup : std::uint8_t
     Channel,
     Display,
     Keys,
+    Battery,
     Count,
 };
 struct GroupInfo
@@ -352,8 +356,9 @@ struct GroupInfo
 };
 constexpr GroupInfo Groups[] = {
     {"Channel", {MenuItem::Squelch, MenuItem::Power}, 2},
-    {"Display", {MenuItem::Backlight}, 1},
+    {"Display", {MenuItem::Backlight, MenuItem::BacklightTime}, 2},
     {"Keys", {MenuItem::KeyLock, MenuItem::AutoLock}, 2},
+    {"Battery", {MenuItem::BatterySave}, 1},
 };
 static_assert(std::size(Groups) == static_cast<std::size_t>(MenuGroup::Count));
 MenuGroup menuGroup = MenuGroup::Channel;
@@ -363,6 +368,12 @@ bool menuAtGroups = true;
 // returns there.
 bool menuQuick = false;
 int backlightLevel = DefaultBacklight;
+// Backlight time choices, as the codeplug numbers them.
+constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
+std::uint16_t backlightS = 0; // 0 = always on
+bool backlightLit = true;
+os::Ticks lastLightUse = 0;
+std::uint8_t batterySave = 0;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
@@ -471,6 +482,39 @@ void showLog(Display &d)
     logView.draw(d, HeaderFont.height, true);
 }
 
+lib::StaticString<12> durationText(std::uint16_t seconds)
+{
+    lib::StaticString<12> text;
+    if (seconds == 0) {
+        text << "Always";
+    } else if (seconds >= 3600) {
+        text << seconds / 3600 << " h";
+    } else if (seconds >= 60) {
+        text << seconds / 60 << " min";
+    } else {
+        text << seconds << " s";
+    }
+    return text;
+}
+
+const char *batterySaveText(std::uint8_t mode)
+{
+    constexpr const char *Texts[] = {"Off", "On", "Fast wake"};
+    return Texts[mode <= 2 ? mode : 1];
+}
+
+// A key, the knob, a signal or a transmission: the backlight comes on and
+// stays on for its time.
+void useLight(Display &d)
+{
+    lastLightUse = os::nowMs();
+    if (!backlightLit) {
+        backlightLit = true;
+        d.setBacklight(backlightLevel);
+        services::power::hold(services::power::AwakeReason::Display);
+    }
+}
+
 void uiMain(void *)
 {
     Display &d = *display;
@@ -478,6 +522,8 @@ void uiMain(void *)
     logView.configure(d.width() / LogFont.width, (d.height() - HeaderFont.height) / LogFont.height);
     drawStartScreen(d);
     d.setBacklight(DefaultBacklight);
+    services::power::hold(services::power::AwakeReason::Display);
+    lastLightUse = os::nowMs();
     log::info("ui") << "display " << d.width() << " x " << d.height();
 
     // The codeplug: settings, and the channel the radio starts on.
@@ -488,6 +534,8 @@ void uiMain(void *)
         if (selector.current()) {
             channels = &selector;
             keyLock.setSettings(selector.settings().keyLock);
+            backlightS = selector.settings().backlightS;
+            batterySave = selector.settings().batterySave;
             log::info("ui") << "codeplug: zone " << selector.zone() << " \"" << selector.zoneName() << "\", "
                             << selector.zoneSize() << " channels" << (selector.vfoMode() ? ", VFO" : "");
             logLockSettings();
@@ -595,6 +643,14 @@ void uiMain(void *)
             label = "Backlight";
             value << backlightLevel;
             break;
+        case MenuItem::BacklightTime:
+            label = "Light time";
+            value << durationText(backlightS).view();
+            break;
+        case MenuItem::BatterySave:
+            label = "Battery save";
+            value << batterySaveText(batterySave);
+            break;
         case MenuItem::KeyLock:
             label = "Lock covers";
             value << (k.knob ? "All" : k.keypad && k.side ? "Keys"
@@ -674,6 +730,22 @@ void uiMain(void *)
             }
             menuValue.select(static_cast<std::uint8_t>(backlightLevel));
             break;
+        case MenuItem::BacklightTime:
+            menuValue.open("Light time");
+            for (std::uint8_t i = 0; i < std::size(BacklightTimes); ++i) {
+                menuValue.add(i, durationText(BacklightTimes[i]).view());
+                if (BacklightTimes[i] == backlightS) {
+                    menuValue.select(i);
+                }
+            }
+            break;
+        case MenuItem::BatterySave:
+            menuValue.open("Battery save");
+            menuValue.add(0, "Off");
+            menuValue.add(1, "On", "150 ms sleep");
+            menuValue.add(2, "Fast wake", "70 ms sleep");
+            menuValue.select(batterySave);
+            break;
         case MenuItem::KeyLock:
             menuValue.open("Lock covers");
             menuValue.add(0, "All", "keys, PTT, knob");
@@ -742,6 +814,14 @@ void uiMain(void *)
         case MenuItem::Backlight:
             backlightLevel = v;
             d.setBacklight(v);
+            break;
+        case MenuItem::BacklightTime:
+            backlightS = BacklightTimes[v < std::size(BacklightTimes) ? v : 0];
+            log::info("ui") << "light time " << durationText(backlightS).view();
+            break;
+        case MenuItem::BatterySave:
+            batterySave = v;
+            radio::post(radio::BatterySave{v});
             break;
         case MenuItem::KeyLock: {
             services::KeyLockSettings s = keyLock.settings();
@@ -899,7 +979,15 @@ void uiMain(void *)
                            [&](const Backlight &b) {
                                backlightLevel = b.level;
                                d.setBacklight(b.level);
+                               backlightLit = true;
+                               lastLightUse = os::nowMs();
+                               services::power::hold(services::power::AwakeReason::Display);
                                log::info("ui") << "backlight " << b.level;
+                           },
+                           [&](const BacklightTime &t) {
+                               backlightS = t.seconds;
+                               useLight(d);
+                               log::info("ui") << "light time " << durationText(backlightS).view();
                            },
                            [&](const ShowTestPattern &) {
                                drawTestPattern(d);
@@ -912,6 +1000,7 @@ void uiMain(void *)
                            [&](const Keys &k) { keyTest.setKeys(d, k.mask, view == View::KeyTest); },
                            [&](const KeyEvent &e) {
                                using Type = KeyDebouncer::EventType;
+                               useLight(d);
                                if (e.key == Key::Ptt) {
                                    // Press and release only; a refused press never keys
                                    // the radio, a release always reaches it.
@@ -949,6 +1038,7 @@ void uiMain(void *)
                            },
                            [&](const Transmitting &t) {
                                transmitting = t.on;
+                               useLight(d);
                                if (view == View::Log) {
                                    drawHeader(d);
                                }
@@ -956,6 +1046,7 @@ void uiMain(void *)
                            },
                            [&](const Receiving &r) {
                                receiving = r.on;
+                               useLight(d);
                                refreshLockMark();
                            },
                            [&](const ShowStandby &) {
@@ -976,6 +1067,7 @@ void uiMain(void *)
                            },
                            [&](const KeyLockReport &) { logLockSettings(); },
                            [&](const EncoderClicks &c) {
+                               useLight(d);
                                const Verdict v = keyLock.knob(lockContext());
                                if (v != Verdict::Pass) {
                                    onLockVerdict(v);
@@ -1015,6 +1107,9 @@ void uiMain(void *)
                                audio::post(audio::VolumeKnob{v.permille});
                                const int step = services::volumeStep(v.permille);
                                const bool changed = step != volumeLevel;
+                               if (changed && volumeLevel >= 0) {
+                                   useLight(d);
+                               }
                                volumeLevel = step;
                                if (changed && view == View::Standby) {
                                    standby.drawStatus(d, standbyState());
@@ -1051,7 +1146,16 @@ void uiMain(void *)
         }
         if (view == View::Start && static_cast<std::int32_t>(os::nowMs() - startUntil) >= 0) {
             show(channels != nullptr ? View::Standby : View::KeyTest);
+            radio::post(radio::BatterySave{batterySave});
             useChannel();
+        }
+        // The backlight goes off after its time, never during a signal or
+        // a transmission.
+        if (backlightLit && backlightS != 0 && !transmitting && !receiving && view != View::Message &&
+            os::nowMs() - lastLightUse >= static_cast<os::Ticks>(backlightS) * 1000) {
+            backlightLit = false;
+            d.setBacklight(0);
+            services::power::release(services::power::AwakeReason::Display);
         }
         if (view == View::Log) {
             const os::Ticks second = os::nowMs() / 1000;

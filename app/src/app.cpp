@@ -307,7 +307,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, codec <page> <reg> <value> (hex), bbx <type> <bytes> (hex), fm <reg> [value] (hex), "
-                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm sweep, fm tune <0-4095>|auto, fm tx <kHz>|off, fm ctcss <0.1 Hz>|off, fm power low|mid|high|turbo, fm tot <s>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2]";
+                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm sweep, fm tune <0-4095>|auto, fm tx <kHz>|off, fm ctcss <0.1 Hz>|off, fm power low|mid|high|turbo, fm tot <s>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
     } else if (command == "fault") {
         log::info("console") << "crashing on purpose";
         flushLog();
@@ -332,6 +332,8 @@ void runCommand(std::string_view command)
         } else {
             log::info("console") << "auto power-off after " << minutes << " min without a key or knob";
         }
+    } else if (const int seconds = numberAfter(command, "light time "); seconds >= 0 && seconds <= 3600) {
+        ui::post(ui::BacklightTime{static_cast<std::uint16_t>(seconds)});
     } else if (const int level = numberAfter(command, "light "); level >= 0 && level <= 5) {
         if (!ui::post(ui::Backlight{static_cast<std::uint8_t>(level)})) {
             log::info("console") << "no display";

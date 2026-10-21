@@ -17,6 +17,11 @@ struct Backlight
 {
     std::uint8_t level; // 0..5
 };
+/// How long the backlight stays on after the last key; 0 = always on.
+struct BacklightTime
+{
+    std::uint16_t seconds;
+};
 struct ShowTestPattern
 {
 };
@@ -96,7 +101,7 @@ struct SwitchingOff
 {
 };
 
-using Message = std::variant<Backlight, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
+using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
     EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, ShowStandby, SetKeyLock, KeyLockSettings, KeyLockReport>;
 
 /// Starts the ui task, which owns @p display.
