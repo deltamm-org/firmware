@@ -36,6 +36,9 @@ public:
     void endTransmit() override;
     std::uint16_t transmitPower() const override { return m_power; }
     void idle() override;
+    void sleepReceiver() override;
+    void wakeReceiver() override;
+    bool receiverAsleep() const override { return m_asleep; }
     bool receiving() const override { return m_chip.mode() == drivers::radio::Rda1846::Mode::Receive; }
     bool transmitting() const override { return m_chip.mode() == drivers::radio::Rda1846::Mode::Transmit; }
     FmReceiveStatus status() override;
@@ -50,6 +53,7 @@ public:
 
 private:
     void setPin(unsigned pin, bool high);
+    unsigned frontEnd() const;
 
     drivers::radio::Rda1846 &m_chip;
     RfHardware &m_rf;
@@ -57,6 +61,8 @@ private:
     void (*m_sleepMs)(unsigned);
     std::uint16_t m_power = 0;
     bool m_wide = false;
+    std::uint32_t m_receiveHz = 0;
+    bool m_asleep = false;
 };
 
 } // namespace dmm::services

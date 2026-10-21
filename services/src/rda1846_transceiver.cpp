@@ -80,7 +80,8 @@ const char *Rda1846Transceiver::receive(const FmChannel &channel, int squelchLev
     const int noiseOpen = squelchOpenNoiseDb(channel.wide, squelchLevel);
     m_chip.setNoiseSquelch(noiseOpen, noiseOpen - SquelchHysteresisDb);
     m_chip.setMode(Chip::Mode::Receive);
-    setPin(hz > m_pins.splitHz ? m_pins.receiveHighBand : m_pins.receiveLowBand, true);
+    m_receiveHz = hz;
+    setPin(frontEnd(), true);
     return nullptr;
 }
 
@@ -140,6 +141,32 @@ void Rda1846Transceiver::idle()
     m_rf.setPowerControl(0);
     m_power = 0;
     m_chip.setMode(Chip::Mode::Idle);
+    m_asleep = false;
+}
+
+void Rda1846Transceiver::sleepReceiver()
+{
+    if (!receiving()) {
+        return;
+    }
+    setPin(frontEnd(), false);
+    m_chip.setMode(Chip::Mode::Idle);
+    m_asleep = true;
+}
+
+void Rda1846Transceiver::wakeReceiver()
+{
+    if (!m_asleep) {
+        return;
+    }
+    m_chip.setMode(Chip::Mode::Receive);
+    setPin(frontEnd(), true);
+    m_asleep = false;
+}
+
+unsigned Rda1846Transceiver::frontEnd() const
+{
+    return m_receiveHz > m_pins.splitHz ? m_pins.receiveHighBand : m_pins.receiveLowBand;
 }
 
 FmReceiveStatus Rda1846Transceiver::status()

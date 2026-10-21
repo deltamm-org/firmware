@@ -187,6 +187,44 @@ TEST_CASE("receive applies trim, tuning and squelch, then opens one front end")
     CHECK(bus.registers[0x30] == 0x4006);
 }
 
+TEST_CASE("a sleeping receiver keeps its tuning and wakes on the same front end")
+{
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    Rda1846 chip(bus);
+    FakeRf rf;
+    Rda1846Transceiver fm(chip, rf, BoardPins, noSleep);
+    REQUIRE(fm.start());
+    const StockCalibration cal = calibration();
+
+    fm.sleepReceiver(); // not receiving: nothing to do
+    CHECK_FALSE(fm.receiverAsleep());
+
+    REQUIRE(fm.receive(FmChannel{145'500'000, 0, true}, 1, cal) == nullptr);
+    const std::uint16_t frequencyHigh = bus.registers[0x29];
+    const std::uint16_t frequencyLow = bus.registers[0x2A];
+    fm.sleepReceiver();
+    CHECK(fm.receiverAsleep());
+    CHECK_FALSE(fm.receiving());
+    CHECK(bus.registers[0x30] == 0x7006);
+    CHECK(gpioField(bus.registers[0x1F], 4) == 2); // VHF front end off
+    CHECK(gpioField(bus.registers[0x1F], 0) == 2);
+
+    fm.wakeReceiver();
+    CHECK_FALSE(fm.receiverAsleep());
+    CHECK(fm.receiving());
+    CHECK(bus.registers[0x30] == 0x7026);
+    CHECK(gpioField(bus.registers[0x1F], 4) == 3);
+    CHECK(bus.registers[0x29] == frequencyHigh);
+    CHECK(bus.registers[0x2A] == frequencyLow);
+
+    fm.sleepReceiver();
+    fm.idle();
+    CHECK_FALSE(fm.receiverAsleep());
+    fm.wakeReceiver(); // idle wins
+    CHECK_FALSE(fm.receiving());
+}
+
 TEST_CASE("receive refuses frequencies the calibration does not cover")
 {
     FakeBus bus;

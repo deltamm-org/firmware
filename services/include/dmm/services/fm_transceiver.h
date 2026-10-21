@@ -55,6 +55,14 @@ public:
 
     /// Stops receiving or transmitting; the chip stays powered.
     virtual void idle() = 0;
+    /// Battery save: switches the receiver and its front end off while
+    /// receiving, keeping the tuning.
+    virtual void sleepReceiver() = 0;
+    /// Switches a sleeping receiver back on.
+    virtual void wakeReceiver() = 0;
+    /// True from sleepReceiver() until wakeReceiver(), receive(),
+    /// transmit() or idle().
+    virtual bool receiverAsleep() const = 0;
     virtual bool receiving() const = 0;
     virtual bool transmitting() const = 0;
     virtual FmReceiveStatus status() = 0;
