@@ -237,6 +237,10 @@ bool radioCommand(std::string_view command)
     } else if (numbersAfter(command, "lock auto ", 10, n, 1) && n[0] <= 3600) {
         lockSettings.autoLockMs = static_cast<std::uint32_t>(n[0]) * 1000;
         posted = ui::post(ui::KeyLockSettings{lockSettings});
+    } else if (command == "save") {
+        posted = radio::post(radio::BatterySaveStatus{});
+    } else if (numbersAfter(command, "save ", 10, n, 1) && n[0] <= 2) {
+        posted = radio::post(radio::BatterySave{static_cast<std::uint8_t>(n[0])});
     } else if (command == "fm sweep") {
         posted = radio::post(radio::FmSweep{});
     } else if (command == "fm tune auto") {
@@ -303,7 +307,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, codec <page> <reg> <value> (hex), bbx <type> <bytes> (hex), fm <reg> [value] (hex), "
-                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm sweep, fm tune <0-4095>|auto, fm tx <kHz>|off, fm ctcss <0.1 Hz>|off, fm power low|mid|high|turbo, fm tot <s>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>";
+                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm sweep, fm tune <0-4095>|auto, fm tx <kHz>|off, fm ctcss <0.1 Hz>|off, fm power low|mid|high|turbo, fm tot <s>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2]";
     } else if (command == "fault") {
         log::info("console") << "crashing on purpose";
         flushLog();

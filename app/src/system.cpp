@@ -10,6 +10,7 @@
 #include "dmm/services/battery.h"
 #include "dmm/services/calibration.h"
 #include "dmm/services/log.h"
+#include "dmm/services/power.h"
 #include "dmm/version.h"
 
 #include <atomic>
@@ -284,6 +285,7 @@ void start(Platform &p)
 
 void noteActivity()
 {
+    services::power::activity();
     lastActivity.store(os::nowMs(), std::memory_order_relaxed);
 }
 

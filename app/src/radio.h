@@ -76,6 +76,16 @@ struct FmSquelch
 {
     std::uint8_t level;
 };
+/// Battery save: 0 = off; 1 or 2 = the receiver sleeps 150 or 70 ms per
+/// cycle while the radio is idle.
+struct BatterySave
+{
+    std::uint8_t mode;
+};
+/// Logs battery save's state and what keeps the radio awake.
+struct BatterySaveStatus
+{
+};
 /// Logs the FM receiver's state and signal strength.
 struct FmStatus
 {
@@ -124,7 +134,7 @@ struct UseChannel
 };
 
 using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, CodecWrite, RawPacket, FmRead, Microphone, FmWrite,
-    FmReceive, FmIdle, FmSquelch, FmStatus, FmSweep, FmTune, Ptt, FmTransmitFrequency, FmCtcss, FmPower, FmTimeout, UseChannel>;
+    FmReceive, FmIdle, FmSquelch, FmStatus, FmSweep, FmTune, Ptt, FmTransmitFrequency, FmCtcss, FmPower, FmTimeout, UseChannel, BatterySave, BatterySaveStatus>;
 
 /// Starts the radio task, which owns @p baseband and @p fm (may be
 /// nullptr) and brings them up.

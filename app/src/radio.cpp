@@ -10,7 +10,9 @@
 #include "dmm/lib/format.h"
 #include "dmm/lib/variant.h"
 #include "dmm/os/os.h"
+#include "dmm/services/battery_saver.h"
 #include "dmm/services/log.h"
+#include "dmm/services/power.h"
 #include "dmm/services/squelch_gate.h"
 
 #include <span>
@@ -21,6 +23,7 @@ namespace dmm::app::radio {
 namespace {
 
 namespace log = services::log;
+namespace power = services::power;
 
 services::Baseband *baseband = nullptr;
 services::FmTransceiver *fm = nullptr;
@@ -40,6 +43,7 @@ services::FmChannel fmChannel;
 int squelchLevel = DefaultSquelchLevel;
 services::SquelchGate gate;
 bool speakerOpen = false;
+services::BatterySaver saver;
 
 // FM transmit settings and state.
 constexpr std::uint16_t DefaultTimeoutS = 30;
@@ -83,6 +87,11 @@ void setSpeaker(bool open)
         return;
     }
     speakerOpen = open;
+    if (open) {
+        power::hold(power::AwakeReason::Carrier);
+    } else {
+        power::release(power::AwakeReason::Carrier);
+    }
     ui::post(ui::Receiving{open});
     baseband->setCarrier(open);
     audio::post(audio::ReceiveAudio{open});
@@ -165,6 +174,7 @@ void fmReceive()
     }
     const int level = squelchLevel < 1 ? 1 : squelchLevel;
     const char *problem = fm->receive(fmChannel, level, *cal);
+    saver.reset();
     gate.reset();
     gate.setForcedOpen(squelchLevel == 0);
     if (problem != nullptr) {
@@ -299,6 +309,7 @@ void startTransmit()
         return;
     }
     transmitting = true;
+    power::hold(power::AwakeReason::Transmit);
     ui::post(ui::Transmitting{true});
     transmitStarted = os::nowMs();
     log::info("fm") << "transmitting " << mhz(channel.transmitHz).view() << " MHz, power " << powerName(powerLevel)
@@ -313,6 +324,7 @@ void stopTransmit(const char *why)
     fm->endTransmit();
     baseband->setMicrophone(false);
     transmitting = false;
+    power::release(power::AwakeReason::Transmit);
     ui::post(ui::Transmitting{false});
     log::info("fm") << "transmit off (" << why << ") after " << (os::nowMs() - transmitStarted) / 100 / 10 << "."
                     << (os::nowMs() - transmitStarted) / 100 % 10 << " s";
@@ -349,8 +361,66 @@ void bringUp()
     }
 }
 
+const char *saveModeText(std::uint8_t mode)
+{
+    constexpr const char *Texts[] = {"off", "on, 150 ms sleep", "on, 70 ms sleep"};
+    return Texts[mode <= 2 ? mode : 1];
+}
+
+void saveStatus()
+{
+    lib::StaticString<64> reasons;
+    for (unsigned i = 0; i < static_cast<unsigned>(power::AwakeReason::Count); ++i) {
+        const auto reason = static_cast<power::AwakeReason>(i);
+        if (power::isHeld(reason)) {
+            reasons << (reasons.view().empty() ? "" : ", ") << power::name(reason);
+        }
+    }
+    log::info("power") << "battery save " << saveModeText(saver.mode()) << "; "
+                       << (saver.active() ? (saver.asleep() ? "receiver asleep" : "listening") : "awake") << ", "
+                       << saver.cycles() << " sleeps so far; awake for: "
+                       << (reasons.view().empty() ? std::string_view("nothing") : reasons.view()) << ", idle "
+                       << power::idleForMs() / 1000 << " s";
+}
+
+// Sleeps or wakes the receiver as battery save asks.
+void saveStep()
+{
+    const bool receiverOn = fm != nullptr && !transmitting && (fm->receiving() || fm->receiverAsleep());
+    const bool wasActive = saver.active();
+    switch (saver.update(os::nowMs(), power::idleForMs(), receiverOn)) {
+    case services::BatterySaver::Action::Sleep:
+        fm->sleepReceiver();
+        break;
+    case services::BatterySaver::Action::Wake:
+        fm->wakeReceiver();
+        break;
+    case services::BatterySaver::Action::None:
+        break;
+    }
+    if (saver.active() != wasActive) {
+        if (saver.active()) {
+            log::info("power") << "battery save: receiver sleeps " << services::BatterySaver::offMs(saver.mode())
+                               << " ms, listens " << services::BatterySaver::ListenMs << " ms";
+        } else {
+            log::info("power") << "battery save ended after " << saver.cycles() << " sleeps so far";
+        }
+    }
+}
+
 void handle(Message &message)
 {
+    // Every command finds the receiver awake; battery save's own messages
+    // leave it as it is.
+    const bool saveMessage =
+        std::get_if<BatterySave>(&message) != nullptr || std::get_if<BatterySaveStatus>(&message) != nullptr;
+    if (saver.active() && !saveMessage) {
+        if (fm != nullptr && fm->receiverAsleep()) {
+            fm->wakeReceiver();
+        }
+        saver.reset();
+        log::info("power") << "battery save ended after " << saver.cycles() << " sleeps so far";
+    }
     // Anything but PTT itself ends a transmission first.
     if (transmitting && std::get_if<Ptt>(&message) == nullptr) {
         stopTransmit("another command");
@@ -489,6 +559,11 @@ void handle(Message &message)
                        log::info("fm") << "tune " << v << (t.value >= 0 ? " (held)" : " (calibrated)") << ": "
                                        << settledRssi() << " dBm";
                    },
+                   [](const BatterySave &s) {
+                       saver.setMode(s.mode);
+                       log::info("power") << "battery save " << saveModeText(saver.mode());
+                   },
+                   [](const BatterySaveStatus &) { saveStatus(); },
                    [](const Microphone &m) {
                        if (fm == nullptr) {
                            log::info("fm") << "no FM transceiver";
@@ -508,10 +583,16 @@ void radioMain(void *)
     os::Ticks lastPoll = os::nowMs();
     while (!os::stopRequested()) {
         const bool busy = fm != nullptr && (fm->receiving() || transmitting);
+        os::Ticks wait = busy ? FmPollMs : IdleWaitMs;
+        if (saver.asleep()) {
+            const auto left = static_cast<std::int32_t>(saver.nextChangeMs() - os::nowMs());
+            wait = left > 0 ? static_cast<os::Ticks>(left) : 0;
+        }
         Message m;
-        if (inbox.receive(m, busy ? FmPollMs : IdleWaitMs)) {
+        if (inbox.receive(m, wait)) {
             handle(m);
         }
+        saveStep();
         if (transmitting && timeoutS != 0 && os::nowMs() - transmitStarted >= static_cast<os::Ticks>(timeoutS) * 1000) {
             stopTransmit("timeout");
         }
