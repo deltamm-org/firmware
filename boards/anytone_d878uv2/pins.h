@@ -71,9 +71,8 @@ inline constexpr Pin Pf2{Port::A, 14};
 inline constexpr Pin EncoderA{Port::C, 8};
 inline constexpr Pin EncoderB{Port::C, 9};
 inline constexpr unsigned EncoderIrqPriority = 7;
-/// Raw counts per click: one per edge of A. Two if each click is a full
-/// quadrature cycle.
-inline constexpr int EncoderCountsPerDetent = 2;
+/// Raw counts per click: each click is one edge of A.
+inline constexpr int EncoderCountsPerDetent = 1;
 
 // Volume knob: a potentiometer on PC2, ADC channel 12.
 inline constexpr Pin VolumeKnob{Port::C, 2};
