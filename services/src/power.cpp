@@ -9,7 +9,7 @@ namespace {
 
 os::Mutex stateLock;
 std::uint32_t held = 0;
-os::Ticks lastRelease = 0;
+os::Ticks lastBusy = 0;
 
 constexpr std::uint32_t bit(AwakeReason reason)
 {
@@ -54,7 +54,7 @@ void release(AwakeReason reason)
     if ((held & bit(reason)) != 0) {
         held &= ~bit(reason);
         if (held == 0) {
-            lastRelease = os::nowMs();
+            lastBusy = os::nowMs();
         }
     }
     stateLock.unlock();
@@ -73,10 +73,17 @@ std::uint32_t heldMask()
     return mask;
 }
 
+void activity()
+{
+    stateLock.lock();
+    lastBusy = os::nowMs();
+    stateLock.unlock();
+}
+
 os::Ticks idleForMs()
 {
     stateLock.lock();
-    const os::Ticks idle = held != 0 ? 0 : os::nowMs() - lastRelease;
+    const os::Ticks idle = held != 0 ? 0 : os::nowMs() - lastBusy;
     stateLock.unlock();
     return idle;
 }

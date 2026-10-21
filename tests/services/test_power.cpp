@@ -28,3 +28,11 @@ TEST_CASE("stay-awake reasons combine and idle time starts at the last release")
     CHECK(power::heldMask() == 0);
     CHECK(power::name(AwakeReason::UsbLink) == "usb");
 }
+
+TEST_CASE("activity starts the idle time again")
+{
+    os::sleepMs(30);
+    REQUIRE(power::idleForMs() >= 25);
+    power::activity();
+    CHECK(power::idleForMs() < 25);
+}

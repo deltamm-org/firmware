@@ -34,7 +34,11 @@ bool isHeld(AwakeReason reason);
 /// Bit n set = reason n held.
 std::uint32_t heldMask();
 
-/// Milliseconds since the last reason was released; 0 while any is held.
+/// A moment of use, such as a key press: the idle time starts again.
+void activity();
+
+/// Milliseconds since the last release or activity; 0 while any reason is
+/// held.
 os::Ticks idleForMs();
 
 } // namespace dmm::services::power
