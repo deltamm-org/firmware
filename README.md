@@ -27,26 +27,28 @@ with zone, channel, frequency, tones, power, volume and battery, and a
 short grouped settings menu. Key lock
 covers the keypad, side keys and knob, with auto lock and forced lock.
 
-**Platform.** Beeps, volume, backlight, battery monitor and auto
-power-off. A USB log with a debug console, and crash details kept across
-restarts.
+**Battery.** Battery save cycles the receiver while the radio is idle,
+with the codeplug's setting, and the backlight goes off after its light
+time. A battery monitor and auto power-off.
+
+**Platform.** Beeps, volume and backlight. A USB log with a debug
+console, and crash details kept across restarts.
 
 **Tools.** `dmm-radio` backs up the radio and prepares the update files.
 A desktop simulator runs the same firmware with a drawn radio face.
 
 ## Roadmap
 
-1. Battery save
-2. CTCSS and DCS decoding, DCS transmit
-3. DMR receive and transmit
-4. Refined user interface: screen layouts, menus, icons and fonts tuned
+1. CTCSS and DCS decoding, DCS transmit
+2. DMR receive and transmit
+3. Refined user interface: screen layouts, menus, icons and fonts tuned
    as features are added
-5. Programming over USB, compatible with existing codeplug tools
-6. Scan and dual watch
-7. GPS
-8. Calibration tool
-9. APRS, Bluetooth, recording, DTMF and selective calling
-10. DMR roaming and SMS
+4. Programming over USB, compatible with existing codeplug tools
+5. Scan and dual watch
+6. GPS
+7. Calibration tool
+8. APRS, Bluetooth, recording, DTMF and selective calling
+9. DMR roaming and SMS
 
 ## Getting started
 
