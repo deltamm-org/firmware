@@ -30,7 +30,14 @@ namespace log = services::log;
 os::Task<640> uiTask;
 os::Queue<Message, 16> inbox;
 Display *display = nullptr;
-Storage *storage = nullptr;
+CodeplugSource *codeplug = nullptr;
+const services::InputDevices *input = nullptr;
+
+// The label on @p key as the user sees it.
+std::string_view keyText(Key key)
+{
+    return input != nullptr ? input->keyLabel(key) : keyName(key);
+}
 
 // The header band's colour: black on the development views, the status
 // bar's grey on the radio's own screens.
@@ -339,7 +346,7 @@ enum class MenuItem : std::uint8_t
 MenuItem menuItem = MenuItem::Squelch;
 
 // Menu groups and their items. Settings of the current channel come first
-// and also open directly from the standby screen (P2).
+// and also open directly from the standby screen (Front2).
 enum class MenuGroup : std::uint8_t
 {
     Channel,
@@ -368,7 +375,7 @@ bool menuAtGroups = true;
 // returns there.
 bool menuQuick = false;
 int backlightLevel = DefaultBacklight;
-// Backlight time choices, as the codeplug numbers them.
+// Backlight time choices, in seconds.
 constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
 std::uint16_t backlightS = 0; // 0 = always on
 bool backlightLit = true;
@@ -377,6 +384,8 @@ std::uint8_t batterySave = 0;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
+// The standby screen's quick-key hint.
+lib::StaticString<40> quickKeys;
 // Frequency digits typed on the standby screen.
 constexpr std::size_t EntryDigits = 6;
 char entry[EntryDigits + 1] = {};
@@ -440,7 +449,7 @@ private:
     static constexpr int ValuesTop = GridTop + 4 * (BoxH + 2) + 4;
 
     // Panel order: side keys and PTT, the four control keys, then digits.
-    static constexpr Key Layout[] = {Key::Ptt, Key::Pf1, Key::Pf2, Key::Pf3, Key::P1, Key::P2, Key::Menu, Key::Up,
+    static constexpr Key Layout[] = {Key::Ptt, Key::Side1, Key::Side2, Key::Side3, Key::Front1, Key::Front2, Key::Menu, Key::Up,
         Key::Down, Key::Exit, Key::Star, Key::Hash, Key::Digit1, Key::Digit2, Key::Digit3, Key::Digit4, Key::Digit5,
         Key::Digit6, Key::Digit7, Key::Digit8, Key::Digit9, Key::Digit0};
 
@@ -456,7 +465,7 @@ private:
         const Color fill = down ? colors::Green : rgb(48, 48, 56);
         const Color ink = down ? colors::Black : colors::White;
         d.fillRect(x, y, BoxW, BoxH, fill);
-        const std::string_view name = keyName(key);
+        const std::string_view name = keyText(key);
         const int textW = static_cast<int>(name.size()) * HeaderFont.width;
         drawText(d, HeaderFont, x + (BoxW - textW) / 2, y + 3, name, ink, fill);
     }
@@ -526,10 +535,12 @@ void uiMain(void *)
     lastLightUse = os::nowMs();
     log::info("ui") << "display " << d.width() << " x " << d.height();
 
+    quickKeys << keyText(Key::Menu) << "  " << keyText(Key::Front1) << " Zone  " << keyText(Key::Front2) << " Chan  "
+              << keyText(Key::Hash) << " VFO";
+
     // The codeplug: settings, and the channel the radio starts on.
-    if (storage != nullptr) {
-        static StockCodeplug codeplug(*storage);
-        static ChannelSelector selector(codeplug);
+    if (codeplug != nullptr) {
+        static ChannelSelector selector(*codeplug);
         selector.load();
         if (selector.current()) {
             channels = &selector;
@@ -572,6 +583,7 @@ void uiMain(void *)
         s.locked = keyLock.locked() || keyLock.settings().forced;
         s.entry = std::string_view(entry, entryLength);
         s.volume = volumeLevel;
+        s.keys = quickKeys.view();
         return s;
     };
     auto barHeader = [&](bool bar) {
@@ -887,7 +899,7 @@ void uiMain(void *)
             if (step && (key == Key::Up || key == Key::Down)) {
                 zonePicker.move(key == Key::Up ? -1 : 1);
                 zonePicker.draw(d, StandbyScreen::StatusH);
-            } else if (press && (key == Key::Menu || key == Key::P1)) {
+            } else if (press && (key == Key::Menu || key == Key::Front1)) {
                 channels->selectZone(zonePicker.chosen());
                 show(View::Standby);
                 useChannel();
@@ -931,10 +943,10 @@ void uiMain(void *)
             }
             useChannel();
             redrawView();
-        } else if (press && key == Key::P1) {
+        } else if (press && key == Key::Front1) {
             entryLength = 0;
             openZonePicker();
-        } else if (press && key == Key::P2) {
+        } else if (press && key == Key::Front2) {
             entryLength = 0;
             openGroup(MenuGroup::Channel, true);
         }
@@ -1172,10 +1184,11 @@ void uiMain(void *)
 
 } // namespace
 
-void start(Display &d, Storage *s)
+void start(Display &d, CodeplugSource *c, const services::InputDevices *i)
 {
     display = &d;
-    storage = s;
+    codeplug = c;
+    input = i;
     log::setTap(onLogLine);
     uiTask.start("ui", 4, uiMain, nullptr);
 }

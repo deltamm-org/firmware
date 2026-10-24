@@ -13,8 +13,8 @@ namespace dmm::services {
 struct KeyLockSettings
 {
     bool knob = true;   // channel knob
-    bool keypad = true; // digits, *, #, Exit, Up, Down, P1, P2
-    bool side = true;   // PF1, PF2, PF3 and PTT
+    bool keypad = true; // front panel: digits, *, #, Exit, Up, Down, Front1, Front2
+    bool side = true;   // Side1..Side3 and PTT
     /// Always locked, and no unlock on the radio.
     bool forced = false;
     /// Lock by itself after this long without a key on a lockable screen;

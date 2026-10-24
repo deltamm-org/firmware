@@ -7,6 +7,7 @@
 
 #include "dmm/hal/gd32f30x/parallel_host_port.h"
 #include "dmm/services/baseband.h"
+#include "dmm/services/sct3258_baseband.h"
 
 namespace board {
 
@@ -29,5 +30,9 @@ public:
 private:
     dmm::hal::gd32f30x::ParallelHostPort m_port{BasebandPort};
 };
+
+/// The TLV320AIC3204 codec behind the baseband chip: speaker on the
+/// headphone-left driver, microphone on the left input.
+const dmm::services::Sct3258Baseband::Audio &basebandAudio();
 
 } // namespace board

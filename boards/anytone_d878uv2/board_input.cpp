@@ -14,6 +14,7 @@
 #include "dmm/hal/gd32f30x/irq.h"
 
 #include <atomic>
+#include <iterator>
 
 namespace board {
 
@@ -33,8 +34,8 @@ constexpr std::uint32_t SettleCycles = hal::SystemClockHz / 200'000; // 5 us
 
 // Keys by row (PE7 first) and column (PC5, PB1, PB2); Count = no key.
 constexpr Key Matrix[8][3] = {
-    {Key::Digit1, Key::Menu, Key::P1},
-    {Key::Digit2, Key::Up, Key::P2},
+    {Key::Digit1, Key::Menu, Key::Front1},
+    {Key::Digit2, Key::Up, Key::Front2},
     {Key::Digit3, Key::Down, Key::Count},
     {Key::Digit4, Key::Digit7, Key::Count},
     {Key::Digit5, Key::Digit8, Key::Count},
@@ -72,10 +73,10 @@ KeyMask BoardInput::readKeys()
         keys |= keyBit(Key::Ptt);
     }
     if (low(Pf1)) {
-        keys |= keyBit(Key::Pf1);
+        keys |= keyBit(Key::Side1);
     }
     if (low(Pf2)) {
-        keys |= keyBit(Key::Pf2);
+        keys |= keyBit(Key::Side2);
     }
 
     PanelPinsGuard guard;
@@ -83,7 +84,7 @@ KeyMask BoardInput::readKeys()
     cm::busyWaitCycles(SettleCycles);
     const bool pf3 = low(Pf3Column);
     if (pf3) {
-        keys |= keyBit(Key::Pf3);
+        keys |= keyBit(Key::Side3);
     }
     for (unsigned row = 0; row < 8; ++row) {
         const auto rowBit = static_cast<std::uint16_t>(1u << (KeypadFirstRow + row));
@@ -128,6 +129,15 @@ void BoardInput::onEncoderEdge()
     const bool a = hal::read(EncoderA);
     const bool b = hal::read(EncoderB);
     encoderCount.fetch_add(a != b ? 1 : -1, std::memory_order_relaxed);
+}
+
+std::string_view BoardInput::keyLabel(dmm::services::Key key) const
+{
+    static constexpr std::string_view Labels[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "#", "Menu",
+        "Exit", "Up", "Down", "P1", "P2", "PF1", "PF2", "PF3", "PTT"};
+    static_assert(std::size(Labels) == static_cast<unsigned>(dmm::services::Key::Count));
+    const auto i = static_cast<unsigned>(key);
+    return i < std::size(Labels) ? Labels[i] : "?";
 }
 
 } // namespace board

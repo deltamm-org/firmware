@@ -19,12 +19,12 @@ bool elapsed(std::uint32_t now, std::uint32_t since, std::uint32_t ms)
 bool KeyLock::covers(Key key, bool exemptFunction) const
 {
     switch (key) {
-    case Key::Pf1:
-    case Key::Pf2:
-    case Key::Pf3:
+    case Key::Side1:
+    case Key::Side2:
+    case Key::Side3:
         return m_settings.side && !exemptFunction;
-    case Key::P1:
-    case Key::P2:
+    case Key::Front1:
+    case Key::Front2:
         return m_settings.keypad && !exemptFunction;
     case Key::Menu:
     case Key::Ptt:

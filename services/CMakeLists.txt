@@ -3,14 +3,14 @@
 
 add_library(dmm_services STATIC
     src/battery.cpp
-    src/calibration.cpp
     src/channel_selector.cpp
-    src/codeplug.cpp
+    src/d878uv2_calibration.cpp
+    src/d878uv2_codeplug.cpp
+    src/d878uv2_storage.cpp
     src/data_link.cpp
     src/input.cpp
     src/key_lock.cpp
     src/log.cpp
-    src/nand_storage.cpp
     src/power.cpp
     src/audio.cpp
     src/rda1846_transceiver.cpp

@@ -30,6 +30,14 @@ kernel configuration.
 The simulator boards implement the service interfaces directly with Qt,
 so they replace the drivers and HAL, not the app.
 
+The service interfaces are abstract: the app sees frequencies, levels and
+states, never a chip's registers or a radio's data formats. Code for one
+chip sits in files named after it (`rda1846_transceiver`,
+`sct3258_baseband`); code for one radio's data formats in files named
+after the model (`d878uv2_calibration`, `d878uv2_codeplug`). Values only
+a chip understands, such as its tuning tables, codec wiring and
+calibrated gains, go from the board straight to that chip's service.
+
 ## Operating system
 
 On a radio, `os/` sits on the FreeRTOS kernel with static allocation only:

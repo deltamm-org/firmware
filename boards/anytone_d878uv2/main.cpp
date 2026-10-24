@@ -32,8 +32,10 @@
 #include "dmm/hal/gd32f30x/usbd.h"
 #include "dmm/hal/gd32f30x/watchdog.h"
 #include "dmm/os/os.h"
+#include "dmm/services/d878uv2_calibration.h"
+#include "dmm/services/d878uv2_codeplug.h"
+#include "dmm/services/d878uv2_storage.h"
 #include "dmm/services/log.h"
-#include "dmm/services/nand_storage.h"
 #include "dmm/services/rda1846_transceiver.h"
 #include "dmm/services/sct3258_baseband.h"
 #include "dmm/services/usb_channel.h"
@@ -41,6 +43,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -289,8 +292,10 @@ void hal::boardMain()
     static BitBangSpiNandBus flashBus{FlashPins};
     flashBus.configurePins();
     static dmm::drivers::storage::SpiNand flash{flashBus, delayUs};
-    static dmm::services::NandStorage storage{flash};
+    static dmm::services::D878Uv2Storage storage{flash};
     storage.start();
+    static dmm::services::D878Uv2Calibration calibration;
+    static dmm::services::D878Uv2Codeplug codeplug{storage};
 
     adc().start();
     static BoardInput input;
@@ -302,7 +307,16 @@ void hal::boardMain()
     static BoardRf rf;
     rf.configure();
     static dmm::drivers::baseband::Sct3258 basebandChip{basebandBoard.bus(), BoardBaseband::pollDelayUs};
-    static dmm::services::Sct3258Baseband baseband{basebandChip, basebandBoard, dmm::baseband::bootBlob()};
+    // Read from the radio task once the app has the calibration.
+    static dmm::services::Sct3258Baseband baseband{basebandChip, basebandBoard, dmm::baseband::bootBlob(), basebandAudio(),
+        []() -> std::optional<dmm::services::Sct3258Baseband::Trims> {
+            const auto gains = calibration.basebandAnalogGains();
+            const auto codec = calibration.codecTrims();
+            if (!gains || !codec) {
+                return std::nullopt;
+            }
+            return dmm::services::Sct3258Baseband::Trims{*gains, {codec->leftOut, codec->rightOut, codec->rightInput}};
+        }};
     static dmm::drivers::radio::Rda1846 fmChip{fmBus};
     static dmm::services::Rda1846Transceiver fm{fmChip, rf, FmPins, [](unsigned ms) { dmm::os::sleepMs(ms); },
         []() -> const dmm::drivers::radio::Rda1846::Tuning & { return fmTuning(&storage); }};
@@ -317,7 +331,7 @@ void hal::boardMain()
     usbDevice.start();
     static dmm::app::Platform platform{leds, logSink, system, "anytone_d878uv2",
         clock == ClockSource::Crystal ? "clock 120 MHz from crystal" : "crystal did not start, clock 120 MHz from internal RC",
-        &display, &input, &battery, &storage, &dataChannel, &baseband, &fm, &audio};
+        &display, &input, &battery, &storage, &dataChannel, &baseband, &fm, &audio, &calibration, &codeplug};
     dmm::app::start(platform);
     dmm::os::runScheduler();
     for (;;) {

@@ -41,6 +41,25 @@ in `ARM_GNU_TOOLCHAIN`.
   written in our own words, with the chip's documentation named where it
   is the source.
 
+## Shared code stays abstract
+
+- Code outside chip-named, model-named and `boards/` files knows no radio
+  model, vendor or chip, in code or comments.
+- Shared interfaces are fully abstract. They speak in the app's terms
+  (Hz, dB, dBm, mV, levels, on/off) and never in a chip's: no register
+  addresses, register or bit layouts, value widths or ranges, chip
+  scales, raw packets or byte blocks, chip pin or channel names, vendor
+  key names or data formats. A value the interface cannot name in the
+  app's terms does not belong in it.
+- Chip facts live in chip-named files (`rda1846*`, `sct3258*`,
+  `st7735*`, `gd32f30x/`); a radio's data formats in model-named files
+  (`d878uv2_*`); wiring, levels and tuning tables in `boards/<name>/`.
+- Values only a chip understands go from the board straight to that
+  chip's service (a table or a source function the board supplies), not
+  through the app.
+- Debug access is the chip service's own: it parses its console commands;
+  the app only forwards the text.
+
 ## Never in the repository
 
 - Vendor firmware bytes, vendor tools, or code or names taken from

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tommi Tauriainen
 
-#include "dmm/services/calibration.h"
+#include "dmm/services/d878uv2_calibration.h"
 
 namespace dmm::services {
 
@@ -74,7 +74,7 @@ bool copyValid(Storage &storage, std::uint32_t copy)
 {
     constexpr std::uint32_t MarkerBytes = 8;
     std::uint8_t markers[MarkerBytes];
-    if (!readable(storage.read(copy + StockCalibration::BlockBytes - MarkerBytes, markers))) {
+    if (!readable(storage.read(copy + D878Uv2Calibration::BlockBytes - MarkerBytes, markers))) {
         return false;
     }
     const bool valid = markers[4] == 0x55 && markers[5] == 0x55 && markers[6] == 0xAA && markers[7] == 0xAA;
@@ -84,7 +84,7 @@ bool copyValid(Storage &storage, std::uint32_t copy)
 
 } // namespace
 
-bool StockCalibration::load(Storage &storage)
+bool D878Uv2Calibration::load(Storage &storage)
 {
     m_loaded = false;
     m_copy = copyValid(storage, CopyA) ? 0 : 1;
@@ -97,7 +97,16 @@ bool StockCalibration::load(Storage &storage)
     return true;
 }
 
-void StockCalibration::use(std::span<const std::uint8_t, Bytes> bytes)
+const char *D878Uv2Calibration::source() const
+{
+    if (m_flagged) {
+        return m_copy == 0 ? "copy A (flash check failed, as usual for this block)"
+                           : "copy B (flash check failed, as usual for this block)";
+    }
+    return m_copy == 0 ? "copy A" : "copy B";
+}
+
+void D878Uv2Calibration::use(std::span<const std::uint8_t, Bytes> bytes)
 {
     for (std::uint32_t i = 0; i < Bytes; ++i) {
         m_data[i] = bytes[i];
@@ -107,7 +116,7 @@ void StockCalibration::use(std::span<const std::uint8_t, Bytes> bytes)
     m_loaded = true;
 }
 
-std::optional<int> StockCalibration::batteryOffsetMv() const
+std::optional<int> D878Uv2Calibration::batteryOffsetMv() const
 {
     if (!present() || m_data[BatteryOffsetAt] > BatteryOffsetMax) {
         return std::nullopt;
@@ -115,7 +124,7 @@ std::optional<int> StockCalibration::batteryOffsetMv() const
     return (static_cast<int>(m_data[BatteryOffsetAt]) - 100) * 10;
 }
 
-std::optional<std::uint16_t> StockCalibration::referenceTrim() const
+std::optional<std::uint16_t> D878Uv2Calibration::referenceTrim() const
 {
     if (!present()) {
         return std::nullopt;
@@ -127,7 +136,7 @@ std::optional<std::uint16_t> StockCalibration::referenceTrim() const
     return v;
 }
 
-std::optional<std::uint16_t> StockCalibration::txPower(std::uint32_t hz, PowerLevel level) const
+std::optional<std::uint16_t> D878Uv2Calibration::txPower(std::uint32_t hz, PowerLevel level) const
 {
     const Band *b = bandFor(hz);
     if (!present() || b == nullptr) {
@@ -145,7 +154,7 @@ std::optional<std::uint16_t> StockCalibration::txPower(std::uint32_t hz, PowerLe
     return static_cast<std::uint16_t>(value << PowerShift);
 }
 
-std::optional<std::uint16_t> StockCalibration::rxTune(std::uint32_t hz) const
+std::optional<std::uint16_t> D878Uv2Calibration::rxTune(std::uint32_t hz) const
 {
     const Band *b = bandFor(hz);
     if (!present() || b == nullptr) {
@@ -175,7 +184,7 @@ std::optional<std::uint16_t> StockCalibration::rxTune(std::uint32_t hz) const
                                                              : v);
 }
 
-std::optional<int> StockCalibration::squelchThreshold(std::uint32_t hz, int level) const
+std::optional<int> D878Uv2Calibration::squelchThreshold(std::uint32_t hz, int level) const
 {
     const Band *b = bandFor(hz);
     if (!present() || b == nullptr) {
@@ -190,7 +199,7 @@ std::optional<int> StockCalibration::squelchThreshold(std::uint32_t hz, int leve
     return m_data[b->block + SquelchBaseAt] - 2 * (level - 1) + flatness[b->squelchRef] - flatness[seg];
 }
 
-std::optional<StockCalibration::Deviation> StockCalibration::deviation() const
+std::optional<Calibration::Deviation> D878Uv2Calibration::deviation() const
 {
     if (!present()) {
         return std::nullopt;
@@ -199,7 +208,7 @@ std::optional<StockCalibration::Deviation> StockCalibration::deviation() const
     return Deviation{d[0], d[1], d[2]};
 }
 
-std::optional<std::array<std::uint8_t, 10>> StockCalibration::basebandAnalogGains() const
+std::optional<std::array<std::uint8_t, 10>> D878Uv2Calibration::basebandAnalogGains() const
 {
     if (!present()) {
         return std::nullopt;
@@ -211,7 +220,7 @@ std::optional<std::array<std::uint8_t, 10>> StockCalibration::basebandAnalogGain
     return g;
 }
 
-std::optional<StockCalibration::CodecTrims> StockCalibration::codecTrims() const
+std::optional<D878Uv2Calibration::CodecTrims> D878Uv2Calibration::codecTrims() const
 {
     if (!present()) {
         return std::nullopt;

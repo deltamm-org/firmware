@@ -32,6 +32,8 @@ struct StandbyState
     bool locked = false;
     /// Digits typed for a frequency, or empty.
     std::string_view entry;
+    /// The quick-key hint for the bottom bar.
+    std::string_view keys;
     /// A short message in the bottom bar instead of the key hints, or empty.
     std::string_view note;
     /// Volume step 0..15, or -1 when unknown.

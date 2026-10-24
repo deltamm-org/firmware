@@ -158,43 +158,13 @@ bool numbersAfter(std::string_view command, std::string_view prefix, int base, s
     return true;
 }
 
-// "bbx <type> <byte>...": hex bytes separated by single spaces.
-bool rawPacket(std::string_view command, radio::RawPacket &m)
+// Hands @p command without its first @p prefixLength characters to one
+// chip's own console commands.
+bool chipCommand(radio::ChipCommand::Chip chip, std::string_view command, std::size_t prefixLength)
 {
-    if (!lib::startsWith(command, "bbx ")) {
-        return false;
-    }
-    command.remove_prefix(4);
-    int index = -1; // -1: the type byte
-    while (!command.empty()) {
-        const std::size_t end = command.find(' ');
-        const std::size_t size = end == std::string_view::npos ? command.size() : end;
-        if (size == 0 || size > 2 || index >= static_cast<int>(sizeof m.fields)) {
-            return false;
-        }
-        std::int32_t value = 0;
-        for (std::size_t i = 0; i < size; ++i) {
-            const char c = command[i];
-            const int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10
-                                                                                    : -1;
-            if (digit < 0) {
-                return false;
-            }
-            value = value * 16 + digit;
-        }
-        if (index < 0) {
-            m.type = static_cast<std::uint8_t>(value);
-        } else {
-            m.fields[index] = static_cast<std::uint8_t>(value);
-        }
-        ++index;
-        command.remove_prefix(end == std::string_view::npos ? size : end + 1);
-    }
-    if (index < 0) {
-        return false;
-    }
-    m.count = static_cast<std::uint8_t>(index);
-    return true;
+    radio::ChipCommand c{chip, {}};
+    c.text << std::string_view(command.data() + prefixLength, command.size() - prefixLength);
+    return !c.text.truncated() && radio::post(c);
 }
 
 // The radio and audio console commands; false if @p command is none of
@@ -202,7 +172,6 @@ bool rawPacket(std::string_view command, radio::RawPacket &m)
 bool radioCommand(std::string_view command)
 {
     std::int32_t n[3] = {};
-    radio::RawPacket raw{};
     bool posted = true;
     if (command == "bb") {
         posted = radio::post(radio::Info{});
@@ -210,8 +179,6 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::Restart{});
     } else if (numbersAfter(command, "bbtone ", 10, n, 2) && n[0] > 0 && n[0] <= 8000 && n[1] > 0 && n[1] <= 10000) {
         posted = radio::post(radio::ChipTone{static_cast<std::uint16_t>(n[0]), static_cast<std::uint16_t>(n[1])});
-    } else if (numbersAfter(command, "codec ", 16, n, 3) && n[0] <= 0xFF && n[1] <= 0x7F && n[2] <= 0xFF) {
-        posted = radio::post(radio::CodecWrite{static_cast<std::uint8_t>(n[0]), static_cast<std::uint8_t>(n[1]), static_cast<std::uint8_t>(n[2])});
     } else if ((numbersAfter(command, "fm rx ", 10, n, 1) || numbersAfter(command, "fm rxw ", 10, n, 1)) && n[0] >= 100'000) {
         posted = radio::post(radio::FmReceive{static_cast<std::uint32_t>(n[0]) * 1000, lib::startsWith(command, "fm rxw ")});
     } else if (command == "fm off") {
@@ -246,28 +213,20 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::BatterySaveStatus{});
     } else if (numbersAfter(command, "save ", 10, n, 1) && n[0] <= 2) {
         posted = radio::post(radio::BatterySave{static_cast<std::uint8_t>(n[0])});
-    } else if (command == "fm sweep") {
-        posted = radio::post(radio::FmSweep{});
-    } else if (command == "fm tune auto") {
-        posted = radio::post(radio::FmTune{-1});
-    } else if (numbersAfter(command, "fm tune ", 10, n, 1) && n[0] <= 0xFFF) {
-        posted = radio::post(radio::FmTune{static_cast<std::int16_t>(n[0])});
     } else if (command == "fm status") {
         posted = radio::post(radio::FmStatus{});
     } else if (numbersAfter(command, "fm sq ", 10, n, 1) && n[0] <= 5) {
         posted = radio::post(radio::FmSquelch{static_cast<std::uint8_t>(n[0])});
-    } else if (numbersAfter(command, "fm ", 16, n, 2) && n[0] <= 0x7F && n[1] <= 0xFFFF) {
-        posted = radio::post(radio::FmWrite{static_cast<std::uint8_t>(n[0]), static_cast<std::uint16_t>(n[1])});
-    } else if (numbersAfter(command, "fm ", 16, n, 1) && n[0] <= 0x7F) {
-        posted = radio::post(radio::FmRead{static_cast<std::uint8_t>(n[0])});
     } else if (command == "mic on" || command == "mic off") {
         posted = radio::post(radio::Microphone{command == "mic on"});
-    } else if (rawPacket(command, raw)) {
-        posted = radio::post(raw);
     } else if (numbersAfter(command, "beep ", 10, n, 2) && n[0] > 0 && n[0] <= 8000 && n[1] > 0 && n[1] <= 10000) {
         posted = audio::post(audio::Tone{static_cast<std::uint16_t>(n[0]), static_cast<std::uint16_t>(n[1])});
     } else if (command == "rx on" || command == "rx off") {
         posted = audio::post(audio::ReceiveAudio{command == "rx on"});
+    } else if (lib::startsWith(command, "fm ")) {
+        posted = chipCommand(radio::ChipCommand::Chip::Fm, command, 3);
+    } else if (lib::startsWith(command, "bb ")) {
+        posted = chipCommand(radio::ChipCommand::Chip::Baseband, command, 3);
     } else {
         return false;
     }
@@ -311,8 +270,14 @@ void runCommand(std::string_view command)
     if (command == "help") {
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
-                                "bbtone <hz> <ms>, codec <page> <reg> <value> (hex), bbx <type> <bytes> (hex), fm <reg> [value] (hex), "
-                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm sweep, fm tune <0-4095>|auto, fm tx <kHz>|off, fm ctcss <0.1 Hz>|off, fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+                                "bbtone <hz> <ms>, "
+                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm ctcss <0.1 Hz>|off, fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+        if (platform->fm != nullptr) {
+            log::info("console") << "FM chip: " << platform->fm->debugHelp();
+        }
+        if (platform->baseband != nullptr) {
+            log::info("console") << "baseband chip: " << platform->baseband->debugHelp();
+        }
     } else if (command == "fault") {
         log::info("console") << "crashing on purpose";
         flushLog();
@@ -451,7 +416,7 @@ void start(Platform &p)
 {
     platform = &p;
     if (p.display != nullptr) {
-        ui::start(*p.display, p.storage);
+        ui::start(*p.display, p.codeplug, p.input);
     }
     if (p.input != nullptr) {
         input::start(*p.input);

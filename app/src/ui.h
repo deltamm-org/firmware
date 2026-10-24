@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include "dmm/services/codeplug.h"
 #include "dmm/services/display.h"
 #include "dmm/services/input.h"
 #include "dmm/services/key_lock.h"
-#include "dmm/services/storage.h"
 
 #include <cstdint>
 #include <variant>
@@ -105,7 +105,8 @@ using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog,
     EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, ShowStandby, SetKeyLock, KeyLockSettings, KeyLockReport>;
 
 /// Starts the ui task, which owns @p display.
-void start(services::Display &display, services::Storage *storage);
+/// @p input (may be nullptr) gives the key labels.
+void start(services::Display &display, services::CodeplugSource *codeplug, const services::InputDevices *input);
 
 /// Queues a message for the ui task; false when the queue is full or there
 /// is no display.

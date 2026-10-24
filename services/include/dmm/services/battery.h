@@ -9,12 +9,28 @@
 
 namespace dmm::services {
 
+/// Battery levels for a pack, in millivolts.
+struct BatteryThresholds
+{
+    /// A bar is shown at or above each of these.
+    int bars[3];
+    /// Readings must be this much higher to go up a bar, so the level
+    /// does not flicker with load.
+    int barHysteresis;
+    int lowBelow;
+    int lowClearsAt;
+    int emptyBelow;
+    os::Ticks emptyAfterMs;
+};
+
 /// The board's battery voltage sense.
 class BatterySensor
 {
 public:
     /// Pack voltage in millivolts before calibration, or -1 without a sense.
     virtual int readMillivolts() = 0;
+    /// The levels for the board's battery pack.
+    virtual BatteryThresholds thresholds() const = 0;
 
 protected:
     ~BatterySensor() = default;
@@ -25,26 +41,15 @@ protected:
 class BatteryMonitor
 {
 public:
-    struct Thresholds
-    {
-        /// A bar is shown at or above each of these.
-        int bars[3];
-        /// Readings must be this much higher to go up a bar, so the level
-        /// does not flicker with load.
-        int barHysteresis;
-        int lowBelow;
-        int lowClearsAt;
-        int emptyBelow;
-        os::Ticks emptyAfterMs;
-    };
-
-    /// The D878UVII's 2-cell pack: levels for a 2-cell Li-ion pack.
-    static constexpr Thresholds TwoCellLiIon{{6450, 6850, 7450}, 100, 6000, 6100, 5950, 10'000};
-
     /// Readings averaged for the steady voltage.
     static constexpr int Window = 8;
 
-    explicit BatteryMonitor(const Thresholds &thresholds);
+    BatteryMonitor() = default;
+    explicit BatteryMonitor(const BatteryThresholds &thresholds);
+
+    /// Levels for the readings from now on. Until set, no level is low or
+    /// empty.
+    void setThresholds(const BatteryThresholds &thresholds) { m_t = thresholds; }
 
     /// Calibration offset added to every reading.
     void setOffset(int millivolts) { m_offset = millivolts; }
@@ -63,7 +68,7 @@ public:
 private:
     int targetLevel(int mv) const;
 
-    Thresholds m_t;
+    BatteryThresholds m_t{};
     int m_offset = 0;
     int m_samples[Window]{};
     int m_count = 0;

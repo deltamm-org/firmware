@@ -53,10 +53,10 @@ TEST_CASE("locked: each category refuses its keys and nothing else")
 {
     KeyLock lock;
     lockByLongStar(lock);
-    for (Key k : {Key::Digit0, Key::Digit9, Key::Star, Key::Hash, Key::Exit, Key::Up, Key::Down, Key::P1, Key::P2}) {
+    for (Key k : {Key::Digit0, Key::Digit9, Key::Star, Key::Hash, Key::Exit, Key::Up, Key::Down, Key::Front1, Key::Front2}) {
         CHECK(tap(lock, k, standby(5000)) == V::Refused);
     }
-    for (Key k : {Key::Pf1, Key::Pf2, Key::Pf3}) {
+    for (Key k : {Key::Side1, Key::Side2, Key::Side3}) {
         CHECK(tap(lock, k, standby(5000)) == V::Refused);
     }
     CHECK(lock.knob(standby(5000)) == V::Refused);
@@ -68,7 +68,7 @@ TEST_CASE("locked: each category refuses its keys and nothing else")
     keypadOnly.side = false;
     lock.setSettings(keypadOnly);
     CHECK(tap(lock, Key::Digit5, standby(5000)) == V::Refused);
-    CHECK(tap(lock, Key::Pf1, standby(5000)) == V::Pass);
+    CHECK(tap(lock, Key::Side1, standby(5000)) == V::Pass);
     CHECK(lock.knob(standby(5000)) == V::Pass);
     CHECK(lock.ptt(true, standby(5000)) == V::Pass);
 
@@ -84,8 +84,8 @@ TEST_CASE("functions that must always work pass, and so does PTT release")
     lockByLongStar(lock);
     KeyLock::Context monitorKey = standby(2000);
     monitorKey.exemptFunction = true;
-    CHECK(tap(lock, Key::Pf2, monitorKey) == V::Pass);
-    CHECK(tap(lock, Key::P1, monitorKey) == V::Pass);
+    CHECK(tap(lock, Key::Side2, monitorKey) == V::Pass);
+    CHECK(tap(lock, Key::Front1, monitorKey) == V::Pass);
     CHECK(lock.ptt(false, standby(2000)) == V::Pass);
 }
 
@@ -124,7 +124,7 @@ TEST_CASE("screens that do not take the lock work normally while locked")
 {
     KeyLock lock;
     lockByLongStar(lock);
-    for (Key k : {Key::Menu, Key::Exit, Key::Up, Key::Down, Key::Digit3, Key::Pf1, Key::P1, Key::Star}) {
+    for (Key k : {Key::Menu, Key::Exit, Key::Up, Key::Down, Key::Digit3, Key::Side1, Key::Front1, Key::Star}) {
         CHECK(tap(lock, k, menuScreen(2000)) == V::Pass);
     }
     CHECK(lock.knob(menuScreen(2000)) == V::Pass);

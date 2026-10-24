@@ -14,7 +14,7 @@ QStringList SimBridge::keyNames() const
 {
     QStringList names;
     for (unsigned i = 0; i < static_cast<unsigned>(dmm::services::Key::Count); ++i) {
-        const std::string_view n = dmm::services::keyName(static_cast<dmm::services::Key>(i));
+        const std::string_view n = m_input.keyLabel(static_cast<dmm::services::Key>(i));
         names << QString::fromUtf8(n.data(), static_cast<qsizetype>(n.size()));
     }
     return names;

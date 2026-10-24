@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tommi Tauriainen
 
-#include "dmm/services/calibration.h"
+#include "dmm/services/d878uv2_calibration.h"
 
 #include <doctest/doctest.h>
 
 #include <array>
 
+using dmm::services::D878Uv2Calibration;
 using dmm::services::PowerLevel;
-using dmm::services::StockCalibration;
 
 namespace {
 
 constexpr std::uint32_t MHz = 1'000'000;
 
-void put16(std::array<std::uint8_t, StockCalibration::Bytes> &d, std::size_t at, std::uint16_t v)
+void put16(std::array<std::uint8_t, D878Uv2Calibration::Bytes> &d, std::size_t at, std::uint16_t v)
 {
     d[at] = static_cast<std::uint8_t>(v);
     d[at + 1] = static_cast<std::uint8_t>(v >> 8);
 }
 
 // A calibrated radio with simple round numbers.
-std::array<std::uint8_t, StockCalibration::Bytes> sample()
+std::array<std::uint8_t, D878Uv2Calibration::Bytes> sample()
 {
-    std::array<std::uint8_t, StockCalibration::Bytes> d{};
+    std::array<std::uint8_t, D878Uv2Calibration::Bytes> d{};
     d[0x14] = 'w';
     d[0x15] = 'w';
     put16(d, 0x00, 0x0812); // reference trim
@@ -74,9 +74,9 @@ std::array<std::uint8_t, StockCalibration::Bytes> sample()
     return d;
 }
 
-StockCalibration loaded(const std::array<std::uint8_t, StockCalibration::Bytes> &d)
+D878Uv2Calibration loaded(const std::array<std::uint8_t, D878Uv2Calibration::Bytes> &d)
 {
-    StockCalibration cal;
+    D878Uv2Calibration cal;
     cal.use(d);
     return cal;
 }
@@ -85,7 +85,7 @@ StockCalibration loaded(const std::array<std::uint8_t, StockCalibration::Bytes> 
 
 TEST_CASE("transmit power is the band base corrected by the level's flatness")
 {
-    const StockCalibration cal = loaded(sample());
+    const D878Uv2Calibration cal = loaded(sample());
     CHECK(cal.txPower(460 * MHz, PowerLevel::Low) == 40 * 16);
     CHECK(cal.txPower(433'500'000, PowerLevel::Low) == 44 * 16);
     CHECK(cal.txPower(401 * MHz, PowerLevel::Low) == 38 * 16);
@@ -102,7 +102,7 @@ TEST_CASE("a power value outside 0..255 is refused, not wrapped")
     auto d = sample();
     d[0x200 + 50] = 0; // 450 MHz: 40 + 0 - 10 = 30, still fine
     d[0x02] = 5;       // now 5 + 0 - 10 < 0
-    const StockCalibration cal = loaded(d);
+    const D878Uv2Calibration cal = loaded(d);
     CHECK_FALSE(cal.txPower(450 * MHz, PowerLevel::Low).has_value());
     CHECK(cal.txPower(460 * MHz, PowerLevel::Low) == 5 * 16);
     // Above 255 the value no longer fits the DAC's top bits.
@@ -113,7 +113,7 @@ TEST_CASE("a power value outside 0..255 is refused, not wrapped")
 
 TEST_CASE("front-end tuning interpolates between the calibration points")
 {
-    const StockCalibration cal = loaded(sample());
+    const D878Uv2Calibration cal = loaded(sample());
     CHECK(cal.rxTune(400 * MHz) == 1000);
     CHECK(cal.rxTune(420 * MHz) == 1500);
     CHECK(cal.rxTune(440 * MHz) == 2000);
@@ -129,7 +129,7 @@ TEST_CASE("front-end tuning interpolates between the calibration points")
 
 TEST_CASE("squelch threshold: base, level and flatness")
 {
-    const StockCalibration cal = loaded(sample());
+    const D878Uv2Calibration cal = loaded(sample());
     CHECK(cal.squelchThreshold(456 * MHz, 1) == 100);
     CHECK(cal.squelchThreshold(456 * MHz, 3) == 96);
     CHECK(cal.squelchThreshold(432 * MHz, 1) == 103); // flatness 57 against 60
@@ -140,7 +140,7 @@ TEST_CASE("squelch threshold: base, level and flatness")
 
 TEST_CASE("reference trim, deviation and baseband gains")
 {
-    const StockCalibration cal = loaded(sample());
+    const D878Uv2Calibration cal = loaded(sample());
     CHECK(cal.referenceTrim() == 0x0812);
     REQUIRE(cal.deviation().has_value());
     CHECK(cal.deviation()->voice == 0x50);
@@ -159,7 +159,7 @@ TEST_CASE("an uncalibrated radio gives no RF values")
 {
     auto d = sample();
     d[0x14] = 0;
-    const StockCalibration cal = loaded(d);
+    const D878Uv2Calibration cal = loaded(d);
     CHECK_FALSE(cal.referenceTrim().has_value());
     CHECK_FALSE(cal.txPower(460 * MHz, PowerLevel::Low).has_value());
     CHECK_FALSE(cal.rxTune(440 * MHz).has_value());

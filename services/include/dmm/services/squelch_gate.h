@@ -5,14 +5,6 @@
 
 namespace dmm::services {
 
-/// The transceiver squelch's noise condition: the received noise must fall
-/// below this, in the receiver's dB, for the squelch to open. Each squelch
-/// level (1..5) needs 2 dB less noise; wide channels carry more.
-constexpr int squelchOpenNoiseDb(bool wide, int level)
-{
-    return (wide ? 62 : 52) - 2 * level;
-}
-
 /// Debounces the receiver's carrier decision into speaker open or closed:
 /// it opens after OpenAfter carrier polls in a row and closes after
 /// CloseAfter polls without, so a single odd poll changes nothing. Forced

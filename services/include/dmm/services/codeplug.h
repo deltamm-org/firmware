@@ -5,7 +5,6 @@
 
 #include "dmm/services/calibration.h"
 #include "dmm/services/key_lock.h"
-#include "dmm/services/storage.h"
 
 #include <cstdint>
 #include <optional>
@@ -51,15 +50,12 @@ struct Channel
     bool receiveOnly = false;
     Tone receiveTone;
     Tone transmitTone;
-    /// As stored: up to 16 bytes, zero-terminated here.
+    /// Up to NameBytes bytes, zero-terminated.
     char name[NameBytes + 1] = {};
 
     /// Transmits and receives FM.
     bool analog() const { return mode == ChannelMode::Analog || mode == ChannelMode::AnalogDigital; }
 };
-
-/// Decodes a 64-byte channel record; nothing when it is not a channel.
-std::optional<Channel> decodeChannel(std::span<const std::uint8_t, 64> record);
 
 /// The general settings DeltaMM uses so far.
 struct CodeplugSettings
@@ -77,10 +73,8 @@ struct CodeplugSettings
     std::uint16_t backlightS = 0; // backlight time after the last key; 0 = always on
 };
 
-/// Decodes the start of the general settings block (at least 0xC0 bytes).
-CodeplugSettings decodeSettings(std::span<const std::uint8_t> block);
-
-/// What the radio reads from a codeplug.
+/// What the radio reads from its codeplug, whatever its format. The
+/// limits are the most DeltaMM handles.
 class CodeplugSource
 {
 public:
@@ -109,43 +103,6 @@ public:
 
 protected:
     ~CodeplugSource() = default;
-};
-
-/// The codeplug on the data flash, read only. Every 128 KB block is kept
-/// twice, in the block itself and the one after it; reads come from the
-/// copy marked valid.
-class StockCodeplug final : public CodeplugSource
-{
-public:
-    explicit StockCodeplug(Storage &storage)
-        : m_storage(storage)
-    {
-    }
-
-    /// Reads @p data from codeplug address @p address, from the valid copy
-    /// of each 128 KB block it touches.
-    StorageResult read(std::uint32_t address, std::span<std::uint8_t> data);
-
-    std::optional<CodeplugSettings> settings() override;
-    std::optional<Channel> channel(std::uint16_t index) override;
-    std::optional<Channel> vfo(bool sideB) override;
-    bool zoneInUse(std::uint8_t zone) override;
-    std::size_t zonesInUse(std::span<std::uint8_t> out) override;
-    bool zoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name) override;
-    std::size_t zoneChannels(std::uint8_t zone, std::span<std::uint16_t> out) override;
-    std::uint16_t zoneSelection(std::uint8_t zone, bool sideB) override;
-
-private:
-    bool copyValid(std::uint32_t block, bool &valid);
-    bool bitSet(std::uint32_t bitmap, unsigned index);
-
-    Storage &m_storage;
-    // Copy choice per block, remembered: blocks and whether the first copy
-    // is valid.
-    static constexpr std::size_t Cached = 16;
-    std::uint32_t m_cachedBlock[Cached] = {};
-    bool m_cachedValid[Cached] = {};
-    std::size_t m_cachedCount = 0;
 };
 
 } // namespace dmm::services

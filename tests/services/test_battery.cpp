@@ -9,6 +9,8 @@ using dmm::services::BatteryMonitor;
 
 namespace {
 
+constexpr dmm::services::BatteryThresholds TwoCell{{6450, 6850, 7450}, 100, 6000, 6100, 5950, 10'000};
+
 // Feeds @p count readings of @p mv, 250 ms apart, from @p now on.
 void feed(BatteryMonitor &m, int mv, int count, dmm::os::Ticks &now)
 {
@@ -22,7 +24,7 @@ void feed(BatteryMonitor &m, int mv, int count, dmm::os::Ticks &now)
 
 TEST_CASE("the first reading sets the level; the average follows later ones")
 {
-    BatteryMonitor m(BatteryMonitor::TwoCellLiIon);
+    BatteryMonitor m(TwoCell);
     dmm::os::Ticks now = 0;
     CHECK_FALSE(m.valid());
     m.update(-1, now);
@@ -37,7 +39,7 @@ TEST_CASE("the first reading sets the level; the average follows later ones")
 
 TEST_CASE("levels go down one bar at a time and up only past the hysteresis")
 {
-    BatteryMonitor m(BatteryMonitor::TwoCellLiIon);
+    BatteryMonitor m(TwoCell);
     dmm::os::Ticks now = 0;
     feed(m, 7600, 8, now);
     feed(m, 6300, 8, now); // average falls through every threshold
@@ -52,7 +54,7 @@ TEST_CASE("levels go down one bar at a time and up only past the hysteresis")
 
 TEST_CASE("low below 6.00 V, cleared at 6.10 V; the calibration offset counts")
 {
-    BatteryMonitor m(BatteryMonitor::TwoCellLiIon);
+    BatteryMonitor m(TwoCell);
     dmm::os::Ticks now = 0;
     feed(m, 5990, 8, now);
     CHECK(m.low());
@@ -67,7 +69,7 @@ TEST_CASE("low below 6.00 V, cleared at 6.10 V; the calibration offset counts")
 
 TEST_CASE("empty only after 10 s below 5.95 V without a break")
 {
-    BatteryMonitor m(BatteryMonitor::TwoCellLiIon);
+    BatteryMonitor m(TwoCell);
     dmm::os::Ticks now = 0;
     feed(m, 5900, 8, now); // 2 s
     CHECK_FALSE(m.empty());

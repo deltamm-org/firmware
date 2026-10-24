@@ -8,6 +8,9 @@
 namespace dmm::services {
 
 /// What the previous run left behind when it crashed.
+///
+/// The fields after lr follow the one CPU family supported today. A board
+/// on another CPU would need a generic list of named values here.
 struct CrashReport
 {
     /// "hard fault", "stack overflow", ...

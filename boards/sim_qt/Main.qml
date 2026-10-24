@@ -71,7 +71,7 @@ ApplicationWindow {
                 columns: 6
                 spacing: 4
                 Repeater {
-                    // Indexes into Key: PTT, PF1-3, P1, P2, Menu, Up, Down,
+                    // Indexes into Key: PTT, Side1-3, Front1-2, Menu, Up, Down,
                     // Exit, *, #, 1-9, 0.
                     model: [21, 18, 19, 20, 16, 17, 12, 14, 15, 13, 10, 11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
                     delegate: Button {

@@ -3,7 +3,7 @@
 
 #include "sim_storage.h"
 
-#include "dmm/services/calibration.h"
+#include "dmm/services/d878uv2_calibration.h"
 
 namespace {
 
@@ -13,16 +13,16 @@ constexpr std::uint32_t Size = 256u * 1024 * 1024;
 
 SimStorage::SimStorage()
 {
-    using dmm::services::StockCalibration;
-    for (std::uint32_t i = 0; i < StockCalibration::Bytes; ++i) {
-        put(StockCalibration::CopyA + i, 0);
+    using dmm::services::D878Uv2Calibration;
+    for (std::uint32_t i = 0; i < D878Uv2Calibration::Bytes; ++i) {
+        put(D878Uv2Calibration::CopyA + i, 0);
     }
-    put(StockCalibration::CopyA + 0x11, 100); // battery offset 0
-    put(StockCalibration::CopyA + 0x14, 'w');
-    put(StockCalibration::CopyA + 0x15, 'w');
+    put(D878Uv2Calibration::CopyA + 0x11, 100); // battery offset 0
+    put(D878Uv2Calibration::CopyA + 0x14, 'w');
+    put(D878Uv2Calibration::CopyA + 0x15, 'w');
     const std::uint8_t valid[] = {0x55, 0x55, 0xAA, 0xAA};
     for (std::uint32_t i = 0; i < 4; ++i) {
-        put(StockCalibration::CopyA + StockCalibration::BlockBytes - 4 + i, valid[i]);
+        put(D878Uv2Calibration::CopyA + D878Uv2Calibration::BlockBytes - 4 + i, valid[i]);
     }
     putSampleCodeplug();
 }

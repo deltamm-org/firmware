@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "dmm/lib/format.h"
 #include "dmm/services/baseband.h"
 #include "dmm/services/codeplug.h"
 #include "dmm/services/fm_transceiver.h"
@@ -31,35 +32,21 @@ struct SpeakerVolume
 {
     std::uint8_t step;
 };
-/// One audio codec register (console test).
-struct CodecWrite
+/// One of a chip's own console commands (console test).
+struct ChipCommand
 {
-    std::uint8_t page;
-    std::uint8_t reg;
-    std::uint8_t value;
-};
-/// A raw baseband packet; the replies go to the log (console test).
-struct RawPacket
-{
-    std::uint8_t type;
-    std::uint8_t count;
-    std::uint8_t fields[16];
-};
-/// Logs one FM transceiver register.
-struct FmRead
-{
-    std::uint8_t reg;
+    enum class Chip : std::uint8_t
+    {
+        Fm,
+        Baseband,
+    };
+    Chip chip;
+    lib::StaticString<64> text;
 };
 /// Microphone on (unmuted) or muted.
 struct Microphone
 {
     bool on;
-};
-/// Writes one FM transceiver register (console test).
-struct FmWrite
-{
-    std::uint8_t reg;
-    std::uint16_t value;
 };
 /// Receive FM at @c receiveHz; the squelch opens the speaker.
 struct FmReceive
@@ -89,16 +76,6 @@ struct BatterySaveStatus
 /// Logs the FM receiver's state and signal strength.
 struct FmStatus
 {
-};
-/// Steps the receive front-end tuning over its range and logs the signal
-/// strength at each step, then puts the calibrated value back.
-struct FmSweep
-{
-};
-/// Holds the receive front-end tuning at @c value; -1 = calibrated value.
-struct FmTune
-{
-    std::int16_t value;
 };
 /// The PTT key went down (transmit) or up (back to receive).
 struct Ptt
@@ -145,8 +122,7 @@ struct UseChannel
     std::uint8_t squelch;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, CodecWrite, RawPacket, FmRead, Microphone, FmWrite,
-    FmReceive, FmIdle, FmSquelch, FmStatus, FmSweep, FmTune, Ptt, FmTransmitFrequency, FmCtcss, FmPower, FmTimeout, FmTransmitAudio, UseChannel, BatterySave, BatterySaveStatus>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmCtcss, FmPower, FmTimeout, FmTransmitAudio, UseChannel, BatterySave, BatterySaveStatus>;
 
 /// Starts the radio task, which owns @p baseband and @p fm (may be
 /// nullptr) and brings them up.

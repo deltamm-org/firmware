@@ -25,6 +25,6 @@ void reportBattery();
 
 /// The radio's calibration once it has been read and looks valid, else
 /// nullptr. Read-only after that, from any task.
-const services::StockCalibration *calibration();
+const services::Calibration *calibration();
 
 } // namespace dmm::app::system

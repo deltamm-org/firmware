@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tommi Tauriainen
 
-#include "dmm/services/nand_storage.h"
+#include "dmm/services/d878uv2_storage.h"
 
 namespace dmm::services {
 
@@ -64,12 +64,12 @@ const char *resultName(StorageResult r)
     return "?";
 }
 
-NandStorage::NandStorage(SpiNand &nand)
+D878Uv2Storage::D878Uv2Storage(SpiNand &nand)
     : m_nand(nand)
 {
 }
 
-void NandStorage::start()
+void D878Uv2Storage::start()
 {
     m_lock.lock();
     m_present = m_nand.identify();
@@ -79,7 +79,7 @@ void NandStorage::start()
     m_lock.unlock();
 }
 
-void NandStorage::loadRemapTable()
+void D878Uv2Storage::loadRemapTable()
 {
     m_entries = -1;
     int newest = -1;
@@ -108,7 +108,7 @@ void NandStorage::loadRemapTable()
     m_entries = count;
 }
 
-std::uint16_t NandStorage::remapBlock(std::uint16_t block) const
+std::uint16_t D878Uv2Storage::remapBlock(std::uint16_t block) const
 {
     for (int i = 0; i < m_entries; ++i) {
         if (m_bad[i] == block) {
@@ -118,7 +118,7 @@ std::uint16_t NandStorage::remapBlock(std::uint16_t block) const
     return block;
 }
 
-StorageInfo NandStorage::info()
+StorageInfo D878Uv2Storage::info()
 {
     m_lock.lock();
     StorageInfo i;
@@ -131,7 +131,7 @@ StorageInfo NandStorage::info()
     return i;
 }
 
-StorageResult NandStorage::readPhysical(std::uint32_t address, std::span<std::uint8_t> data)
+StorageResult D878Uv2Storage::readPhysical(std::uint32_t address, std::span<std::uint8_t> data)
 {
     StorageResult result = StorageResult::Ok;
     std::size_t done = 0;
@@ -152,7 +152,7 @@ StorageResult NandStorage::readPhysical(std::uint32_t address, std::span<std::ui
     return result;
 }
 
-StorageResult NandStorage::read(std::uint32_t address, std::span<std::uint8_t> data, bool physical)
+StorageResult D878Uv2Storage::read(std::uint32_t address, std::span<std::uint8_t> data, bool physical)
 {
     m_lock.lock();
     StorageResult result = StorageResult::Ok;

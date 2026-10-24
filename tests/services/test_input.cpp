@@ -72,8 +72,8 @@ TEST_CASE("Up repeats while held; other keys do not")
 TEST_CASE("keys pressed together are reported together, PTT included")
 {
     Recorder r;
-    r.feed(keyBit(Key::Ptt) | keyBit(Key::Pf1), 20);
-    CHECK(r.events == std::vector<std::string>{"PF1 press@10", "PTT press@10"});
+    r.feed(keyBit(Key::Ptt) | keyBit(Key::Side1), 20);
+    CHECK(r.events == std::vector<std::string>{"Side1 press@10", "PTT press@10"});
     CHECK(keyName(Key::Star) == "*");
     CHECK(keyName(Key::Count) == "?");
 }

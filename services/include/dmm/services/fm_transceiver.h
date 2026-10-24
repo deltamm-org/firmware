@@ -6,6 +6,7 @@
 #include "dmm/services/calibration.h"
 
 #include <cstdint>
+#include <string_view>
 
 namespace dmm::services {
 
@@ -22,8 +23,6 @@ struct FmReceiveStatus
 {
     bool carrier = false; // squelch decision: a signal is present
     int rssiDbm = 0;
-    int noiseDb = 0;
-    int quality = 0;
 };
 
 /// The analog FM transceiver and the board around it.
@@ -40,18 +39,16 @@ public:
     /// the reference trim, front-end tuning and squelch threshold for
     /// squelch level @p squelchLevel (1..5) from @p calibration. Returns
     /// nullptr, or why it did not.
-    virtual const char *receive(const FmChannel &channel, int squelchLevel, const StockCalibration &calibration) = 0;
+    virtual const char *receive(const FmChannel &channel, int squelchLevel, const Calibration &calibration) = 0;
     /// Transmits on @p channel's transmit frequency at @p level, with a
     /// CTCSS tone of @p ctcssCentiHz (0.01 Hz units; 0 = none), power and
     /// deviation from @p calibration. The microphone is unmuted. Returns
     /// nullptr, or why it did not transmit (then nothing was switched on).
     virtual const char *transmit(const FmChannel &channel, PowerLevel level, std::uint16_t ctcssCentiHz,
-        const StockCalibration &calibration) = 0;
+        const Calibration &calibration) = 0;
     /// Ends a transmission: power amplifier off first, then the transmit
     /// path, microphone muted, idle. Safe to call at any time.
     virtual void endTransmit() = 0;
-    /// The power-amplifier control value of the running transmission, or 0.
-    virtual std::uint16_t transmitPower() const = 0;
 
     /// Stops receiving or transmitting; the chip stays powered.
     virtual void idle() = 0;
@@ -66,16 +63,17 @@ public:
     virtual bool receiving() const = 0;
     virtual bool transmitting() const = 0;
     virtual FmReceiveStatus status() = 0;
-    /// Overrides the receive front-end tuning (12 bits) until the next
-    /// receive(), for measurements.
-    virtual void setReceiveTune(std::uint16_t value) = 0;
+    /// Logs @p what, then what the receiver hears in the chip's own
+    /// figures.
+    virtual void logStatus(std::string_view what) = 0;
 
-    /// One register, for the console.
-    virtual std::uint16_t readRegister(std::uint8_t address) = 0;
-    virtual void writeRegister(std::uint8_t address, std::uint16_t value) = 0;
-    /// Mutes or unmutes the microphone. Returns the chip's pin register as
-    /// written, for the log.
-    virtual std::uint16_t setMicrophoneMuted(bool muted) = 0;
+    virtual void setMicrophoneMuted(bool muted) = 0;
+
+    /// Runs one of the chip's own console commands, for experiments; the
+    /// result goes to the log. False if @p command is not one of them.
+    virtual bool debugCommand(std::string_view command) = 0;
+    /// The chip's console commands, for the help text.
+    virtual const char *debugHelp() const = 0;
 
 protected:
     ~FmTransceiver() = default;

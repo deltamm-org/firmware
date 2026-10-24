@@ -5,7 +5,7 @@
 
 namespace dmm::services {
 
-BatteryMonitor::BatteryMonitor(const Thresholds &thresholds)
+BatteryMonitor::BatteryMonitor(const BatteryThresholds &thresholds)
     : m_t(thresholds)
 {
 }

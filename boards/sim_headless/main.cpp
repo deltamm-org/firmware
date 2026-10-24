@@ -6,6 +6,8 @@
 
 #include "dmm/app/app.h"
 #include "dmm/os/os.h"
+#include "dmm/services/d878uv2_calibration.h"
+#include "dmm/services/d878uv2_codeplug.h"
 
 #include "sim_audio.h"
 #include "sim_battery.h"
@@ -141,8 +143,10 @@ int main(int argc, char *argv[])
         battery.setMillivolts(parser.value(batteryOption).toInt());
     }
     static SimStorage storage;
+    static dmm::services::D878Uv2Calibration calibration;
+    static dmm::services::D878Uv2Codeplug codeplug{storage};
     static SimAudio audio;
-    static dmm::app::Platform platform{leds, logSink, system, "sim_headless", nullptr, &display, &input, &battery, &storage, nullptr, nullptr, nullptr, &audio};
+    static dmm::app::Platform platform{leds, logSink, system, "sim_headless", nullptr, &display, &input, &battery, &storage, nullptr, nullptr, nullptr, &audio, &calibration, &codeplug};
     dmm::app::start(platform);
     dmm::os::runScheduler();
 
@@ -151,7 +155,7 @@ int main(int argc, char *argv[])
         QTimer::singleShot(3500, &app, [names] {
             for (unsigned i = 0; i < static_cast<unsigned>(dmm::services::Key::Count); ++i) {
                 const auto key = static_cast<dmm::services::Key>(i);
-                const std::string_view n = dmm::services::keyName(key);
+                const std::string_view n = input.keyLabel(key);
                 if (names.contains(QString::fromUtf8(n.data(), static_cast<qsizetype>(n.size())), Qt::CaseInsensitive)) {
                     input.setKey(key, true);
                 }

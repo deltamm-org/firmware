@@ -11,7 +11,9 @@
 
 namespace dmm::services {
 
-/// Every key a radio may have. A board without some of them never reports them.
+/// Every key a radio may have. A board without some of them never reports
+/// them. The set is fixed for now; later the board could name its own keys
+/// at compile time, so the count follows the radio.
 enum class Key : std::uint8_t
 {
     Digit0,
@@ -30,11 +32,13 @@ enum class Key : std::uint8_t
     Exit,
     Up,
     Down,
-    P1,
-    P2,
-    Pf1,
-    Pf2,
-    Pf3,
+    // Programmable keys on the front panel.
+    Front1,
+    Front2,
+    // Programmable keys on the radio's sides or top.
+    Side1,
+    Side2,
+    Side3,
     Ptt,
     Count,
 };
@@ -48,7 +52,8 @@ constexpr KeyMask keyBit(Key key)
     return 1u << static_cast<unsigned>(key);
 }
 
-/// Short name for logs and screens: "0", "*", "Menu", "PF1", "PTT", ...
+/// Name for logs: "0", "*", "Menu", "Front1", "PTT", ... Screens use the
+/// board's InputDevices::keyLabel() instead.
 std::string_view keyName(Key key);
 
 /// The board's input hardware, read by the input task only.
@@ -65,6 +70,9 @@ public:
 
     /// The volume knob, 0..1000, or -1 on a board without one.
     virtual int volumeKnob() = 0;
+    /// The label on @p key as the user sees it, for screens; at most four
+    /// characters. Constant, so any task may call it.
+    virtual std::string_view keyLabel(Key key) const = 0;
 
 protected:
     ~InputDevices() = default;

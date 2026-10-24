@@ -8,7 +8,7 @@ namespace dmm::services {
 std::string_view keyName(Key key)
 {
     static constexpr std::string_view Names[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "#", "Menu",
-        "Exit", "Up", "Down", "P1", "P2", "PF1", "PF2", "PF3", "PTT"};
+        "Exit", "Up", "Down", "Front1", "Front2", "Side1", "Side2", "Side3", "PTT"};
     static_assert(sizeof Names / sizeof Names[0] == static_cast<unsigned>(Key::Count));
     const auto i = static_cast<unsigned>(key);
     return i < static_cast<unsigned>(Key::Count) ? Names[i] : "?";

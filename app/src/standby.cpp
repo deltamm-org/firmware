@@ -196,8 +196,7 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
     // Bottom bar: the quick keys, or a short note.
     d.fillRect(0, h - HintH, w, 1, p::Rule);
     d.fillRect(0, h - HintH + 1, w, HintH - 1, p::Ground);
-    const std::string_view hints =
-        s.note.empty() ? std::string_view("Menu  P1 Zone  P2 Chan  # VFO") : s.note;
+    const std::string_view hints = s.note.empty() ? s.keys : s.note;
     drawText(d, Small, 3, h - HintH + 2, hints, p::Dim, p::Ground);
 }
 

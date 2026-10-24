@@ -6,6 +6,8 @@
 #include "dmm/services/input.h"
 
 #include <atomic>
+#include <iterator>
+#include <string_view>
 
 /// Simulated keys and knobs, set from the GUI thread and read by the app.
 class SimInput final : public dmm::services::InputDevices
@@ -21,6 +23,15 @@ public:
     std::int32_t encoderPosition() override { return m_position.load(); }
     int encoderCountsPerDetent() const override { return CountsPerDetent; }
     int volumeKnob() override { return m_volume.load(); }
+    /// The simulated panel's labels.
+    std::string_view keyLabel(dmm::services::Key key) const override
+    {
+        static constexpr std::string_view Labels[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "#", "Menu",
+            "Exit", "Up", "Down", "P1", "P2", "PF1", "PF2", "PF3", "PTT"};
+        static_assert(std::size(Labels) == static_cast<unsigned>(dmm::services::Key::Count));
+        const auto i = static_cast<unsigned>(key);
+        return i < std::size(Labels) ? Labels[i] : "?";
+    }
 
 private:
     static constexpr int CountsPerDetent = 2;

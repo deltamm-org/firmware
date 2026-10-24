@@ -145,7 +145,8 @@ inline constexpr unsigned BasebandResetLowMs = 500;
 // microphone while high; GPIO0 and GPIO4 turn on the receive front end
 // above and below 300 MHz; GPIO5 selects the transmit path above 300 MHz
 // and GPIO7 the transmit filter for 165-300 MHz; GPIO2 powers the GPS.
+// The receive front-end tuning is a 12-bit PWM value.
 inline constexpr dmm::hal::gd32f30x::ThreeWireBus::Pins FmTransceiverBus{{Port::B, 5}, {Port::B, 3}, {Port::B, 4}};
-inline constexpr dmm::services::Rda1846Transceiver::Pins FmPins{3, 0, 4, 5, 7, 2, 300'000'000, 165'000'000};
+inline constexpr dmm::services::Rda1846Transceiver::Pins FmPins{3, 0, 4, 5, 7, 2, 300'000'000, 165'000'000, 0xFFF};
 
 } // namespace board

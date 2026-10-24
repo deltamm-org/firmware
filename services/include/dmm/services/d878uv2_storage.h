@@ -9,7 +9,8 @@
 
 namespace dmm::services {
 
-/// Storage on the radio's SPI NAND.
+/// The D878UVII's data flash: an SPI NAND with the radio's own bad-block
+/// table.
 ///
 /// Worn 128 KB blocks are replaced with spare ones, listed in the first
 /// block: up to 125 records of 0x1F8 bytes at
@@ -17,13 +18,13 @@ namespace dmm::services {
 /// record holds 125 little-endian block numbers (address / 128 KB) that are
 /// replaced, then at 0xFA the 125 blocks replacing them, and at 0x1F6 the
 /// number of entries in use.
-class NandStorage final : public Storage
+class D878Uv2Storage final : public Storage
 {
 public:
     static constexpr std::uint32_t BlockBytes = 0x20000;
     static constexpr int MaxRemapEntries = 89;
 
-    explicit NandStorage(drivers::storage::SpiNand &nand);
+    explicit D878Uv2Storage(drivers::storage::SpiNand &nand);
 
     /// Identifies the chip and loads the remap table. Call once.
     void start();

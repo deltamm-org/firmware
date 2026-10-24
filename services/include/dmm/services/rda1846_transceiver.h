@@ -13,7 +13,8 @@ namespace dmm::services {
 class Rda1846Transceiver final : public FmTransceiver
 {
 public:
-    /// What the transceiver's GPIO pins do on the board (pin numbers 0..7).
+    /// What the transceiver's GPIO pins do on the board (pin numbers 0..7),
+    /// and the range of the board's receive front-end tuning.
     struct Pins
     {
         unsigned microphoneMute;   // high = muted
@@ -24,7 +25,13 @@ public:
         unsigned gpsPower;         // high = on
         std::uint32_t splitHz;
         std::uint32_t midLowHz;
+        std::uint16_t receiveTuneMax;
     };
+
+    /// The noise level, in the chip's dB, the received noise must fall below
+    /// for the squelch to open. Each squelch level (1..5) needs 2 dB less;
+    /// wide channels carry more noise.
+    static constexpr int squelchOpenNoiseDb(bool wide, int level) { return (wide ? 62 : 52) - 2 * level; }
 
     /// Picks the chip's register values when it starts; may read storage.
     using TuningSource = const drivers::radio::Rda1846::Tuning &(*)();
@@ -36,11 +43,12 @@ public:
 
     bool present() override { return m_chip.present(); }
     bool start() override;
-    const char *receive(const FmChannel &channel, int squelchLevel, const StockCalibration &calibration) override;
+    const char *receive(const FmChannel &channel, int squelchLevel, const Calibration &calibration) override;
     const char *transmit(const FmChannel &channel, PowerLevel level, std::uint16_t ctcssCentiHz,
-        const StockCalibration &calibration) override;
+        const Calibration &calibration) override;
     void endTransmit() override;
-    std::uint16_t transmitPower() const override { return m_power; }
+    /// The power-amplifier control value of the running transmission, or 0.
+    std::uint16_t transmitPower() const { return m_power; }
     void idle() override;
     void sleepReceiver() override;
     void wakeReceiver() override;
@@ -48,10 +56,11 @@ public:
     bool receiving() const override { return m_chip.mode() == drivers::radio::Rda1846::Mode::Receive; }
     bool transmitting() const override { return m_chip.mode() == drivers::radio::Rda1846::Mode::Transmit; }
     FmReceiveStatus status() override;
-    void setReceiveTune(std::uint16_t value) override { m_rf.setReceiveTune(value); }
-    std::uint16_t readRegister(std::uint8_t address) override { return m_chip.readRegister(address); }
-    void writeRegister(std::uint8_t address, std::uint16_t value) override { m_chip.writeRegister(address, value); }
-    std::uint16_t setMicrophoneMuted(bool muted) override;
+    void logStatus(std::string_view what) override;
+    void setMicrophoneMuted(bool muted) override;
+    /// "<reg> [value]" (hex), "tune <value>|auto", "sweep".
+    bool debugCommand(std::string_view command) override;
+    const char *debugHelp() const override;
 
     /// The GPIO register at start: microphone muted, every RF switch and
     /// the GPS off, other pins floating.
@@ -60,6 +69,8 @@ public:
 private:
     void setPin(unsigned pin, bool high);
     unsigned frontEnd() const;
+    int settledRssi();
+    void sweep();
 
     drivers::radio::Rda1846 &m_chip;
     RfHardware &m_rf;
@@ -69,6 +80,7 @@ private:
     std::uint16_t m_power = 0;
     bool m_wide = false;
     std::uint32_t m_receiveHz = 0;
+    std::uint16_t m_tune = 0; // the calibrated front-end tuning in use
     bool m_asleep = false;
 };
 

@@ -7,6 +7,7 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,25 @@ public:
 
 const std::vector<std::uint8_t> Blob(2048, 0x22);
 
+using CodecWrite = Sct3258Baseband::CodecWrite;
+constexpr CodecWrite Receive[] = {{1, 52, 0x00}, {0, 65, 0xD4}};
+constexpr CodecWrite Transmit[] = {{0, 65, 0x00}, {1, 59, 32}, {0, 86, 0xA0}, {0, 88, 32}, {1, 52, 0x80}};
+constexpr Sct3258Baseband::Audio TestAudio{
+    .codec = Sct3258::CodecTlv320aic3204,
+    .receive = Receive,
+    .transmit = Transmit,
+    .speakerPage = 1,
+    .speakerRegister = 0x10,
+    .speakerMuted = 0x40,
+    .speakerSteps = {0x3A, 0x3C, 0x3F, 2, 6, 8, 10, 12, 13, 15, 16, 18, 20, 22, 23},
+    .trims = {{{1, 0x12, 0}, {1, 0x13, 0}, {1, 0x3C, 0}}},
+};
+
+std::optional<Sct3258Baseband::Trims> testTrims()
+{
+    return Sct3258Baseband::Trims{{0x46, 0x50, 0x05, 0x78, 0x09, 0xC4, 0x05, 0xDC, 0x01, 0x0E}, {4, 8, 12}};
+}
+
 } // namespace
 
 TEST_CASE("start boots the chip, reads its versions, picks the codec and leaves it in analog mode")
@@ -34,7 +54,7 @@ TEST_CASE("start boots the chip, reads its versions, picks the codec and leaves 
     FakeSct3258 chip;
     FakeBoard board;
     Sct3258 sct(chip, noDelay);
-    Sct3258Baseband baseband(sct, board, Blob);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
 
     REQUIRE(baseband.start());
     CHECK(board.powerUps == 1);
@@ -49,8 +69,8 @@ TEST_CASE("start boots the chip, reads its versions, picks the codec and leaves 
     CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x00, 0x2D, 0x01});
     CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x00, 0x10, 0x04});
     CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x10, 0x10});
-    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0xD4, 0x00, 0x00}); // DAC -22 dB
-    CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 52, 0x00, 0x00, 0x00}); // mic off
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 52, 0x00, 0x00, 0x00}); // mic off
+    CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0xD4, 0x00, 0x00}); // DAC -22 dB
 }
 
 TEST_CASE("without a boot program or an answer the baseband reports why and stays off")
@@ -59,19 +79,19 @@ TEST_CASE("without a boot program or an answer the baseband reports why and stay
         FakeSct3258 chip;
         FakeBoard board;
         Sct3258 sct(chip, noDelay);
-        Sct3258Baseband baseband(sct, board, {});
+        Sct3258Baseband baseband(sct, board, {}, TestAudio, testTrims);
         CHECK_FALSE(baseband.start());
         CHECK(board.powerUps == 0);
         CHECK(baseband.info().problem != nullptr);
         CHECK_FALSE(baseband.setSpeakerVolume(5));
-        CHECK_FALSE(baseband.playTone(1000, 100, 0x20));
+        CHECK_FALSE(baseband.playTone(1000, 100, 50));
     }
     {
         FakeSct3258 chip;
         chip.answerBoot = false;
         FakeBoard board;
         Sct3258 sct(chip, noDelay);
-        Sct3258Baseband baseband(sct, board, Blob);
+        Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
         CHECK_FALSE(baseband.start());
         CHECK(board.powerUps == 1);
         CHECK_FALSE(baseband.info().running);
@@ -79,19 +99,16 @@ TEST_CASE("without a boot program or an answer the baseband reports why and stay
     }
 }
 
-TEST_CASE("volume steps map to the codec's speaker driver gain")
+TEST_CASE("volume steps come from the board's table")
 {
-    CHECK(Sct3258Baseband::volumeRegister(0) == 0x40);
-    CHECK(Sct3258Baseband::volumeRegister(1) == 0x3A);  // -6 dB
-    CHECK(Sct3258Baseband::volumeRegister(15) == 0x17); // +23 dB
-    CHECK(Sct3258Baseband::volumeRegister(99) == 0x17);
-    int previous = -7;
-    for (int step = 1; step <= 15; ++step) {
-        const int r = Sct3258Baseband::volumeRegister(step);
-        const int db = r >= 0x20 ? r - 0x40 : r;
-        CHECK(db > previous);
-        previous = db;
-    }
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    const Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    CHECK(baseband.volumeRegister(0) == 0x40);
+    CHECK(baseband.volumeRegister(1) == 0x3A);
+    CHECK(baseband.volumeRegister(15) == 23);
+    CHECK(baseband.volumeRegister(99) == 23);
 }
 
 TEST_CASE("volume, tone, codec writes and audio pins after start")
@@ -99,12 +116,12 @@ TEST_CASE("volume, tone, codec writes and audio pins after start")
     FakeSct3258 chip;
     FakeBoard board;
     Sct3258 sct(chip, noDelay);
-    Sct3258Baseband baseband(sct, board, Blob);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
     REQUIRE(baseband.start());
     chip.packets.clear();
 
     CHECK(baseband.setSpeakerVolume(15));
-    CHECK(baseband.playTone(1000, 300, 0x20));
+    CHECK(baseband.playTone(1000, 300, 50));
     CHECK(baseband.codecWrite(1, 0x12, 0x04));
     REQUIRE(chip.packets.size() == 3);
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 0x10, 0x17, 0x00, 0x00});
@@ -117,29 +134,46 @@ TEST_CASE("analog mode, work mode and carrier packets")
     FakeSct3258 chip;
     FakeBoard board;
     Sct3258 sct(chip, noDelay);
-    Sct3258Baseband baseband(sct, board, Blob);
-    const std::uint8_t gains[10] = {0x46, 0x50, 0x05, 0x78, 0x09, 0xC4, 0x05, 0xDC, 0x01, 0x0E};
-    CHECK_FALSE(baseband.setAnalog(false, gains)); // not started
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    CHECK_FALSE(baseband.setAnalog(false)); // not started
     REQUIRE(baseband.start());
     chip.packets.clear();
 
-    CHECK(baseband.setAnalog(true, gains));
+    CHECK(baseband.setAnalog(true));
     CHECK(baseband.setWorkMode(dmm::services::Baseband::WorkMode::Receive));
     CHECK(baseband.setCarrier(true));
-    REQUIRE(chip.packets.size() == 4);
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x1A, 0x80});
-    CHECK(chip.packets[1] ==
+    // The codec trims go first, once after start.
+    REQUIRE(chip.packets.size() == 7);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 0x12, 0x04, 0x00, 0x00});
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 0x3C, 0x0C, 0x00, 0x00});
+    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x00, 0x1A, 0x80});
+    CHECK(chip.packets[4] ==
         std::vector<std::uint8_t>{0x00, 0x3C, 0xC2, 0x46, 0x50, 0x05, 0x78, 0x09, 0xC4, 0x05, 0xDC, 0x01, 0x0E});
-    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
-    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
+    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
+    chip.packets.clear();
+    CHECK(baseband.setAnalog(false));
+    CHECK(chip.packets.size() == 2);
 }
 
-TEST_CASE("microphone path and codec trims")
+TEST_CASE("analog mode needs the calibrated values")
 {
     FakeSct3258 chip;
     FakeBoard board;
     Sct3258 sct(chip, noDelay);
-    Sct3258Baseband baseband(sct, board, Blob);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, [] { return std::optional<Sct3258Baseband::Trims>{}; });
+    REQUIRE(baseband.start());
+    chip.packets.clear();
+    CHECK_FALSE(baseband.setAnalog(true));
+    CHECK(chip.packets.empty());
+}
+
+TEST_CASE("microphone path")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
     CHECK_FALSE(baseband.setMicrophone(true)); // not started
     REQUIRE(baseband.start());
     chip.packets.clear();
@@ -152,8 +186,25 @@ TEST_CASE("microphone path and codec trims")
     CHECK(baseband.setMicrophone(false));
     REQUIRE(chip.packets.size() == 2);
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 0x34, 0x00, 0x00, 0x00});
+}
+
+TEST_CASE("the chip's console commands write codec registers and send raw packets")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    REQUIRE(baseband.start());
     chip.packets.clear();
-    CHECK(baseband.setCodecTrims(4, 8, 12));
-    REQUIRE(chip.packets.size() == 3);
+
+    CHECK(baseband.debugCommand("codec 1 12 4"));
+    REQUIRE(chip.packets.size() == 1);
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 0x12, 0x04, 0x00, 0x00});
+    CHECK(baseband.debugCommand("packet 20 30"));
+    REQUIRE(chip.packets.size() == 2);
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x20, 0x30});
+    CHECK_FALSE(baseband.debugCommand("codec 1 80 4")); // register out of range
+    CHECK_FALSE(baseband.debugCommand("codec 1 12"));
+    CHECK_FALSE(baseband.debugCommand("packet"));
+    CHECK_FALSE(baseband.debugCommand("restart"));
 }

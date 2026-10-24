@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tommi Tauriainen
 
-#include "dmm/services/codeplug.h"
+#include "dmm/services/d878uv2_codeplug.h"
 
 #include <algorithm>
 #include <iterator>
@@ -145,7 +145,7 @@ CodeplugSettings decodeSettings(std::span<const std::uint8_t> b)
     return s;
 }
 
-bool StockCodeplug::copyValid(std::uint32_t block, bool &valid)
+bool D878Uv2Codeplug::copyValid(std::uint32_t block, bool &valid)
 {
     for (std::size_t i = 0; i < m_cachedCount; ++i) {
         if (m_cachedBlock[i] == block) {
@@ -166,7 +166,7 @@ bool StockCodeplug::copyValid(std::uint32_t block, bool &valid)
     return true;
 }
 
-StorageResult StockCodeplug::read(std::uint32_t address, std::span<std::uint8_t> data)
+StorageResult D878Uv2Codeplug::read(std::uint32_t address, std::span<std::uint8_t> data)
 {
     StorageResult worst = StorageResult::Ok;
     while (!data.empty()) {
@@ -189,7 +189,7 @@ StorageResult StockCodeplug::read(std::uint32_t address, std::span<std::uint8_t>
     return worst;
 }
 
-std::optional<CodeplugSettings> StockCodeplug::settings()
+std::optional<CodeplugSettings> D878Uv2Codeplug::settings()
 {
     std::uint8_t b[SettingsBytes];
     if (!readable(read(Settings, b))) {
@@ -198,13 +198,13 @@ std::optional<CodeplugSettings> StockCodeplug::settings()
     return decodeSettings(b);
 }
 
-bool StockCodeplug::bitSet(std::uint32_t bitmap, unsigned index)
+bool D878Uv2Codeplug::bitSet(std::uint32_t bitmap, unsigned index)
 {
     std::uint8_t byte = 0;
     return readable(read(bitmap + index / 8, std::span(&byte, 1))) && (byte >> (index % 8) & 1) != 0;
 }
 
-std::optional<Channel> StockCodeplug::channel(std::uint16_t index)
+std::optional<Channel> D878Uv2Codeplug::channel(std::uint16_t index)
 {
     if (index >= MaxChannels || !bitSet(ChannelBitmap, index)) {
         return std::nullopt;
@@ -218,7 +218,7 @@ std::optional<Channel> StockCodeplug::channel(std::uint16_t index)
     return decodeChannel(std::span<const std::uint8_t, 64>(r));
 }
 
-std::optional<Channel> StockCodeplug::vfo(bool sideB)
+std::optional<Channel> D878Uv2Codeplug::vfo(bool sideB)
 {
     std::uint8_t r[ChannelBytes];
     if (!readable(read(sideB ? VfoB : VfoA, r))) {
@@ -227,7 +227,7 @@ std::optional<Channel> StockCodeplug::vfo(bool sideB)
     return decodeChannel(std::span<const std::uint8_t, 64>(r));
 }
 
-std::size_t StockCodeplug::zonesInUse(std::span<std::uint8_t> out)
+std::size_t D878Uv2Codeplug::zonesInUse(std::span<std::uint8_t> out)
 {
     std::uint8_t bitmap[(MaxZones + 7) / 8];
     if (!readable(read(ZoneBitmap, bitmap))) {
@@ -242,12 +242,12 @@ std::size_t StockCodeplug::zonesInUse(std::span<std::uint8_t> out)
     return n;
 }
 
-bool StockCodeplug::zoneInUse(std::uint8_t zone)
+bool D878Uv2Codeplug::zoneInUse(std::uint8_t zone)
 {
     return zone < MaxZones && bitSet(ZoneBitmap, zone);
 }
 
-bool StockCodeplug::zoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name)
+bool D878Uv2Codeplug::zoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name)
 {
     std::uint8_t raw[ZoneNameBytes];
     name[0] = '\0';
@@ -262,7 +262,7 @@ bool StockCodeplug::zoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 
     return true;
 }
 
-std::size_t StockCodeplug::zoneChannels(std::uint8_t zone, std::span<std::uint16_t> out)
+std::size_t D878Uv2Codeplug::zoneChannels(std::uint8_t zone, std::span<std::uint16_t> out)
 {
     std::uint8_t raw[MaxZoneChannels * 2];
     if (zone >= MaxZones || !readable(read(ZoneChannels + zone * ZoneChannelStride, raw))) {
@@ -278,7 +278,7 @@ std::size_t StockCodeplug::zoneChannels(std::uint8_t zone, std::span<std::uint16
     return n;
 }
 
-std::uint16_t StockCodeplug::zoneSelection(std::uint8_t zone, bool sideB)
+std::uint16_t D878Uv2Codeplug::zoneSelection(std::uint8_t zone, bool sideB)
 {
     std::uint8_t raw[2];
     if (zone >= MaxZones || !readable(read(ZoneSelections + (sideB ? ZoneSelectionSideB : 0) + zone * 2u, raw))) {

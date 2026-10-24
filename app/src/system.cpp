@@ -40,8 +40,7 @@ std::atomic<os::Ticks> lastActivity{0};
 std::atomic<int> autoOffMinutes{0};
 std::atomic<bool> batteryReportWanted{false};
 
-services::BatteryMonitor battery(services::BatteryMonitor::TwoCellLiIon);
-services::StockCalibration stockCalibration;
+services::BatteryMonitor battery;
 std::atomic<bool> calibrationReady{false};
 bool batteryCalibrated = false;
 
@@ -150,22 +149,24 @@ void loadCalibration()
                          << info.sizeBytes / (1024 * 1024) << " MB, "
                          << (info.remappedBlocks < 0 ? "no remap table" : "remapped blocks: ")
                          << (info.remappedBlocks < 0 ? 0 : info.remappedBlocks);
-    if (!stockCalibration.load(*platform->storage)) {
+    services::Calibration *cal = platform->calibration;
+    if (cal == nullptr) {
+        return;
+    }
+    if (!cal->load(*platform->storage)) {
         log::error("calibration") << "could not be read";
         return;
     }
-    calibrationReady.store(stockCalibration.present(), std::memory_order_release);
-    const auto offset = stockCalibration.batteryOffsetMv();
-    if (!stockCalibration.present() || !offset) {
-        log::warning("calibration") << "copy " << (stockCalibration.copy() == 0 ? "A" : "B")
-                                    << " read, but the radio does not look calibrated";
+    calibrationReady.store(cal->present(), std::memory_order_release);
+    const auto offset = cal->batteryOffsetMv();
+    if (!cal->present() || !offset) {
+        log::warning("calibration") << cal->source() << " read, but the radio does not look calibrated";
         return;
     }
     battery.setOffset(*offset);
     batteryCalibrated = true;
-    log::info("calibration") << "copy " << (stockCalibration.copy() == 0 ? "A" : "B") << ", battery offset "
-                             << (*offset < 0 ? "-" : "+") << (*offset < 0 ? -*offset : *offset) << " mV"
-                             << (stockCalibration.flagged() ? " (flash check failed, as usual for this block)" : "");
+    log::info("calibration") << cal->source() << ", battery offset " << (*offset < 0 ? "-" : "+")
+                             << (*offset < 0 ? -*offset : *offset) << " mV";
 }
 
 void sampleBattery(os::Ticks now)
@@ -202,6 +203,9 @@ void systemMain(void *)
     }
     logResetReport();
     platform->system.holdPower();
+    if (platform->battery != nullptr) {
+        battery.setThresholds(platform->battery->thresholds());
+    }
     loadCalibration();
 
     // A short red flash first shows the image runs, whatever happens next.
@@ -305,9 +309,9 @@ void reportBattery()
     batteryReportWanted.store(true, std::memory_order_relaxed);
 }
 
-const services::StockCalibration *calibration()
+const services::Calibration *calibration()
 {
-    return calibrationReady.load(std::memory_order_acquire) ? &stockCalibration : nullptr;
+    return calibrationReady.load(std::memory_order_acquire) ? platform->calibration : nullptr;
 }
 
 } // namespace dmm::app::system
