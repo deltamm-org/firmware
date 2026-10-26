@@ -15,8 +15,8 @@ endorsed by AnyTone or the makers of the chips it drives.
 ## Features
 
 **FM radio.** Receive and transmit using the radio's own factory
-calibration. Squelch levels, repeater offsets, CTCSS transmit tones, four
-power levels, a transmit timeout and amateur-band limits.
+calibration. Squelch levels, CTCSS and DCS tones both ways, repeater
+offsets, four power levels, a transmit timeout and amateur-band limits.
 
 **Channels.** Channels, zones and the VFO come from the codeplug already
 on the radio. Pick zones from a list, step channels with the knob, or type
@@ -39,16 +39,15 @@ A desktop simulator runs the same firmware with a drawn radio face.
 
 ## Roadmap
 
-1. CTCSS and DCS decoding, DCS transmit
-2. DMR receive and transmit
-3. Refined user interface: screen layouts, menus, icons and fonts tuned
+1. DMR receive and transmit
+2. Refined user interface: screen layouts, menus, icons and fonts tuned
    as features are added
-4. Programming over USB, compatible with existing codeplug tools
-5. Scan and dual watch
-6. GPS
-7. Calibration tool
-8. APRS, Bluetooth, recording, DTMF and selective calling
-9. DMR roaming and SMS
+3. Programming over USB, compatible with existing codeplug tools
+4. Scan and dual watch
+5. GPS
+6. Calibration tool
+7. APRS, Bluetooth, recording, DTMF and selective calling
+8. DMR roaming and SMS
 
 ## Getting started
 
