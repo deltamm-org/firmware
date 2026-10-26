@@ -53,6 +53,14 @@ constexpr int CtcssClosePolls = 15;
 constexpr int DcsClosePolls = 90;
 services::SquelchGate toneGate(ToneOpenPolls, CtcssClosePolls);
 bool speakerOpen = false;
+
+// DMR receive: the channel's settings, whether it works through a
+// repeater, and the call being heard.
+services::dmr::ChannelSettings dmrSettings;
+bool dmrRepeater = false;
+bool inCall = false;
+os::Ticks callStarted = 0;
+bool timingFound = false;
 services::BatterySaver saver;
 
 // FM transmit settings and state.
@@ -119,7 +127,11 @@ void setSpeaker(bool open)
         power::release(power::AwakeReason::Carrier);
     }
     ui::post(ui::Receiving{open});
-    withBaseband([open](auto &b) { b.setCarrier(open); });
+    // On FM the baseband passes audio only while told of a carrier; on DMR
+    // it does its own carrier detection.
+    if (!fmChannel.digital) {
+        withBaseband([open](auto &b) { b.setCarrier(open); });
+    }
     audio::post(audio::ReceiveAudio{open});
 }
 
@@ -204,6 +216,11 @@ void startFm()
     log::info("fm") << "transceiver found; microphone muted, idle";
 }
 
+[[gnu::noinline, gnu::cold]] void logFm(const char *what)
+{
+    log::error("fm") << what;
+}
+
 [[gnu::noinline, gnu::cold]] void logReceiveRefused(const char *problem)
 {
     log::error("fm") << "receive refused at " << mhz(fmChannel.receiveHz).view() << " MHz: " << problem;
@@ -226,7 +243,7 @@ bool gateOpen()
 void fmReceive()
 {
     if (system::calibration() == nullptr) {
-        log::error("fm") << "receive refused: no calibration loaded";
+        logFm("receive refused: no calibration loaded");
         return;
     }
     const int level = squelchLevel < 1 ? 1 : squelchLevel;
@@ -245,6 +262,126 @@ void fmReceive()
     basebandAnalogReceive();
     logReceiving();
     setSpeaker(gateOpen());
+}
+
+[[gnu::noinline]] void logCallEnd(const char *why, os::Ticks ms)
+{
+    log::info("dmr") << "call " << why << " after " << ms / 100 / 10 << "." << ms / 100 % 10 << " s";
+}
+
+[[gnu::noinline, gnu::cold]] void logDmr(const char *what)
+{
+    log::error("dmr") << what;
+}
+
+[[gnu::noinline]] void logDmrReceiving(bool ok)
+{
+    log::info("dmr") << "receiving " << mhz(fmChannel.receiveHz).view() << " MHz, colour code " << dmrSettings.colourCode
+                     << (dmrRepeater ? ", slot " : ", both slots direct")
+                     << (dmrRepeater ? static_cast<int>(dmrSettings.slot) : 0) << (ok ? "" : "; baseband refused");
+}
+
+void endCall(const char *why)
+{
+    if (!inCall) {
+        return;
+    }
+    inCall = false;
+    logCallEnd(why, os::nowMs() - callStarted);
+    setSpeaker(false);
+}
+
+// Tunes to the DMR channel and lets the baseband listen.
+void dmrReceive()
+{
+    endCall("left");
+    setSpeaker(false);
+    timingFound = false;
+    if (system::calibration() == nullptr) {
+        logDmr("receive refused: no calibration loaded");
+        return;
+    }
+    const char *problem = fm->receive(fmChannel, 1);
+    saver.reset();
+    if (problem != nullptr) {
+        logReceiveRefused(problem);
+        return;
+    }
+    bool ok = !HasBaseband;
+    withBaseband([&ok](auto &b) { ok = b.setDigital(dmrSettings, dmrRepeater); });
+    logDmrReceiving(ok);
+}
+
+// Receive on the current channel, FM or DMR.
+void receive()
+{
+    if (fmChannel.digital) {
+        dmrReceive();
+    } else {
+        fmReceive();
+    }
+}
+
+void onDmrEvent(const services::dmr::Event &e)
+{
+    using Kind = services::dmr::Event::Kind;
+    using services::dmr::DataType;
+    switch (e.kind) {
+    case Kind::SlotFound:
+        if (!timingFound && e.verified) {
+            timingFound = true;
+            log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing found"
+                             << (e.inboundBusy ? ", inbound busy" : "");
+        }
+        break;
+    case Kind::Burst: {
+        const bool lcBurst = e.voice || e.type == DataType::VoiceLcHeader || e.type == DataType::TerminatorWithLc;
+        const auto lc = lcBurst ? services::dmr::FullLc::decode(e.payload()) : std::nullopt;
+        if (!lc) {
+            log::debug("dmr") << "burst type " << static_cast<int>(e.type) << ", colour code " << e.colourCode;
+            break;
+        }
+        if (!e.voice && e.type == DataType::TerminatorWithLc) {
+            endCall("ended");
+            break;
+        }
+        if (!inCall) {
+            inCall = true;
+            callStarted = os::nowMs();
+            log::info("dmr") << (lc->groupCall() ? "group call" : lc->privateCall() ? "private call"
+                                                                                    : "call")
+                             << " from "
+                             << lc->source << " to " << lc->destination << ", colour code " << e.colourCode
+                             << (lc->emergency() ? ", emergency" : "");
+            setSpeaker(true);
+        }
+        break;
+    }
+    case Kind::SyncLost:
+        timingFound = false;
+        endCall("lost");
+        break;
+    case Kind::CarrierFound:
+    case Kind::CarrierLost:
+        log::debug("dmr") << (e.kind == Kind::CarrierFound ? "carrier found" : "carrier lost");
+        break;
+    case Kind::AllSent:
+        break;
+    }
+}
+
+// One pass over what the baseband heard.
+void pollDmr()
+{
+    withBaseband([](auto &b) {
+        services::dmr::Event e;
+        for (int i = 0; i < 8 && b.nextEvent(e); ++i) {
+            onDmrEvent(e);
+        }
+    });
+    if (inCall) {
+        power::activity();
+    }
 }
 
 void fmStatus()
@@ -290,6 +427,10 @@ void startTransmit()
     if (transmitting) {
         return;
     }
+    if (fmChannel.digital) {
+        log::info("dmr") << "PTT: DMR transmit is not built yet";
+        return;
+    }
     if (!fm->receiving() || system::calibration() == nullptr) {
         log::info("fm") << "PTT: no FM channel set (fm rx first)";
         return;
@@ -315,7 +456,7 @@ void startTransmit()
         fm->endTransmit();
         withBaseband([](auto &b) { b.setMicrophone(false); });
         log::error("fm") << "transmit refused at " << mhz(channel.transmitHz).view() << " MHz: " << problem;
-        fmReceive();
+        receive();
         return;
     }
     if (transmitAudio == FmTransmitAudio::Route::Baseband) {
@@ -342,7 +483,7 @@ void stopTransmit(const char *why)
     ui::post(ui::Transmitting{false});
     log::info("fm") << "transmit off (" << why << ") after " << (os::nowMs() - transmitStarted) / 100 / 10 << "."
                     << (os::nowMs() - transmitStarted) / 100 % 10 << " s";
-    fmReceive();
+    receive();
 }
 
 void bringUp()
@@ -356,9 +497,13 @@ void bringUp()
         if (speakerVolume >= 0) {
             b.setSpeakerVolume(speakerVolume);
         }
-        // A restart forgets the analog set-up.
+        // A restart forgets the analog or digital set-up.
         if (fm->receiving() && system::calibration() != nullptr) {
-            basebandAnalogReceive();
+            if (fmChannel.digital) {
+                b.setDigital(dmrSettings, dmrRepeater);
+            } else {
+                basebandAnalogReceive();
+            }
         }
     });
 }
@@ -388,7 +533,9 @@ void saveStatus()
 // Sleeps or wakes the receiver as battery save asks.
 void saveStep()
 {
-    const bool receiverOn = !transmitting && (fm->receiving() || fm->receiverAsleep());
+    // Battery save sleeps only an FM receiver; a DMR receiver would lose
+    // the signal's timing.
+    const bool receiverOn = !fmChannel.digital && !transmitting && (fm->receiving() || fm->receiverAsleep());
     const bool wasActive = saver.active();
     switch (saver.update(os::nowMs(), power::idleForMs(), receiverOn)) {
     case services::BatterySaver::Action::Sleep:
@@ -445,9 +592,10 @@ void handle(Message &message)
                    },
                    [](const FmReceive &r) {
                        const services::Tone receiveTone = fmChannel.receiveTone;
-                       fmChannel = services::FmChannel{r.receiveHz, r.receiveHz, r.wide, {}, {}};
+                       fmChannel = services::FmChannel{r.receiveHz, r.receiveHz, r.wide, {}, {}, false};
+                       dmrSettings = {};
                        fmChannel.receiveTone = receiveTone;
-                       fmReceive();
+                       receive();
                    },
                    [](const FmIdle &) {
                        fm->idle();
@@ -458,7 +606,7 @@ void handle(Message &message)
                    [](const FmSquelch &s) {
                        squelchLevel = s.level;
                        if (fm->receiving()) {
-                           fmReceive();
+                           receive();
                        } else {
                            log::info("fm") << "squelch " << squelchLevel;
                        }
@@ -486,7 +634,7 @@ void handle(Message &message)
                        fmChannel.receiveTone = t.tone;
                        log::info("fm") << "receive " << toneText(t.tone).view();
                        if (fm->receiving()) {
-                           fmReceive();
+                           receive();
                        }
                    },
                    [](const FmPower &p) {
@@ -501,23 +649,31 @@ void handle(Message &message)
                        timeoutS = t.seconds;
                        log::info("fm") << "transmit timeout " << timeoutS << " s";
                    },
+                   [](const DmrReceive &r) {
+                       fmChannel = services::FmChannel{r.receiveHz, r.receiveHz, false, {}, {}, true};
+                       dmrSettings = {};
+                       dmrSettings.colourCode = r.colourCode;
+                       dmrSettings.slot = r.slot == 2 ? 2 : 1;
+                       dmrRepeater = r.slot != 0;
+                       transmitHz = r.receiveHz;
+                       dmrReceive();
+                   },
                    [](const UseChannel &u) {
                        const services::Channel &c = u.channel;
-                       if (!c.analog()) {
-                           fm->idle();
-                           setSpeaker(false);
-                           log::info("fm") << "digital channel " << c.name << ": not supported yet, receiver off";
-                           return;
-                       }
-                       const bool toneSquelch = c.squelchMode == services::SquelchMode::Tone;
-                       fmChannel = services::FmChannel{
-                           c.receiveHz, c.transmitHz, c.wide, toneSquelch ? c.receiveTone : services::Tone{}, c.transmitTone};
+                       const bool toneSquelch = c.squelchMode == services::SquelchMode::Tone && c.analog();
+                       fmChannel = services::FmChannel{c.receiveHz, c.transmitHz, c.wide && c.analog(),
+                           toneSquelch ? c.receiveTone : services::Tone{}, c.analog() ? c.transmitTone : services::Tone{},
+                           c.digital()};
+                       dmrSettings = c.dmr;
+                       // A digital channel works through a repeater when it
+                       // receives and transmits on different frequencies.
+                       dmrRepeater = c.receiveHz != c.transmitHz;
                        transmitHz = c.transmitHz;
                        transmitTone = c.transmitTone;
                        powerLevel = c.power;
                        receiveOnly = c.receiveOnly;
                        squelchLevel = u.squelch;
-                       fmReceive();
+                       receive();
                    },
                    [](const BatterySave &s) {
                        saver.setMode(s.mode);
@@ -565,7 +721,11 @@ void radioMain(void *)
         }
         if (fm->receiving() && os::nowMs() - lastPoll >= FmPollMs) {
             lastPoll = os::nowMs();
-            pollFm();
+            if (fmChannel.digital) {
+                pollDmr();
+            } else {
+                pollFm();
+            }
         }
     }
 }

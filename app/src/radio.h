@@ -118,13 +118,21 @@ struct FmTransmitAudio
 };
 /// Works on @c channel from now on: receive, and transmit on PTT, with its
 /// frequencies, width, tone and power. @c squelch is 0..5.
+/// Receive DMR at @c receiveHz on colour code @c colourCode, slot 1 or 2
+/// through a repeater, or both slots direct (@c slot 0).
+struct DmrReceive
+{
+    std::uint32_t receiveHz;
+    std::uint8_t colourCode;
+    std::uint8_t slot;
+};
 struct UseChannel
 {
     services::Channel channel;
     std::uint8_t squelch;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, UseChannel, BatterySave, BatterySaveStatus>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, UseChannel, BatterySave, BatterySaveStatus>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.

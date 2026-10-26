@@ -223,6 +223,9 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::Restart{});
     } else if (numbersAfter(command, "bbtone ", 10, n, 2) && n[0] > 0 && n[0] <= 8000 && n[1] > 0 && n[1] <= 10000) {
         posted = radio::post(radio::ChipTone{static_cast<std::uint16_t>(n[0]), static_cast<std::uint16_t>(n[1])});
+    } else if (numbersAfter(command, "dmr rx ", 10, n, 3) && n[0] >= 100'000 && n[1] <= 15 && n[2] <= 2) {
+        posted = radio::post(radio::DmrReceive{static_cast<std::uint32_t>(n[0]) * 1000, static_cast<std::uint8_t>(n[1]),
+            static_cast<std::uint8_t>(n[2])});
     } else if ((numbersAfter(command, "fm rx ", 10, n, 1) || numbersAfter(command, "fm rxw ", 10, n, 1)) && n[0] >= 100'000) {
         posted = radio::post(radio::FmReceive{static_cast<std::uint32_t>(n[0]) * 1000, lib::startsWith(command, "fm rxw ")});
     } else if (command == "fm off") {
@@ -313,7 +316,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, "
-                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
     } else if (command == "fault") {

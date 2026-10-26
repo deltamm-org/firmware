@@ -168,7 +168,7 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
         // Details: mode and width, tones, power, offset.
         lib::StaticString<40> det;
         if (!c->analog()) {
-            det << "DMR";
+            det << "DMR CC" << c->dmr.colourCode << " TS" << c->dmr.slot;
         } else {
             det << "FM " << (c->wide ? "25k" : "12.5k");
             if (c->transmitTone.kind != Tone::Kind::None) {
