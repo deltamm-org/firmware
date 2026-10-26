@@ -65,6 +65,12 @@ Chip::SubTone chipTone(const Tone &tone)
     return {};
 }
 
+Chip::Bandwidth bandwidth(const FmChannel &channel)
+{
+    return channel.digital ? Chip::Bandwidth::Digital : channel.wide ? Chip::Bandwidth::Wide
+                                                                     : Chip::Bandwidth::Narrow;
+}
+
 } // namespace
 
 Rda1846Transceiver::Rda1846Transceiver(Chip &chip, RfHardware &rf, const Pins &pins, void (*sleepMs)(unsigned),
@@ -122,13 +128,13 @@ const char *Rda1846Transceiver::receive(const FmChannel &channel, int squelchLev
     m_rf.setReceiveTune(trims->frontEndTune);
     m_tune = trims->frontEndTune;
     m_chip.setFrequency(hz);
-    m_chip.setBandwidth(channel.wide ? Chip::Bandwidth::Wide : Chip::Bandwidth::Narrow);
+    m_chip.setBandwidth(bandwidth(channel));
     m_wide = channel.wide;
     m_chip.setSquelch(trims->squelchOpenDbm, trims->squelchOpenDbm - SquelchHysteresisDb);
     const int noiseOpen = squelchOpenNoiseDb(channel.wide, squelchLevel);
     m_chip.setNoiseSquelch(noiseOpen, noiseOpen - SquelchHysteresisDb);
     logSquelch(trims->squelchOpenDbm, noiseOpen);
-    m_chip.setReceiveTone(chipTone(channel.receiveTone));
+    m_chip.setReceiveTone(chipTone(channel.digital ? Tone{} : channel.receiveTone));
     m_chip.setMode(Chip::Mode::Receive);
     m_receiveHz = hz;
     setPin(frontEnd(), true);
@@ -153,7 +159,7 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     m_rf.setTransmitPath(true);
     muteMicrophone(false);
     m_chip.setFrequency(hz);
-    m_chip.setBandwidth(channel.wide ? Chip::Bandwidth::Wide : Chip::Bandwidth::Narrow);
+    m_chip.setBandwidth(bandwidth(channel));
     const Tone &tone = channel.transmitTone;
     const std::uint8_t toneDeviation = tone.kind == Tone::Kind::Ctcss ? trims->ctcssDeviation
         : tone.kind == Tone::Kind::Dcs                                ? trims->dcsDeviation

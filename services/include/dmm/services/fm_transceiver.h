@@ -20,6 +20,7 @@ struct FmChannel
     bool wide = false; // 25 kHz rather than 12.5 kHz
     Tone receiveTone;  // listened for; None = none
     Tone transmitTone;
+    bool digital = false; // a DMR channel: the RF path for the baseband's signal
 };
 
 /// What the receiver hears right now, before any debouncing.
@@ -39,7 +40,8 @@ struct FmReceiveStatus
 ///   switch off. False when the chip does not answer.
 /// - receive(channel, squelchLevel): tunes to the channel's receive
 ///   frequency and receives, squelch level 1..5, listening for the
-///   channel's receive tone. Returns nullptr, or why it did not.
+///   channel's receive tone; a digital channel passes its signal on to the
+///   baseband. Returns nullptr, or why it did not.
 /// - transmit(channel, level): transmits on the channel's transmit
 ///   frequency and tone at the power level; the microphone is unmuted.
 ///   Returns nullptr, or why it did not transmit (then nothing was

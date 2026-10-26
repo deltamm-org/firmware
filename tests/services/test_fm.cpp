@@ -207,7 +207,7 @@ TEST_CASE("receive applies trim, tuning and squelch, then opens one front end")
     const D878Uv2Calibration cal = calibration();
     testCalibration = &cal;
 
-    CHECK(fm.receive(FmChannel{433'500'000, 0, false, {}, {}}, 1) == nullptr);
+    CHECK(fm.receive(FmChannel{433'500'000, 0, false, {}, {}, false}, 1) == nullptr);
     CHECK(fm.receiving());
     CHECK(rf.trim == 0x0812);
     CHECK(rf.tune == 1837); // 1000 + 1000 * 33.5 / 40
@@ -221,7 +221,7 @@ TEST_CASE("receive applies trim, tuning and squelch, then opens one front end")
     CHECK_FALSE(rf.amplifier);
 
     // Changing to VHF swaps the front ends.
-    CHECK(fm.receive(FmChannel{145'500'000, 0, true, {}, {}}, 1) == nullptr);
+    CHECK(fm.receive(FmChannel{145'500'000, 0, true, {}, {}, false}, 1) == nullptr);
     CHECK(gpioField(bus.registers[0x1F], 0) == 2);
     CHECK(gpioField(bus.registers[0x1F], 4) == 3);
     CHECK(bus.registers[0x30] == 0x7026);
@@ -234,7 +234,7 @@ TEST_CASE("receive applies trim, tuning and squelch, then opens one front end")
     CHECK(fm.debugCommand("tune auto"));
     CHECK(rf.tune == calibrated);
     CHECK(fm.debugCommand("tune 4000"));
-    CHECK(fm.receive(FmChannel{433'500'000, 0, false, {}, {}}, 1) == nullptr);
+    CHECK(fm.receive(FmChannel{433'500'000, 0, false, {}, {}, false}, 1) == nullptr);
     CHECK(rf.tune == 1837); // a new receive puts the calibrated value back
 
     fm.idle();
@@ -256,7 +256,7 @@ TEST_CASE("a sleeping receiver keeps its tuning and wakes on the same front end"
     fm.sleepReceiver(); // not receiving: nothing to do
     CHECK_FALSE(fm.receiverAsleep());
 
-    REQUIRE(fm.receive(FmChannel{145'500'000, 0, true, {}, {}}, 1) == nullptr);
+    REQUIRE(fm.receive(FmChannel{145'500'000, 0, true, {}, {}, false}, 1) == nullptr);
     const std::uint16_t frequencyHigh = bus.registers[0x29];
     const std::uint16_t frequencyLow = bus.registers[0x2A];
     fm.sleepReceiver();
@@ -292,7 +292,7 @@ TEST_CASE("a receive tone has its own detector and flag, apart from the carrier"
     const D878Uv2Calibration cal = calibration();
     testCalibration = &cal;
 
-    FmChannel channel{145'500'000, 145'500'000, true, {}, {}};
+    FmChannel channel{145'500'000, 145'500'000, true, {}, {}, false};
     channel.receiveTone = Tone{Tone::Kind::Ctcss, 885, false};
     REQUIRE(fm.receive(channel, 1) == nullptr);
     CHECK(bus.registers[0x4A] == 8850);
@@ -334,7 +334,7 @@ TEST_CASE("DCS transmit uses the DCS deviation")
     REQUIRE(fm.start());
     const D878Uv2Calibration cal = calibration();
     testCalibration = &cal;
-    FmChannel channel{433'500'000, 433'500'000, false, {}, {}};
+    FmChannel channel{433'500'000, 433'500'000, false, {}, {}, false};
     channel.transmitTone = Tone{Tone::Kind::Dcs, 023, false};
     REQUIRE(fm.transmit(channel, PowerLevel::Low) == nullptr);
     CHECK(bus.registers[0x4E] == 0x2482);
@@ -355,11 +355,11 @@ TEST_CASE("receive refuses frequencies the calibration does not cover")
     REQUIRE(fm.start());
     const D878Uv2Calibration cal = calibration();
     testCalibration = &cal;
-    CHECK(fm.receive(FmChannel{250'000'000, 0, false, {}, {}}, 1) != nullptr);
+    CHECK(fm.receive(FmChannel{250'000'000, 0, false, {}, {}, false}, 1) != nullptr);
     CHECK_FALSE(fm.receiving());
     D878Uv2Calibration none;
     testCalibration = &none;
-    CHECK(std::string(fm.receive(FmChannel{433'500'000, 0, false, {}, {}}, 1)) == "no calibrated values for this frequency");
+    CHECK(std::string(fm.receive(FmChannel{433'500'000, 0, false, {}, {}, false}, 1)) == "no calibrated values for this frequency");
 }
 
 TEST_CASE("status reads the carrier flag and RSSI")
@@ -424,10 +424,10 @@ TEST_CASE("transmit: band switches and transceiver first, power amplifier last")
     REQUIRE(fm.start());
     const D878Uv2Calibration cal = calibration();
     testCalibration = &cal;
-    REQUIRE(fm.receive(FmChannel{433'500'000, 433'500'000, false, {}, {}}, 1) == nullptr);
+    REQUIRE(fm.receive(FmChannel{433'500'000, 433'500'000, false, {}, {}, false}, 1) == nullptr);
     bus.events.clear();
 
-    FmChannel channel{433'500'000, 438'500'000, false, {}, {}};
+    FmChannel channel{433'500'000, 438'500'000, false, {}, {}, false};
     channel.transmitTone = Tone{Tone::Kind::Ctcss, 1148, false};
     REQUIRE(fm.transmit(channel, PowerLevel::Low) == nullptr);
     CHECK(fm.transmitting());
@@ -487,7 +487,7 @@ TEST_CASE("transmit picks the mid-VHF filter and refuses what the calibration do
     const D878Uv2Calibration cal = calibration();
     testCalibration = &cal;
 
-    REQUIRE(fm.transmit(FmChannel{170'000'000, 170'000'000, true, {}, {}}, PowerLevel::Low) == nullptr);
+    REQUIRE(fm.transmit(FmChannel{170'000'000, 170'000'000, true, {}, {}, false}, PowerLevel::Low) == nullptr);
     CHECK(gpioField(bus.registers[0x1F], 7) == 3);
     CHECK(gpioField(bus.registers[0x1F], 5) == 2);
     CHECK(bus.registers[0x4E] == 0x2002);
@@ -495,13 +495,13 @@ TEST_CASE("transmit picks the mid-VHF filter and refuses what the calibration do
     fm.endTransmit();
     CHECK(gpioField(bus.registers[0x1F], 7) == 2);
 
-    CHECK(fm.transmit(FmChannel{145'000'000, 250'000'000, false, {}, {}}, PowerLevel::Low) != nullptr);
+    CHECK(fm.transmit(FmChannel{145'000'000, 250'000'000, false, {}, {}, false}, PowerLevel::Low) != nullptr);
     CHECK_FALSE(fm.transmitting());
     CHECK_FALSE(rf.amplifier);
     CHECK(rf.power == 0);
     D878Uv2Calibration none;
     testCalibration = &none;
-    CHECK(fm.transmit(FmChannel{433'500'000, 433'500'000, false, {}, {}}, PowerLevel::Low) != nullptr);
+    CHECK(fm.transmit(FmChannel{433'500'000, 433'500'000, false, {}, {}, false}, PowerLevel::Low) != nullptr);
     CHECK_FALSE(rf.amplifier);
 }
 
@@ -522,4 +522,21 @@ TEST_CASE("the chip's console commands read and write registers")
     const auto before = rf.tune;
     CHECK(fm.debugCommand("sweep")); // refused while idle, but known
     CHECK(rf.tune == before);
+}
+
+TEST_CASE("a digital channel receives without listening for a tone")
+{
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    Rda1846 chip(bus);
+    FakeRf rf;
+    Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+    REQUIRE(fm.start());
+    const D878Uv2Calibration cal = calibration();
+    testCalibration = &cal;
+    FmChannel channel{433'450'000, 433'450'000, false, Tone{Tone::Kind::Ctcss, 885, false}, {}, true};
+    REQUIRE(fm.receive(channel, 1) == nullptr);
+    CHECK(fm.receiving());
+    CHECK((bus.registers[0x3A] & 0x1F) == 0); // no tone detector
+    CHECK(bus.registers[0x30] == 0x4026);     // receiving, 12.5 kHz
 }
