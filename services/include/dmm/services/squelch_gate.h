@@ -37,6 +37,8 @@ public:
     }
 
     void setForcedOpen(bool forced) { m_forced = forced; }
+    /// Open by the input alone, whether or not forced open.
+    bool heard() const { return m_open; }
     bool open() const { return m_forced || m_open; }
     /// Closed, counts cleared; for a new channel.
     void reset()

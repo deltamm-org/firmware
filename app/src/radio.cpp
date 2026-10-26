@@ -268,6 +268,13 @@ void pollFm()
 {
     const services::FmReceiveStatus s = fm->status();
     carrierGate.update(s.carrier);
+    // A carrier, debounced, keeps battery save off, so a tone detector has
+    // time to lock before the speaker opens. A single poll does not: the
+    // first one after the receiver wakes can read a carrier that is not
+    // there.
+    if (carrierGate.heard()) {
+        power::activity();
+    }
     toneGate.update(s.toneHeard);
     const bool open = gateOpen();
     if (open != speakerOpen) {

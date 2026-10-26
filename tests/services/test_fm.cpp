@@ -150,6 +150,7 @@ TEST_CASE("the squelch gate needs three polls either way")
     CHECK_FALSE(g.update(false));
     g.setForcedOpen(true);
     CHECK(g.update(false));
+    CHECK_FALSE(g.heard());
     g.setForcedOpen(false);
     CHECK_FALSE(g.open());
 }
