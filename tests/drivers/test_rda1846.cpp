@@ -5,6 +5,7 @@
 
 #include <doctest/doctest.h>
 
+#include <bit>
 #include <map>
 #include <vector>
 
@@ -230,11 +231,75 @@ TEST_CASE("RSSI, transmit tone and deviation")
     CHECK(chip.noiseDb() == 64);
     chip.setNoiseSquelch(56, 53);
     CHECK(bus.registers[0x48] == ((56 << 7) | 53));
-    chip.setTransmitTone(11'880);
+    using Tone = Rda1846::SubTone;
+    chip.setTransmitTone(Tone{Tone::Kind::Ctcss, 11'880, false});
     CHECK(bus.registers[0x4A] == 11'880);
     CHECK(bus.registers[0x4E] == 0x2602);
-    chip.setTransmitTone(0);
+    chip.setTransmitTone(Tone{});
     CHECK(bus.registers[0x4E] == 0x2002);
     chip.setDeviation(0x50, 0x12);
     CHECK(bus.registers[0x59] == ((0x50 << 6) | 0x12));
+}
+
+TEST_CASE("DCS words match the chip maker's example and are Golay codewords")
+{
+    // The programming guide's example: DCS 023 is 0x76 in 0x4B and 0x3813
+    // in 0x4C.
+    CHECK(Rda1846::dcsWord(023) == 0x763813u);
+    // Any two Golay (23,12) codewords differ in at least seven bits.
+    for (const std::uint16_t a : {std::uint16_t{023}, std::uint16_t{0114}, std::uint16_t{0245}, std::uint16_t{0754}}) {
+        for (const std::uint16_t b : {std::uint16_t{025}, std::uint16_t{0115}, std::uint16_t{0251}, std::uint16_t{0731}}) {
+            const std::uint32_t diff = Rda1846::dcsWord(a) ^ Rda1846::dcsWord(b);
+            CHECK(std::popcount(diff) >= 7);
+        }
+        CHECK((Rda1846::dcsWord(a) & 0xFFF) == (0x800u | a));
+    }
+}
+
+TEST_CASE("DCS transmit tones")
+{
+    LoggingBus bus;
+    Rda1846 chip(bus);
+    using Tone = Rda1846::SubTone;
+    chip.setTransmitTone(Tone{Tone::Kind::Dcs, 023, false});
+    CHECK(bus.registers[0x4A] == 13'440);
+    CHECK(bus.registers[0x4B] == 0x0076);
+    CHECK(bus.registers[0x4C] == 0x3813);
+    CHECK(bus.registers[0x4E] == 0x2482);
+    chip.setTransmitTone(Tone{Tone::Kind::Dcs, 023, true});
+    CHECK(bus.registers[0x4E] == 0x2582);
+}
+
+TEST_CASE("a receive tone switches on its own detector and flag, kept across width changes")
+{
+    LoggingBus bus;
+    Rda1846 chip(bus);
+    using Tone = Rda1846::SubTone;
+    bus.registers[0x3A] = 0x40C3;
+    chip.setReceiveTone(Tone{Tone::Kind::Ctcss, 8850, false});
+    CHECK(bus.registers[0x4A] == 8850);
+    CHECK(bus.registers[0x3A] == 0x40C1);
+    CHECK(chip.receiveToneHeard(Rda1846::CtcssMatch));
+    CHECK_FALSE(chip.receiveToneHeard(Rda1846::DcsMatch | 1u << 2));
+    chip.setBandwidth(Rda1846::Bandwidth::Wide);
+    CHECK(bus.registers[0x3A] == 0x44C1);
+    chip.setReceiveTone(Tone{Tone::Kind::Dcs, 0754, true});
+    CHECK(bus.registers[0x3A] == 0x44C4);
+    CHECK(bus.registers[0x4E] == 0x2582);
+    CHECK(chip.receiveToneHeard(Rda1846::DcsInvertedMatch));
+    CHECK_FALSE(chip.receiveToneHeard(Rda1846::DcsMatch));
+    chip.setReceiveTone(Tone{Tone::Kind::Dcs, 023, false});
+    CHECK(chip.receiveToneHeard(Rda1846::DcsMatch));
+    chip.setReceiveTone(Tone{});
+    CHECK(bus.registers[0x3A] == 0x44C0);
+    CHECK(bus.registers[0x4E] == 0x2002);
+    CHECK_FALSE(chip.receiveToneHeard(0xFFFF));
+}
+
+TEST_CASE("the tuning table's detector bits give way to the driver's")
+{
+    LoggingBus bus;
+    Rda1846 chip(bus);
+    chip.setBandwidth(Rda1846::Bandwidth::Narrow);
+    CHECK((bus.registers[0x3A] & 0x1F) == 0);
 }

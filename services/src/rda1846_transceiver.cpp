@@ -140,7 +140,8 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     m_chip.setFrequency(hz);
     m_chip.setBandwidth(channel.wide ? Chip::Bandwidth::Wide : Chip::Bandwidth::Narrow);
     m_chip.setDeviation(trims->voiceDeviation, ctcssCentiHz != 0 ? trims->ctcssDeviation : 0);
-    m_chip.setTransmitTone(ctcssCentiHz);
+    using Tone = Chip::SubTone;
+    m_chip.setTransmitTone(ctcssCentiHz != 0 ? Tone{Tone::Kind::Ctcss, ctcssCentiHz, false} : Tone{});
     m_chip.setMode(Chip::Mode::Transmit);
     setPin(m_pins.transmitHighBand, hz > m_pins.splitHz);
     // Power last.
@@ -160,7 +161,7 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
 void Rda1846Transceiver::endTransmit()
 {
     idle();
-    m_chip.setTransmitTone(0);
+    m_chip.setTransmitTone(Chip::SubTone{});
     muteMicrophone(true);
     setPin(m_pins.transmitHighBand, false);
     setPin(m_pins.transmitMidBand, false);

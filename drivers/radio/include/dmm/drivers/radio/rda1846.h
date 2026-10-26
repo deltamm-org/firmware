@@ -23,9 +23,26 @@ public:
     static constexpr std::uint8_t FlagsRegister = 0x1C;
     static constexpr std::uint8_t QualityRegister = 0x21;
 
-    // Bits of the flags register.
+    // Bits in the flags register.
     static constexpr std::uint16_t SquelchOpen = 1u << 0;
-    static constexpr std::uint16_t ToneMatch = 1u << 2;
+    static constexpr std::uint16_t DcsInvertedMatch = 1u << 6;
+    static constexpr std::uint16_t DcsMatch = 1u << 7;
+    static constexpr std::uint16_t CtcssMatch = 1u << 9;
+
+    /// A sub-audible tone: CTCSS in 0.01 Hz units, or a DCS code (the nine
+    /// bits of its three octal digits), normal or inverted.
+    struct SubTone
+    {
+        enum class Kind : std::uint8_t
+        {
+            None,
+            Ctcss,
+            Dcs,
+        };
+        Kind kind = Kind::None;
+        std::uint16_t value = 0;
+        bool inverted = false;
+    };
 
     enum class Bandwidth : std::uint8_t
     {
@@ -135,8 +152,10 @@ public:
     /// The squelch's noise condition: it opens when the received noise
     /// falls below @p openDb and closes when it rises above @p closeDb.
     void setNoiseSquelch(int openDb, int closeDb);
-    /// The flags register: squelch, tone match.
+    /// The flags register: squelch, tone matches.
     std::uint16_t flags() { return m_bus.read(FlagsRegister); }
+    /// In @p flags, the receive tone set with setReceiveTone() is heard.
+    bool receiveToneHeard(std::uint16_t flags) const { return (flags & m_toneFlag) != 0; }
     /// Received signal strength in dBm.
     int rssiDbm();
     /// Received noise in dB.
@@ -145,8 +164,11 @@ public:
     /// (low four bits of register 0x21, not in the programming guide).
     int signalQuality() { return m_bus.read(QualityRegister) & 0xF; }
 
-    /// CTCSS tone sent with transmit in 0.01 Hz units; 0 for none.
-    void setTransmitTone(std::uint16_t centiHz);
+    /// The tone sent while transmitting.
+    void setTransmitTone(const SubTone &tone);
+    /// The tone the receiver listens for, with only its own detector on;
+    /// Kind::None turns detection off. Kept across width changes.
+    void setReceiveTone(const SubTone &tone);
     /// Transmit deviation: @p voice for voice and tone together (10 bits),
     /// @p tone for the tone alone (6 bits). Larger is wider.
     void setDeviation(std::uint16_t voice, std::uint8_t tone);
@@ -158,6 +180,9 @@ public:
     static std::uint32_t frequencyWord(std::uint32_t hz);
     /// The squelch register for open and close levels in dBm.
     static std::uint16_t squelchWord(int openDbm, int closeDbm);
+    /// The 23-bit DCS word for a nine-bit @p code, as the chip takes it:
+    /// eleven Golay (23,12) parity bits, then 100, then the code.
+    static std::uint32_t dcsWord(std::uint16_t code);
 
     /// Changes one GPIO pin (0..7), keeping the others as the chip has
     /// them. Returns the register value written.
@@ -166,12 +191,16 @@ public:
 private:
     void write(std::span<const Setting> settings, void (*sleepMs)(unsigned));
     void write(std::span<const WidthSetting> settings);
+    void setTone(const SubTone &tone);
 
     hal::RegisterBus &m_bus;
     const Tuning *m_tuning;
     std::uint32_t m_hz = 0;
     Bandwidth m_bandwidth = Bandwidth::Narrow;
     Mode m_mode = Mode::Idle;
+    // The tone detectors switched on, and the flag of the one listened for.
+    std::uint16_t m_detect = 0;
+    std::uint16_t m_toneFlag = 0;
 };
 
 } // namespace dmm::drivers::radio

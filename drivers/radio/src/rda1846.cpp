@@ -91,7 +91,16 @@ constexpr std::uint8_t SquelchRegister = 0x49;
 constexpr std::uint8_t NoiseSquelchRegister = 0x48;
 constexpr std::uint8_t DeviationRegister = 0x59;
 constexpr std::uint8_t Ctcss1Register = 0x4A;
+constexpr std::uint8_t DcsHighRegister = 0x4B;
+constexpr std::uint8_t DcsLowRegister = 0x4C;
 constexpr std::uint8_t ToneModeRegister = 0x4E;
+// The low five bits of this register switch the tone detectors on; the
+// driver owns them, whatever a tuning table writes there.
+constexpr std::uint8_t DetectRegister = 0x3A;
+constexpr std::uint16_t DetectBits = 0x1F;
+constexpr std::uint16_t DetectCtcss = 1u << 0;
+constexpr std::uint16_t DetectDcs = 1u << 1;
+constexpr std::uint16_t DetectDcsInverted = 1u << 2;
 
 // Control register: reference 26 MHz, chip powered, and for wide channels
 // both the analog and the DSP filters at 25 kHz.
@@ -103,10 +112,16 @@ constexpr std::uint16_t TransmitOn = 1u << 6;
 constexpr std::uint16_t CalibrateA = 0x40A4;
 constexpr std::uint16_t CalibrateB = 0x40A6;
 
-// Tone mode: no tone, or CTCSS from the chip (bits 10:9 = 11), no phase
-// shift at the end.
+// Tone mode: no tone, CTCSS (bits 10:9 = 11) or DCS (10, bit 7 set, bit 8
+// for inverted, 23-bit words), no phase shift at the end.
 constexpr std::uint16_t ToneModeOff = 0x2002;
 constexpr std::uint16_t ToneModeCtcss = 0x2602;
+constexpr std::uint16_t ToneModeDcs = 0x2482;
+constexpr std::uint16_t ToneModeDcsInverted = 0x2582;
+// DCS runs on the CTCSS generator at 134.4 Hz.
+constexpr std::uint16_t DcsClockCentiHz = 13'440;
+// Golay (23,12) generator for the DCS parity bits.
+constexpr std::uint32_t GolayGenerator = 0xC75;
 
 constexpr int RssiOffsetDb = 137;
 
@@ -136,7 +151,11 @@ void Rda1846::write(std::span<const WidthSetting> settings)
 {
     const bool wide = m_bandwidth == Bandwidth::Wide;
     for (const WidthSetting &s : settings) {
-        m_bus.write(s.reg, wide ? s.wide : s.narrow);
+        std::uint16_t value = wide ? s.wide : s.narrow;
+        if (s.reg == DetectRegister) {
+            value = static_cast<std::uint16_t>((value & ~DetectBits) | m_detect);
+        }
+        m_bus.write(s.reg, value);
     }
 }
 
@@ -207,10 +226,9 @@ void Rda1846::setBandwidth(Bandwidth bandwidth)
     m_bus.write(PageRegister, 1);
     write(m_tuning->widthPage1);
     m_bus.write(PageRegister, 0);
-    const bool wide = bandwidth == Bandwidth::Wide;
     for (const RangeSetting &r : m_tuning->ranges) {
         if (m_hz >= r.lowHz && m_hz <= r.highHz) {
-            m_bus.write(r.setting.reg, wide ? r.setting.wide : r.setting.narrow);
+            write(std::span(&r.setting, 1));
         }
     }
 }
@@ -260,14 +278,63 @@ int Rda1846::rssiDbm()
     return static_cast<int>(m_bus.read(RssiRegister) >> 8) - RssiOffsetDb;
 }
 
-void Rda1846::setTransmitTone(std::uint16_t centiHz)
+std::uint32_t Rda1846::dcsWord(std::uint16_t code)
 {
-    if (centiHz == 0) {
-        m_bus.write(ToneModeRegister, ToneModeOff);
-        return;
+    const std::uint32_t data = 0x800u | (code & 0x1FFu);
+    std::uint32_t remainder = data << 11;
+    for (int bit = 22; bit >= 11; --bit) {
+        if ((remainder & (1u << bit)) != 0) {
+            remainder ^= GolayGenerator << (bit - 11);
+        }
     }
-    m_bus.write(Ctcss1Register, centiHz);
-    m_bus.write(ToneModeRegister, ToneModeCtcss);
+    return (remainder & 0x7FFu) << 12 | data;
+}
+
+void Rda1846::setTone(const SubTone &tone)
+{
+    switch (tone.kind) {
+    case SubTone::Kind::None:
+        m_bus.write(ToneModeRegister, ToneModeOff);
+        break;
+    case SubTone::Kind::Ctcss:
+        m_bus.write(Ctcss1Register, tone.value);
+        m_bus.write(ToneModeRegister, ToneModeCtcss);
+        break;
+    case SubTone::Kind::Dcs: {
+        const std::uint32_t word = dcsWord(tone.value);
+        m_bus.write(Ctcss1Register, DcsClockCentiHz);
+        m_bus.write(DcsHighRegister, static_cast<std::uint16_t>(word >> 16));
+        m_bus.write(DcsLowRegister, static_cast<std::uint16_t>(word & 0xFFFF));
+        m_bus.write(ToneModeRegister, tone.inverted ? ToneModeDcsInverted : ToneModeDcs);
+        break;
+    }
+    }
+}
+
+void Rda1846::setTransmitTone(const SubTone &tone)
+{
+    setTone(tone);
+}
+
+void Rda1846::setReceiveTone(const SubTone &tone)
+{
+    setTone(tone);
+    switch (tone.kind) {
+    case SubTone::Kind::None:
+        m_detect = 0;
+        m_toneFlag = 0;
+        break;
+    case SubTone::Kind::Ctcss:
+        m_detect = DetectCtcss;
+        m_toneFlag = CtcssMatch;
+        break;
+    case SubTone::Kind::Dcs:
+        m_detect = tone.inverted ? DetectDcsInverted : DetectDcs;
+        m_toneFlag = tone.inverted ? DcsInvertedMatch : DcsMatch;
+        break;
+    }
+    const std::uint16_t detect = m_bus.read(DetectRegister);
+    m_bus.write(DetectRegister, static_cast<std::uint16_t>((detect & ~DetectBits) | m_detect));
 }
 
 void Rda1846::setDeviation(std::uint16_t voice, std::uint8_t tone)
