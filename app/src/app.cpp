@@ -389,12 +389,15 @@ public:
                 m_garbled = true;
             } else if (m_length < sizeof m_line) {
                 m_line[m_length++] = c;
+            } else {
+                // A line too long to keep whole is not run cut short.
+                m_garbled = true;
             }
         }
     }
 
 private:
-    char m_line[24] = {};
+    char m_line[80] = {};
     std::size_t m_length = 0;
     bool m_garbled = false;
     char m_previous = 0;

@@ -61,6 +61,7 @@ bool dmrRepeater = false;
 bool inCall = false;
 os::Ticks callStarted = 0;
 bool timingFound = false;
+bool timingSeen = false;
 services::BatterySaver saver;
 
 // FM transmit settings and state.
@@ -297,6 +298,7 @@ void dmrReceive()
     endCall("left");
     setSpeaker(false);
     timingFound = false;
+    timingSeen = false;
     if (system::calibration() == nullptr) {
         logDmr("receive refused: no calibration loaded");
         return;
@@ -308,7 +310,7 @@ void dmrReceive()
         return;
     }
     bool ok = !HasBaseband;
-    withBaseband([&ok](auto &b) { ok = b.setDigital(dmrSettings, dmrRepeater); });
+    withBaseband([&ok](auto &b) { ok = b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater); });
     logDmrReceiving(ok);
 }
 
@@ -332,6 +334,9 @@ void onDmrEvent(const services::dmr::Event &e)
             timingFound = true;
             log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing found"
                              << (e.inboundBusy ? ", inbound busy" : "");
+        } else if (!timingFound && !timingSeen) {
+            timingSeen = true;
+            log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing seen, not yet verified";
         }
         break;
     case Kind::Burst: {
@@ -359,6 +364,7 @@ void onDmrEvent(const services::dmr::Event &e)
     }
     case Kind::SyncLost:
         timingFound = false;
+        timingSeen = false;
         endCall("lost");
         break;
     case Kind::CarrierFound:
@@ -500,7 +506,7 @@ void bringUp()
         // A restart forgets the analog or digital set-up.
         if (fm->receiving() && system::calibration() != nullptr) {
             if (fmChannel.digital) {
-                b.setDigital(dmrSettings, dmrRepeater);
+                b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater);
             } else {
                 basebandAnalogReceive();
             }
