@@ -130,6 +130,11 @@ int main(int argc, char *argv[])
     const QCommandLineOption batteryOption(QStringLiteral("battery"), QStringLiteral("Battery voltage in millivolts (default 7800)."), QStringLiteral("mv"));
     parser.addOption(frameOption);
     parser.addOption(holdOption);
+    const QCommandLineOption pressOption(QStringLiteral("press"),
+        QStringLiteral("Press and release the keys named in <list> (comma-separated, as on the key test) one after another, "
+                       "from 3.5 s on, 0.4 s apart."),
+        QStringLiteral("list"));
+    parser.addOption(pressOption);
     parser.addOption(batteryOption);
     parser.process(app);
 
@@ -177,6 +182,22 @@ int main(int argc, char *argv[])
             input.turn(3);
             input.setVolume(734);
         });
+    }
+    if (parser.isSet(pressOption)) {
+        const QStringList names = parser.value(pressOption).split(QLatin1Char(','), Qt::SkipEmptyParts);
+        int at = 3500;
+        for (const QString &name : names) {
+            for (unsigned i = 0; i < static_cast<unsigned>(dmm::services::Key::Count); ++i) {
+                const auto key = static_cast<dmm::services::Key>(i);
+                const std::string_view n = input.keyLabel(key);
+                if (name.compare(QString::fromUtf8(n.data(), static_cast<qsizetype>(n.size())), Qt::CaseInsensitive) == 0) {
+                    QTimer::singleShot(at, &app, [key] { input.setKey(key, true); });
+                    QTimer::singleShot(at + 150, &app, [key] { input.setKey(key, false); });
+                    break;
+                }
+            }
+            at += 400;
+        }
     }
     const QStringList commands = parser.values(commandOption);
     if (!commands.isEmpty()) {
