@@ -245,8 +245,13 @@ bool Sct3258::queryText(std::uint8_t field, char *text, std::size_t capacity)
 
 int Sct3258::control(std::span<const std::uint8_t> fields, unsigned timeoutMs)
 {
+    return control(TypeControl, fields, timeoutMs);
+}
+
+int Sct3258::control(std::uint8_t type, std::span<const std::uint8_t> fields, unsigned timeoutMs)
+{
     Packet reply;
-    if (fields.empty() || !request(TypeControl, fields, reply, timeoutMs)) {
+    if (fields.empty() || !request(type, fields, reply, timeoutMs)) {
         return -1;
     }
     const auto echo = reply.field(fields[0]);

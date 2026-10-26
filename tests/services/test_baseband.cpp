@@ -236,3 +236,85 @@ TEST_CASE("the chip's console commands write codec registers and send raw packet
     CHECK_FALSE(baseband.debugCommand("packet"));
     CHECK_FALSE(baseband.debugCommand("restart"));
 }
+
+TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, slot, receive")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    REQUIRE(baseband.start());
+    chip.packets.clear();
+
+    dmm::services::dmr::ChannelSettings settings;
+    settings.colourCode = 7;
+    settings.slot = 2;
+    REQUIRE(baseband.setDigital(settings, true));
+    REQUIRE(chip.packets.size() == 7);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x10, 0x0C});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x1A, 0x02});
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x79, 0x41, 0x00, 0x13, 0x04, 0x00});
+    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x08, 0x77, 0x07});
+    CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02});
+    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
+
+    // Direct: both slots; the vocoder and the call options stay.
+    chip.packets.clear();
+    REQUIRE(baseband.setDigital(settings, false));
+    REQUIRE(chip.packets.size() == 5);
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
+
+    // Back to FM: the analog vocoder first.
+    chip.packets.clear();
+    REQUIRE(baseband.setAnalog(false));
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x10, 0x10});
+}
+
+TEST_CASE("the chip's reports become DMR events")
+{
+    using Kind = dmm::services::dmr::Event::Kind;
+    using dmm::services::dmr::DataType;
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    REQUIRE(baseband.start());
+
+    chip.queue(0x30, {0x7F, 0xC9}); // repeater timing, verified, inbound busy, next slot 1
+    chip.queue(0x30, {0x1B, 0x05}); // voice sync: not an event of its own
+    chip.queue(0x30, {0x77, 0x01, 0x43, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x89, 0x74, 0xCB, 0xB1});
+    chip.queue(0x30, {0x77, 0x01, 0x43, 0x11, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x89, 0x74, 0xCB, 0xB1});
+    chip.queue(0x30, {0x1B, 0x08}); // timing lost
+    chip.queue(0x20, {0x17, 0x0A}); // all sent
+
+    dmm::services::dmr::Event e;
+    REQUIRE(baseband.nextEvent(e));
+    CHECK(e.kind == Kind::SlotFound);
+    CHECK(e.baseStation);
+    CHECK(e.verified);
+    CHECK_FALSE(e.inverted);
+    CHECK(e.inboundBusy);
+    CHECK(e.nextSlot == 1);
+
+    REQUIRE(baseband.nextEvent(e));
+    CHECK(e.kind == Kind::Burst);
+    CHECK(e.colourCode == 1);
+    CHECK_FALSE(e.voice);
+    CHECK(e.type == DataType::VoiceLcHeader);
+    REQUIRE(e.length == 9);
+    const auto lc = dmm::services::dmr::FullLc::decode(e.payload());
+    REQUIRE(lc.has_value());
+    CHECK(lc->destination == 2441);
+    CHECK(lc->source == 7654321);
+
+    REQUIRE(baseband.nextEvent(e));
+    CHECK(e.kind == Kind::Burst);
+    CHECK(e.voice);
+
+    REQUIRE(baseband.nextEvent(e));
+    CHECK(e.kind == Kind::SyncLost);
+    REQUIRE(baseband.nextEvent(e));
+    CHECK(e.kind == Kind::AllSent);
+    CHECK_FALSE(baseband.nextEvent(e));
+}

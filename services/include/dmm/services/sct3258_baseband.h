@@ -78,6 +78,10 @@ public:
     bool setWorkMode(BasebandWorkMode mode);
     bool setCarrier(bool present);
     bool setMicrophone(bool on);
+    /// Also switches the vocoder over (a few seconds the first time) and
+    /// sets the DMR call options once after start().
+    bool setDigital(const dmr::ChannelSettings &settings, bool repeater);
+    bool nextEvent(dmr::Event &event);
     /// "codec <page> <reg> <value>", "packet <type> <bytes>" (hex).
     bool debugCommand(std::string_view command);
     const char *debugHelp() const;
@@ -95,6 +99,8 @@ private:
     bool fail(const char *problem);
     bool write(std::span<const CodecWrite> writes);
     void writeTrims(const Trims &trims);
+    bool selectVocoder(std::uint8_t vocoder);
+    bool toEvent(const drivers::baseband::Packet &report, dmr::Event &event) const;
 
     drivers::baseband::Sct3258 &m_chip;
     BasebandBoard &m_board;
@@ -103,6 +109,8 @@ private:
     TrimsSource m_trims;
     BasebandInfo m_info;
     bool m_trimsWritten = false;
+    std::uint8_t m_vocoder = 0;
+    bool m_callOptionsSet = false;
 };
 
 } // namespace dmm::services

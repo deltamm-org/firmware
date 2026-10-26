@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "dmm/services/dmr.h"
+
 #include <concepts>
 #include <cstdint>
 #include <string_view>
@@ -50,12 +52,17 @@ enum class BasebandWorkMode : std::uint8_t
 ///   only while told a carrier is present.
 /// - setMicrophone(on): connects the microphone for transmit, or
 ///   disconnects it and restores the receive levels.
+/// - setDigital(settings, repeater): DMR on the channel's colour code,
+///   receiving the channel's slot through a repeater, or both slots
+///   direct. False if the chip did not take it.
+/// - nextEvent(event): the next thing heard on a digital channel; false
+///   when there is none.
 /// - debugCommand(text), debugHelp(): the chip's own console commands, for
 ///   experiments; results go to the log, also when start() failed. False
 ///   if @p text is none of them.
 template <class T>
 concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, std::uint16_t ms, int percent, bool on,
-    BasebandWorkMode mode, std::string_view text) {
+    BasebandWorkMode mode, std::string_view text, const dmr::ChannelSettings &dmrSettings, dmr::Event &event) {
     { bb.start() } -> std::same_as<bool>;
     { bb.info() } -> std::same_as<BasebandInfo>;
     { bb.setSpeakerVolume(step) } -> std::same_as<bool>;
@@ -64,6 +71,8 @@ concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, s
     { bb.setWorkMode(mode) } -> std::same_as<bool>;
     { bb.setCarrier(on) } -> std::same_as<bool>;
     { bb.setMicrophone(on) } -> std::same_as<bool>;
+    { bb.setDigital(dmrSettings, on) } -> std::same_as<bool>;
+    { bb.nextEvent(event) } -> std::same_as<bool>;
     { bb.debugCommand(text) } -> std::same_as<bool>;
     { state.debugHelp() } -> std::same_as<const char *>;
 };

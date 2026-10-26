@@ -142,6 +142,8 @@ public:
     /// Sends a control field and checks the chip's answer: the same field
     /// with status 0. Returns the status, or -1 without an answer.
     int control(std::span<const std::uint8_t> fields, unsigned timeoutMs = 100);
+    /// As control(), in a packet of @p type (TypeDmr for DMR fields).
+    int control(std::uint8_t type, std::span<const std::uint8_t> fields, unsigned timeoutMs = 100);
 
     /// Writes one external codec register through the chip (page, register,
     /// value). The chip passes the fields (a zero, page, register, value, two

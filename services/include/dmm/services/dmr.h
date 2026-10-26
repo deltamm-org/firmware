@@ -62,6 +62,43 @@ enum class DataType : std::uint8_t
     Rate1Data = 10,
 };
 
+/// Something the baseband heard on a digital channel.
+struct Event
+{
+    enum class Kind : std::uint8_t
+    {
+        /// The slot timing of a repeater (base station) or another radio was
+        /// found; see the fields below.
+        SlotFound,
+        /// A burst: a data burst of @c type, or the first voice burst of a
+        /// call, with its contents.
+        Burst,
+        /// The signal's timing was lost: the call is over.
+        SyncLost,
+        CarrierFound,
+        CarrierLost,
+        /// Everything queued for sending has gone out.
+        AllSent,
+    };
+    static constexpr std::size_t MaxData = 12;
+
+    Kind kind = Kind::SyncLost;
+    // SlotFound.
+    bool baseStation = false;  // a repeater's timing, else another radio's
+    bool verified = false;     // the slot numbering is confirmed
+    bool inverted = false;     // earlier slot numbers were the other way round
+    bool inboundBusy = false;  // a repeater's inbound channel is in use
+    std::uint8_t nextSlot = 0; // a repeater's next outbound slot, 1 or 2
+    // Burst.
+    std::uint8_t colourCode = 0;
+    bool voice = false;
+    DataType type = DataType::Idle;
+    std::uint8_t length = 0;
+    std::uint8_t data[MaxData] = {};
+
+    std::span<const std::uint8_t> payload() const { return {data, length}; }
+};
+
 /// Full link control opcodes for voice calls.
 enum class Flco : std::uint8_t
 {
