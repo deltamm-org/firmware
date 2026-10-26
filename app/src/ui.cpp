@@ -335,6 +335,7 @@ ListPicker menuValue;
 enum class MenuItem : std::uint8_t
 {
     Squelch,
+    SquelchMode,
     Power,
     Backlight,
     BacklightTime,
@@ -362,7 +363,7 @@ struct GroupInfo
     std::uint8_t count;
 };
 constexpr GroupInfo Groups[] = {
-    {"Channel", {MenuItem::Squelch, MenuItem::Power}, 2},
+    {"Channel", {MenuItem::Squelch, MenuItem::SquelchMode, MenuItem::Power}, 3},
     {"Display", {MenuItem::Backlight, MenuItem::BacklightTime}, 2},
     {"Keys", {MenuItem::KeyLock, MenuItem::AutoLock}, 2},
     {"Battery", {MenuItem::BatterySave}, 1},
@@ -647,6 +648,10 @@ void uiMain(void *)
                 value << channels->squelch();
             }
             break;
+        case MenuItem::SquelchMode:
+            label = "Sq type";
+            value << (channels->current() && channels->current()->squelchMode == SquelchMode::Tone ? "Tone" : "Carrier");
+            break;
         case MenuItem::Power:
             label = "Power";
             value << (channels->current() ? Powers[static_cast<int>(channels->current()->power)] : "-");
@@ -722,6 +727,14 @@ void uiMain(void *)
                 menuValue.add(i, s.view());
             }
             menuValue.select(channels->squelch());
+            break;
+        case MenuItem::SquelchMode:
+            menuValue.open("Sq type");
+            menuValue.add(0, "Carrier");
+            menuValue.add(1, "Tone");
+            if (channels->current()) {
+                menuValue.select(channels->current()->squelchMode == SquelchMode::Tone ? 1 : 0);
+            }
             break;
         case MenuItem::Power:
             menuValue.open("Power");
@@ -819,6 +832,10 @@ void uiMain(void *)
             channels->setSquelch(v);
             log::info("ui") << "squelch " << v;
             break;
+        case MenuItem::SquelchMode:
+            channels->setSquelchMode(v == 1 ? SquelchMode::Tone : SquelchMode::Carrier);
+            log::info("ui") << "squelch opens on " << (v == 1 ? "the tone" : "the carrier");
+            break;
         case MenuItem::Power:
             channels->setPower(static_cast<PowerLevel>(v));
             log::info("ui") << "power " << v;
@@ -854,7 +871,7 @@ void uiMain(void *)
         case MenuItem::Count:
             break;
         }
-        if (menuItem == MenuItem::Squelch || menuItem == MenuItem::Power) {
+        if (menuItem == MenuItem::Squelch || menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power) {
             useChannel();
         }
         // Back to the list it came from, showing the new value; straight to

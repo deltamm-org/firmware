@@ -215,7 +215,7 @@ TEST_CASE("a codeplug set to the VFO starts there, and no zones means VFO only")
     CHECK_FALSE(none.step(1));
 }
 
-TEST_CASE("squelch and power can be changed for the session")
+TEST_CASE("squelch, power and squelch mode can be changed for the session")
 {
     FakeCodeplug cp = sample();
     ChannelSelector sel(cp);
@@ -229,4 +229,8 @@ TEST_CASE("squelch and power can be changed for the session")
     CHECK(sel.current()->power == dmm::services::PowerLevel::Turbo);
     REQUIRE(sel.step(1)); // a new channel brings its own power back
     CHECK(sel.current()->power == dmm::services::PowerLevel::Low);
+    sel.setSquelchMode(dmm::services::SquelchMode::Tone);
+    CHECK(sel.current()->squelchMode == dmm::services::SquelchMode::Tone);
+    REQUIRE(sel.step(-1));
+    CHECK(sel.current()->squelchMode == dmm::services::SquelchMode::Carrier);
 }

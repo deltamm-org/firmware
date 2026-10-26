@@ -44,6 +44,7 @@ std::array<std::uint8_t, 64> sampleRecord()
     r[0x0A] = 9;                              // 88.5 Hz
     r[0x0E] = 19;                             // DCS 023 (octal) = 19, inverted: +512
     r[0x0F] = 0x02;
+    r[0x19] = 1 << 4; // squelch on the receive tone
     std::memcpy(&r[0x23], "RPT 2M", 6);
     return r;
 }
@@ -64,7 +65,25 @@ TEST_CASE("a channel record decodes to frequencies, mode, power and tones")
     CHECK_FALSE(c->receiveOnly);
     CHECK(c->transmitTone == Tone{Tone::Kind::Ctcss, 885, false});
     CHECK(c->receiveTone == Tone{Tone::Kind::Dcs, 19, true});
+    CHECK(c->squelchMode == dmm::services::SquelchMode::Tone);
     CHECK(std::string(c->name) == "RPT 2M");
+}
+
+TEST_CASE("the squelch mode follows the codeplug, carrier without a receive tone")
+{
+    using dmm::services::SquelchMode;
+    auto r = sampleRecord();
+    const auto mode = [&](unsigned stored) {
+        r[0x19] = static_cast<std::uint8_t>(stored << 4);
+        return dmm::services::decodeChannel(r)->squelchMode;
+    };
+    CHECK(mode(0) == SquelchMode::Carrier);
+    CHECK(mode(1) == SquelchMode::Tone);
+    CHECK(mode(2) == SquelchMode::Carrier); // signalling only
+    CHECK(mode(3) == SquelchMode::Tone);
+    CHECK(mode(4) == SquelchMode::Tone);
+    r[9] = 1 << 2; // no receive tone
+    CHECK(mode(1) == SquelchMode::Carrier);
 }
 
 TEST_CASE("plus offset, simplex, digital, custom tone and bad records")

@@ -123,6 +123,11 @@ std::optional<Channel> decodeChannel(std::span<const std::uint8_t, 64> r)
     const std::uint16_t custom = le16(&r[0x10]);
     c.receiveTone = decodeTone(r[9] & 3, r[0x0B], le16(&r[0x0E]), custom);
     c.transmitTone = decodeTone((r[9] >> 2) & 3, r[0x0A], le16(&r[0x0C]), custom);
+    // Squelch modes: carrier, tone, signalling, tone and signalling, tone or
+    // signalling. Signalling alone counts as carrier, the others as tone.
+    const unsigned squelch = (r[0x19] >> 4) & 7;
+    c.squelchMode = squelch == 0 || squelch == 2 || c.receiveTone.kind == Tone::Kind::None ? SquelchMode::Carrier
+                                                                                           : SquelchMode::Tone;
     std::size_t n = 0;
     for (; n < Channel::NameBytes && r[0x23 + n] != 0; ++n) {
         c.name[n] = static_cast<char>(r[0x23 + n]);

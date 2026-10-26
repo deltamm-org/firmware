@@ -21,6 +21,14 @@ enum class ChannelMode : std::uint8_t
     DigitalAnalog, // digital, analog calls heard too
 };
 
+/// What opens the speaker on an FM channel. Stored formats map their other
+/// modes (selective calling and the like) to the nearest of these.
+enum class SquelchMode : std::uint8_t
+{
+    Carrier, // any carrier
+    Tone,    // the channel's receive tone
+};
+
 /// One memory channel of the codeplug.
 struct Channel
 {
@@ -34,6 +42,7 @@ struct Channel
     bool receiveOnly = false;
     Tone receiveTone;
     Tone transmitTone;
+    SquelchMode squelchMode = SquelchMode::Carrier;
     /// Up to NameBytes bytes, zero-terminated.
     char name[NameBytes + 1] = {};
 

@@ -54,6 +54,8 @@ public:
     std::uint8_t squelch() const { return m_sideB ? m_settings.squelchB : m_settings.squelchA; }
     /// Transmit power of the current channel, until the channel changes.
     void setPower(PowerLevel level);
+    /// Squelch mode of the current channel, until the channel changes.
+    void setSquelchMode(SquelchMode mode);
 
     /// Switches to the VFO at @p hz, with the VFO record's other settings.
     void tune(std::uint32_t hz);

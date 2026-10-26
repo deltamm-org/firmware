@@ -105,6 +105,13 @@ void ChannelSelector::setPower(PowerLevel level)
     }
 }
 
+void ChannelSelector::setSquelchMode(SquelchMode mode)
+{
+    if (m_current) {
+        m_current->squelchMode = mode;
+    }
+}
+
 void ChannelSelector::tune(std::uint32_t hz)
 {
     Channel c;

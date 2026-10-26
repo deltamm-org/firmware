@@ -509,7 +509,9 @@ void handle(Message &message)
                            log::info("fm") << "digital channel " << c.name << ": not supported yet, receiver off";
                            return;
                        }
-                       fmChannel = services::FmChannel{c.receiveHz, c.transmitHz, c.wide, c.receiveTone, c.transmitTone};
+                       const bool toneSquelch = c.squelchMode == services::SquelchMode::Tone;
+                       fmChannel = services::FmChannel{
+                           c.receiveHz, c.transmitHz, c.wide, toneSquelch ? c.receiveTone : services::Tone{}, c.transmitTone};
                        transmitHz = c.transmitHz;
                        transmitTone = c.transmitTone;
                        powerLevel = c.power;
