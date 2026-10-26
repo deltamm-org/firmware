@@ -27,6 +27,16 @@ constexpr std::uint32_t ZoneBitmap = 0x024C1300;
 constexpr std::uint32_t ChannelBitmap = 0x024C1500;
 constexpr std::uint32_t VfoA = 0x00FC0800;
 constexpr std::uint32_t VfoB = 0x00FC0840;
+constexpr std::uint32_t ContactBanks = 0x02680000;
+constexpr std::uint32_t ContactBankStride = 0x00040000;
+constexpr unsigned ContactsPerBank = 1000;
+constexpr std::uint32_t ContactBytes = 0x64;
+constexpr std::uint32_t ContactBitmap = 0x02640000;
+constexpr unsigned MaxContacts = 10'000;
+constexpr std::uint32_t RadioIds = 0x02580000;
+constexpr std::uint32_t RadioIdBytes = 0x20;
+constexpr std::uint32_t RadioIdBitmap = 0x024C1320;
+constexpr unsigned MaxRadioIds = 250;
 
 constexpr std::uint32_t BlockBytes = 0x20000;
 constexpr std::uint32_t MarkerOffset = BlockBytes - 8;
@@ -42,6 +52,11 @@ constexpr std::uint8_t CustomCtcss = 51;
 std::uint16_t le16(const std::uint8_t *p)
 {
     return static_cast<std::uint16_t>(p[0] | p[1] << 8);
+}
+
+std::uint32_t le32(const std::uint8_t *p)
+{
+    return static_cast<std::uint32_t>(le16(p)) | static_cast<std::uint32_t>(le16(p + 2)) << 16;
 }
 
 // Big-endian BCD, eight digits.
@@ -128,6 +143,9 @@ std::optional<Channel> decodeChannel(std::span<const std::uint8_t, 64> r)
     const unsigned squelch = (r[0x19] >> 4) & 7;
     c.squelchMode = squelch == 0 || squelch == 2 || c.receiveTone.kind == Tone::Kind::None ? SquelchMode::Carrier
                                                                                            : SquelchMode::Tone;
+    c.dmr.colourCode = r[0x20] & 0x0F;
+    c.dmr.slot = (r[0x21] & 1) != 0 ? 2 : 1;
+    c.dmr.groupList = r[0x1C];
     std::size_t n = 0;
     for (; n < Channel::NameBytes && r[0x23 + n] != 0; ++n) {
         c.name[n] = static_cast<char>(r[0x23 + n]);
@@ -224,27 +242,69 @@ bool D878Uv2Codeplug::bitSet(std::uint32_t bitmap, unsigned index)
     return readable(read(bitmap + index / 8, std::span(&byte, 1))) && (byte >> (index % 8) & 1) != 0;
 }
 
+ChannelLinks channelLinks(std::span<const std::uint8_t, 64> r)
+{
+    return {le32(&r[0x14]), r[0x18]};
+}
+
+std::optional<Channel> D878Uv2Codeplug::readChannel(std::uint32_t address)
+{
+    std::uint8_t r[ChannelBytes];
+    if (!readable(read(address, r))) {
+        return std::nullopt;
+    }
+    const std::span<const std::uint8_t, 64> record(r);
+    std::optional<Channel> c = decodeChannel(record);
+    if (c && c->digital()) {
+        const ChannelLinks links = channelLinks(record);
+        c->dmr.contact = contact(links.contact).value_or(dmr::Target{});
+        c->dmr.ownId = radioId(links.radioId).value_or(0);
+    }
+    return c;
+}
+
 std::optional<Channel> D878Uv2Codeplug::channel(std::uint16_t index)
 {
     if (index >= MaxChannels || !bitSet(ChannelBitmap, index)) {
         return std::nullopt;
     }
+    return readChannel(ChannelBanks + (index / ChannelsPerBank) * ChannelBankStride + (index % ChannelsPerBank) * ChannelBytes);
+}
+
+std::optional<dmr::Target> D878Uv2Codeplug::contact(std::uint32_t index)
+{
+    if (index >= MaxContacts || !bitSet(ContactBitmap, index)) {
+        return std::nullopt;
+    }
     const std::uint32_t address =
-        ChannelBanks + (index / ChannelsPerBank) * ChannelBankStride + (index % ChannelsPerBank) * ChannelBytes;
-    std::uint8_t r[ChannelBytes];
+        ContactBanks + (index / ContactsPerBank) * ContactBankStride + (index % ContactsPerBank) * ContactBytes;
+    std::uint8_t r[0x27];
     if (!readable(read(address, r))) {
         return std::nullopt;
     }
-    return decodeChannel(std::span<const std::uint8_t, 64>(r));
+    const auto id = bcd8(&r[0x23]);
+    if (!id || r[0] > 2) {
+        return std::nullopt;
+    }
+    constexpr dmr::CallType Types[] = {dmr::CallType::Private, dmr::CallType::Group, dmr::CallType::All};
+    return dmr::Target{Types[r[0]], *id};
+}
+
+std::optional<std::uint32_t> D878Uv2Codeplug::radioId(std::uint8_t index)
+{
+    if (index >= MaxRadioIds || !bitSet(RadioIdBitmap, index)) {
+        return std::nullopt;
+    }
+    std::uint8_t r[4];
+    if (!readable(read(RadioIds + index * RadioIdBytes, r))) {
+        return std::nullopt;
+    }
+    return bcd8(&r[0]);
 }
 
 std::optional<Channel> D878Uv2Codeplug::vfo(bool sideB)
 {
-    std::uint8_t r[ChannelBytes];
-    if (!readable(read(sideB ? VfoB : VfoA, r))) {
-        return std::nullopt;
-    }
-    return decodeChannel(std::span<const std::uint8_t, 64>(r));
+    return readChannel(sideB ? VfoB : VfoA);
 }
 
 std::size_t D878Uv2Codeplug::zonesInUse(std::span<std::uint8_t> out)

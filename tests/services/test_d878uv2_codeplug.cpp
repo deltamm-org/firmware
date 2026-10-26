@@ -208,3 +208,77 @@ TEST_CASE("the codeplug reads channels and zones from the valid copy of each blo
     REQUIRE(s.has_value());
     CHECK(s->squelchA == 4);
 }
+
+TEST_CASE("a digital channel's colour code, slot, group list and links")
+{
+    auto r = sampleRecord();
+    r[8] = static_cast<std::uint8_t>((r[8] & ~3) | 1); // digital
+    r[0x14] = 0x34;                                    // contact 0x1234, little-endian
+    r[0x15] = 0x12;
+    r[0x18] = 2;    // radio ID 2
+    r[0x1C] = 5;    // receive group list 5
+    r[0x20] = 0x07; // colour code 7
+    r[0x21] = 0x01; // slot 2
+    const auto c = dmm::services::decodeChannel(r);
+    REQUIRE(c.has_value());
+    CHECK(c->digital());
+    CHECK(c->dmr.colourCode == 7);
+    CHECK(c->dmr.slot == 2);
+    CHECK(c->dmr.groupList == 5);
+    const auto links = dmm::services::channelLinks(r);
+    CHECK(links.contact == 0x1234);
+    CHECK(links.radioId == 2);
+    r[0x21] = 0x00;
+    r[0x1C] = 0xFF;
+    CHECK(dmm::services::decodeChannel(r)->dmr.slot == 1);
+    CHECK(dmm::services::decodeChannel(r)->dmr.groupList == dmm::services::dmr::ChannelSettings::NoGroupList);
+}
+
+TEST_CASE("the codeplug looks up a digital channel's contact and own ID")
+{
+    using dmm::services::dmr::CallType;
+    using dmm::services::dmr::Target;
+    FakeSpiNand chip;
+    auto markValid = [&](std::uint32_t block) {
+        chip.put(block + 0x1FFF8, {0xFF, 0xFF, 0xFF, 0xFF, 0x55, 0x55, 0xAA, 0xAA});
+    };
+    markValid(0x024C0000);
+    chip.put(0x024C1500, {0x01}); // channel 0 in use
+    chip.put(0x024C1320, {0x04}); // radio ID 2 in use
+    markValid(0x02640000);
+    chip.put(0x02640000 + 125, {0x02}); // contact 1001 in use
+    // Channel 0: digital, contact 1001, radio ID 2, colour code 3, slot 1.
+    auto rec = sampleRecord();
+    rec[8] = static_cast<std::uint8_t>((rec[8] & ~3) | 1);
+    rec[0x14] = 0xE9;
+    rec[0x15] = 0x03;
+    rec[0x18] = 2;
+    rec[0x20] = 3;
+    markValid(0x00800000);
+    chip.put(0x00800000, std::vector<std::uint8_t>(rec.begin(), rec.end()));
+    // Contact 1001: second bank, entry 1: a group call to talkgroup 2441.
+    markValid(0x026C0000);
+    std::vector<std::uint8_t> contact(0x27, 0);
+    contact[0] = 1;
+    contact[0x23] = 0x00;
+    contact[0x24] = 0x00;
+    contact[0x25] = 0x24;
+    contact[0x26] = 0x41;
+    chip.put(0x026C0000 + 0x64, contact);
+    // Radio ID 2: 7654321.
+    markValid(0x02580000);
+    chip.put(0x02580000 + 2 * 0x20, {0x07, 0x65, 0x43, 0x21});
+
+    SpiNand nand(chip, noDelay);
+    D878Uv2Storage storage(nand);
+    storage.start();
+    D878Uv2Codeplug cp(storage);
+
+    const auto c = cp.channel(0);
+    REQUIRE(c.has_value());
+    CHECK(c->dmr.colourCode == 3);
+    CHECK(c->dmr.contact == Target{CallType::Group, 2441});
+    CHECK(c->dmr.ownId == 7654321);
+    CHECK_FALSE(cp.contact(1000).has_value()); // not in the bitmap
+    CHECK_FALSE(cp.radioId(1).has_value());
+}

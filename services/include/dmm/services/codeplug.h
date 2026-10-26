@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "dmm/services/dmr.h"
 #include "dmm/services/key_lock.h"
 #include "dmm/services/power_level.h"
 #include "dmm/services/tone.h"
@@ -43,11 +44,15 @@ struct Channel
     Tone receiveTone;
     Tone transmitTone;
     SquelchMode squelchMode = SquelchMode::Carrier;
+    /// Used on digital channels.
+    dmr::ChannelSettings dmr;
     /// Up to NameBytes bytes, zero-terminated.
     char name[NameBytes + 1] = {};
 
     /// Transmits and receives FM.
     bool analog() const { return mode == ChannelMode::Analog || mode == ChannelMode::AnalogDigital; }
+    /// Transmits and receives DMR.
+    bool digital() const { return !analog(); }
 };
 
 /// The general settings DeltaMM uses so far.
