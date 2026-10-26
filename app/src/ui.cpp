@@ -670,9 +670,9 @@ void uiMain(void *)
             break;
         case MenuItem::KeyLock:
             label = "Lock covers";
-            value << (k.knob ? "All" : k.keypad && k.side ? "Keys"
+            value << (k.knob ? "All" : k.keypad && k.side ? "Keys+PTT"
                     : k.keypad                            ? "Keypad"
-                                                          : "Side");
+                                                          : "Side+PTT");
             break;
         case MenuItem::AutoLock:
             label = "Auto lock";
@@ -767,16 +767,16 @@ void uiMain(void *)
         case MenuItem::BatterySave:
             menuValue.open("Battery save");
             menuValue.add(0, "Off");
-            menuValue.add(1, "On", "150 ms sleep");
-            menuValue.add(2, "Fast wake", "70 ms sleep");
+            menuValue.add(1, "On", "150 ms");
+            menuValue.add(2, "Fast wake", "70 ms");
             menuValue.select(batterySave);
             break;
         case MenuItem::KeyLock:
             menuValue.open("Lock covers");
-            menuValue.add(0, "All", "keys, PTT, knob");
-            menuValue.add(1, "Keys", "keys and PTT");
-            menuValue.add(2, "Keypad", "front keys");
-            menuValue.add(3, "Side", "side keys, PTT");
+            menuValue.add(0, "All");
+            menuValue.add(1, "Keys+PTT");
+            menuValue.add(2, "Keypad");
+            menuValue.add(3, "Side+PTT");
             break;
         case MenuItem::AutoLock:
             menuValue.open("Auto lock");

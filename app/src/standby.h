@@ -66,7 +66,9 @@ public:
     static constexpr std::size_t TextBytes = 17;
 
     void open(std::string_view title);
-    /// An item: @p text on the left, @p value (if any) right-aligned.
+    /// An item: @p text on the left, @p value (if any) right-aligned. Both
+    /// are cut to fit their buffers: keep @p text to 16 characters and
+    /// @p value to 8.
     void add(std::uint8_t id, std::string_view text, std::string_view value = {});
     void select(std::uint8_t id);
     void move(int steps);
