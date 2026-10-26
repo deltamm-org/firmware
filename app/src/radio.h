@@ -87,10 +87,12 @@ struct FmTransmitFrequency
 {
     std::uint32_t hz;
 };
-/// CTCSS tone sent with FM transmit, in 0.1 Hz; 0 = none.
-struct FmCtcss
+/// The tone sent with FM transmit, or listened for on receive (the
+/// speaker then opens only for it).
+struct FmTone
 {
-    std::uint16_t deciHz;
+    bool transmit;
+    services::Tone tone;
 };
 /// FM transmit power level.
 struct FmPower
@@ -122,7 +124,7 @@ struct UseChannel
     std::uint8_t squelch;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmCtcss, FmPower, FmTimeout, FmTransmitAudio, UseChannel, BatterySave, BatterySaveStatus>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, UseChannel, BatterySave, BatterySaveStatus>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.

@@ -158,6 +158,50 @@ bool numbersAfter(std::string_view command, std::string_view prefix, int base, s
     return true;
 }
 
+// "fm tone tx|rx <tone>": off, a CTCSS tone in 0.1 Hz (600..2600), or a
+// DCS code as d and three octal digits, then n (normal, the default) or i
+// (inverted).
+bool toneCommand(std::string_view command, radio::FmTone &out)
+{
+    using services::Tone;
+    std::string_view rest = command;
+    if (lib::takeWord(rest) != "fm" || lib::takeWord(rest) != "tone") {
+        return false;
+    }
+    const std::string_view direction = lib::takeWord(rest);
+    if (direction != "tx" && direction != "rx") {
+        return false;
+    }
+    out.transmit = direction == "tx";
+    const std::string_view value = lib::takeWord(rest);
+    if (!rest.empty()) {
+        return false;
+    }
+    if (value == "off") {
+        out.tone = Tone{};
+        return true;
+    }
+    if ((value.size() == 4 || value.size() == 5) && value[0] == 'd') {
+        const char suffix = value.size() == 5 ? value[4] : 'n';
+        bool octal = true;
+        for (std::size_t i = 1; i <= 3; ++i) {
+            octal = octal && value[i] >= '0' && value[i] <= '7';
+        }
+        if (!octal || (suffix != 'n' && suffix != 'i')) {
+            return false;
+        }
+        const auto bits = static_cast<std::uint16_t>((value[1] - '0') << 6 | (value[2] - '0') << 3 | (value[3] - '0'));
+        out.tone = Tone{Tone::Kind::Dcs, bits, suffix == 'i'};
+        return true;
+    }
+    const auto deciHz = lib::parseNumber(value, 10);
+    if (deciHz && *deciHz >= 600 && *deciHz <= 2600) {
+        out.tone = Tone{Tone::Kind::Ctcss, static_cast<std::uint16_t>(*deciHz), false};
+        return true;
+    }
+    return false;
+}
+
 // Hands @p command without its first @p prefixLength characters to one
 // chip's own console commands.
 bool chipCommand(radio::ChipCommand::Chip chip, std::string_view command, std::size_t prefixLength)
@@ -187,10 +231,8 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::FmTransmitFrequency{0});
     } else if (numbersAfter(command, "fm tx ", 10, n, 1) && n[0] >= 100'000) {
         posted = radio::post(radio::FmTransmitFrequency{static_cast<std::uint32_t>(n[0]) * 1000});
-    } else if (command == "fm ctcss off") {
-        posted = radio::post(radio::FmCtcss{0});
-    } else if (numbersAfter(command, "fm ctcss ", 10, n, 1) && n[0] >= 600 && n[0] <= 2600) {
-        posted = radio::post(radio::FmCtcss{static_cast<std::uint16_t>(n[0])});
+    } else if (radio::FmTone tone{}; toneCommand(command, tone)) {
+        posted = radio::post(tone);
     } else if (const int level = powerLevel(command); level >= 0) {
         posted = radio::post(radio::FmPower{static_cast<services::PowerLevel>(level)});
     } else if (command == "fm txaudio both" || command == "fm txaudio bb" || command == "fm txaudio direct") {
@@ -271,7 +313,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, "
-                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm ctcss <0.1 Hz>|off, fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
     } else if (command == "fault") {

@@ -51,6 +51,20 @@ constexpr unsigned PowerStepMs = 1;
     log::info("fm") << what << ' ' << value << unit;
 }
 
+// The chip takes CTCSS in 0.01 Hz units.
+Chip::SubTone chipTone(const Tone &tone)
+{
+    switch (tone.kind) {
+    case Tone::Kind::Ctcss:
+        return {Chip::SubTone::Kind::Ctcss, static_cast<std::uint16_t>(tone.value * 10), false};
+    case Tone::Kind::Dcs:
+        return {Chip::SubTone::Kind::Dcs, tone.value, tone.inverted};
+    case Tone::Kind::None:
+        break;
+    }
+    return {};
+}
+
 } // namespace
 
 Rda1846Transceiver::Rda1846Transceiver(Chip &chip, RfHardware &rf, const Pins &pins, void (*sleepMs)(unsigned),
@@ -114,13 +128,14 @@ const char *Rda1846Transceiver::receive(const FmChannel &channel, int squelchLev
     const int noiseOpen = squelchOpenNoiseDb(channel.wide, squelchLevel);
     m_chip.setNoiseSquelch(noiseOpen, noiseOpen - SquelchHysteresisDb);
     logSquelch(trims->squelchOpenDbm, noiseOpen);
+    m_chip.setReceiveTone(chipTone(channel.receiveTone));
     m_chip.setMode(Chip::Mode::Receive);
     m_receiveHz = hz;
     setPin(frontEnd(), true);
     return nullptr;
 }
 
-const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel level, std::uint16_t ctcssCentiHz)
+const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel level)
 {
     const std::uint32_t hz = channel.transmitHz;
     const auto trims = m_trims.transmit != nullptr ? m_trims.transmit(hz, level) : std::nullopt;
@@ -139,9 +154,12 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     muteMicrophone(false);
     m_chip.setFrequency(hz);
     m_chip.setBandwidth(channel.wide ? Chip::Bandwidth::Wide : Chip::Bandwidth::Narrow);
-    m_chip.setDeviation(trims->voiceDeviation, ctcssCentiHz != 0 ? trims->ctcssDeviation : 0);
-    using Tone = Chip::SubTone;
-    m_chip.setTransmitTone(ctcssCentiHz != 0 ? Tone{Tone::Kind::Ctcss, ctcssCentiHz, false} : Tone{});
+    const Tone &tone = channel.transmitTone;
+    const std::uint8_t toneDeviation = tone.kind == Tone::Kind::Ctcss ? trims->ctcssDeviation
+        : tone.kind == Tone::Kind::Dcs                                ? trims->dcsDeviation
+                                                                      : 0;
+    m_chip.setDeviation(trims->voiceDeviation, toneDeviation);
+    m_chip.setTransmitTone(chipTone(tone));
     m_chip.setMode(Chip::Mode::Transmit);
     setPin(m_pins.transmitHighBand, hz > m_pins.splitHz);
     // Power last.
@@ -208,8 +226,9 @@ FmReceiveStatus Rda1846Transceiver::status()
 {
     const int quality = m_chip.signalQuality();
     const bool strong = quality < (m_wide ? StrongQualityWide : StrongQualityNarrow);
-    const bool flag = (m_chip.flags() & Chip::SquelchOpen) != 0;
-    return {flag || strong, m_chip.rssiDbm()};
+    const std::uint16_t flags = m_chip.flags();
+    const bool flag = (flags & Chip::SquelchOpen) != 0;
+    return {flag || strong, m_chip.rssiDbm(), m_chip.receiveToneHeard(flags)};
 }
 
 void Rda1846Transceiver::logStatus(std::string_view what)

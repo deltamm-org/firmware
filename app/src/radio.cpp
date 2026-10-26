@@ -37,20 +37,28 @@ int speakerVolume = -1;
 // Half of full scale: loud enough to hear, short of clipping.
 constexpr int ChipTonePercent = 50;
 
-// FM receive: the channel, the squelch level and the speaker gate.
+// FM receive: the channel, the squelch level and the speaker gate. A
+// channel with a receive tone opens the speaker on the tone alone, else
+// on the carrier; squelch level 0 forces only the carrier open.
 constexpr os::Ticks FmPollMs = 10;
 constexpr os::Ticks IdleWaitMs = 1000;
 constexpr int DefaultSquelchLevel = 3;
 services::FmChannel fmChannel;
 int squelchLevel = DefaultSquelchLevel;
-services::SquelchGate gate;
+services::SquelchGate carrierGate;
+// Polls before a tone counts as heard, and as gone: DCS words come slowly
+// and drop out briefly, so DCS waits longer before closing.
+constexpr int ToneOpenPolls = 5;
+constexpr int CtcssClosePolls = 15;
+constexpr int DcsClosePolls = 90;
+services::SquelchGate toneGate(ToneOpenPolls, CtcssClosePolls);
 bool speakerOpen = false;
 services::BatterySaver saver;
 
 // FM transmit settings and state.
 constexpr std::uint16_t DefaultTimeoutS = 30;
 std::uint32_t transmitHz = 0; // 0 = the receive frequency
-std::uint16_t ctcssDeciHz = 0;
+services::Tone transmitTone;
 services::PowerLevel powerLevel = services::PowerLevel::Low;
 std::uint16_t timeoutS = DefaultTimeoutS;
 bool receiveOnly = false;
@@ -134,6 +142,30 @@ void basebandAnalogReceive()
     });
 }
 
+// "CTCSS 88.5 Hz", "DCS 023N", "no tone"; for the log.
+lib::StaticString<20> toneText(const services::Tone &tone)
+{
+    lib::StaticString<20> text;
+    switch (tone.kind) {
+    case services::Tone::Kind::None:
+        text << "no tone";
+        break;
+    case services::Tone::Kind::Ctcss:
+        text << "CTCSS " << tone.value / 10 << '.' << static_cast<char>('0' + tone.value % 10) << " Hz";
+        break;
+    case services::Tone::Kind::Dcs:
+        text << "DCS " << static_cast<char>('0' + (tone.value >> 6 & 7)) << static_cast<char>('0' + (tone.value >> 3 & 7))
+             << static_cast<char>('0' + (tone.value & 7)) << (tone.inverted ? 'I' : 'N');
+        break;
+    }
+    return text;
+}
+
+bool toneSquelch()
+{
+    return fmChannel.receiveTone.kind != services::Tone::Kind::None;
+}
+
 // MHz with three decimals, for the log.
 lib::StaticString<12> mhz(std::uint32_t hz)
 {
@@ -180,7 +212,15 @@ void startFm()
 [[gnu::noinline]] void logReceiving()
 {
     log::info("fm") << "receiving " << mhz(fmChannel.receiveHz).view() << " MHz, " << (fmChannel.wide ? "25" : "12.5")
-                    << " kHz, squelch " << squelchLevel;
+                    << " kHz, squelch " << squelchLevel
+                    << (toneSquelch() ? ", opens on " : ", opens on the carrier")
+                    << (toneSquelch() ? toneText(fmChannel.receiveTone).view() : std::string_view());
+}
+
+// The speaker's gate for the current channel.
+bool gateOpen()
+{
+    return toneSquelch() ? toneGate.open() : carrierGate.open();
 }
 
 void fmReceive()
@@ -192,8 +232,11 @@ void fmReceive()
     const int level = squelchLevel < 1 ? 1 : squelchLevel;
     const char *problem = fm->receive(fmChannel, level);
     saver.reset();
-    gate.reset();
-    gate.setForcedOpen(squelchLevel == 0);
+    carrierGate.reset();
+    carrierGate.setForcedOpen(squelchLevel == 0);
+    toneGate.reset();
+    const bool dcs = fmChannel.receiveTone.kind == services::Tone::Kind::Dcs;
+    toneGate.setCounts(ToneOpenPolls, dcs ? DcsClosePolls : CtcssClosePolls);
     if (problem != nullptr) {
         setSpeaker(false);
         logReceiveRefused(problem);
@@ -201,7 +244,7 @@ void fmReceive()
     }
     basebandAnalogReceive();
     logReceiving();
-    setSpeaker(gate.open());
+    setSpeaker(gateOpen());
 }
 
 void fmStatus()
@@ -211,8 +254,11 @@ void fmStatus()
         return;
     }
     const services::FmReceiveStatus s = fm->status();
-    lib::StaticString<64> what;
-    what << mhz(fmChannel.receiveHz).view() << " MHz, carrier " << (s.carrier ? "yes" : "no") << ", speaker "
+    lib::StaticString<96> what;
+    what << mhz(fmChannel.receiveHz).view() << " MHz, carrier " << (s.carrier ? "yes" : "no") << ", tone "
+         << (!toneSquelch() ? "not needed" : s.toneHeard ? "heard"
+                                                         : "not heard")
+         << ", speaker "
          << (speakerOpen ? "open" : "closed");
     fm->logStatus(what.view());
 }
@@ -221,22 +267,15 @@ void fmStatus()
 void pollFm()
 {
     const services::FmReceiveStatus s = fm->status();
-    const bool open = gate.update(s.carrier);
+    carrierGate.update(s.carrier);
+    toneGate.update(s.toneHeard);
+    const bool open = gateOpen();
     if (open != speakerOpen) {
-        fm->logStatus(open ? "squelch open" : "squelch closed");
+        const char *what = toneSquelch() ? (open ? "squelch open, tone heard" : "squelch closed, tone gone")
+                                         : (open ? "squelch open" : "squelch closed");
+        fm->logStatus(what);
         setSpeaker(open);
     }
-}
-
-lib::StaticString<16> ctcssText()
-{
-    lib::StaticString<16> text;
-    if (ctcssDeciHz == 0) {
-        text << "no tone";
-    } else {
-        text << "tone " << ctcssDeciHz / 10 << '.' << static_cast<char>('0' + ctcssDeciHz % 10) << " Hz";
-    }
-    return text;
 }
 
 void startTransmit()
@@ -263,7 +302,8 @@ void startTransmit()
         b.setMicrophone(transmitAudio != FmTransmitAudio::Route::Direct);
         b.setWorkMode(services::BasebandWorkMode::Transmit);
     });
-    const char *problem = fm->transmit(channel, powerLevel, static_cast<std::uint16_t>(ctcssDeciHz * 10));
+    channel.transmitTone = transmitTone;
+    const char *problem = fm->transmit(channel, powerLevel);
     if (problem != nullptr) {
         fm->endTransmit();
         withBaseband([](auto &b) { b.setMicrophone(false); });
@@ -279,7 +319,7 @@ void startTransmit()
     ui::post(ui::Transmitting{true});
     transmitStarted = os::nowMs();
     log::info("fm") << "transmitting " << mhz(channel.transmitHz).view() << " MHz, power " << powerName(powerLevel)
-                    << ", " << ctcssText().view() << ", timeout " << timeoutS << " s, audio "
+                    << ", " << toneText(transmitTone).view() << ", timeout " << timeoutS << " s, audio "
                     << routeName(transmitAudio);
 }
 
@@ -397,7 +437,9 @@ void handle(Message &message)
                        });
                    },
                    [](const FmReceive &r) {
-                       fmChannel = services::FmChannel{r.receiveHz, r.receiveHz, r.wide};
+                       const services::Tone receiveTone = fmChannel.receiveTone;
+                       fmChannel = services::FmChannel{r.receiveHz, r.receiveHz, r.wide, {}, {}};
+                       fmChannel.receiveTone = receiveTone;
                        fmReceive();
                    },
                    [](const FmIdle &) {
@@ -428,9 +470,17 @@ void handle(Message &message)
                                        << (f.hz != 0 ? mhz(f.hz).view() : std::string_view("the receive frequency"))
                                        << (f.hz != 0 ? " MHz" : "");
                    },
-                   [](const FmCtcss &c) {
-                       ctcssDeciHz = c.deciHz;
-                       log::info("fm") << "transmit " << ctcssText().view();
+                   [](const FmTone &t) {
+                       if (t.transmit) {
+                           transmitTone = t.tone;
+                           log::info("fm") << "transmit " << toneText(transmitTone).view();
+                           return;
+                       }
+                       fmChannel.receiveTone = t.tone;
+                       log::info("fm") << "receive " << toneText(t.tone).view();
+                       if (fm->receiving()) {
+                           fmReceive();
+                       }
                    },
                    [](const FmPower &p) {
                        powerLevel = p.level;
@@ -452,12 +502,9 @@ void handle(Message &message)
                            log::info("fm") << "digital channel " << c.name << ": not supported yet, receiver off";
                            return;
                        }
-                       fmChannel = services::FmChannel{c.receiveHz, c.transmitHz, c.wide};
+                       fmChannel = services::FmChannel{c.receiveHz, c.transmitHz, c.wide, c.receiveTone, c.transmitTone};
                        transmitHz = c.transmitHz;
-                       ctcssDeciHz = c.transmitTone.kind == services::Tone::Kind::Ctcss ? c.transmitTone.value : 0;
-                       if (c.transmitTone.kind == services::Tone::Kind::Dcs) {
-                           log::warning("fm") << "DCS transmit not supported yet: sending no tone";
-                       }
+                       transmitTone = c.transmitTone;
                        powerLevel = c.power;
                        receiveOnly = c.receiveOnly;
                        squelchLevel = u.squelch;

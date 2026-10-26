@@ -339,7 +339,7 @@ void hal::boardMain()
             if (!trim || !power || !deviation) {
                 return std::nullopt;
             }
-            return Fm::TransmitTrims{*trim, *power, deviation->voice, deviation->ctcss};
+            return Fm::TransmitTrims{*trim, *power, deviation->voice, deviation->ctcss, deviation->dcs};
         }};
     static Fm fm{fmChip, rf, FmPins, [](unsigned ms) { dmm::os::sleepMs(ms); }, fmTrims,
         []() -> const dmm::drivers::radio::Rda1846::Tuning & { return fmTuning(&storage); }};

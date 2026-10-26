@@ -4,6 +4,7 @@
 #pragma once
 
 #include "dmm/services/power_level.h"
+#include "dmm/services/tone.h"
 
 #include <concepts>
 #include <cstdint>
@@ -17,6 +18,8 @@ struct FmChannel
     std::uint32_t receiveHz = 0;
     std::uint32_t transmitHz = 0;
     bool wide = false; // 25 kHz rather than 12.5 kHz
+    Tone receiveTone;  // listened for; None = none
+    Tone transmitTone;
 };
 
 /// What the receiver hears right now, before any debouncing.
@@ -24,6 +27,7 @@ struct FmReceiveStatus
 {
     bool carrier = false; // squelch decision: a signal is present
     int rssiDbm = 0;
+    bool toneHeard = false; // the channel's receive tone is heard
 };
 
 /// The analog FM transceiver and the board around it. Every radio has one;
@@ -34,19 +38,20 @@ struct FmReceiveStatus
 /// - start(): resets and sets the chip up: idle, microphone muted, every RF
 ///   switch off. False when the chip does not answer.
 /// - receive(channel, squelchLevel): tunes to the channel's receive
-///   frequency and receives, squelch level 1..5. Returns nullptr, or why
-///   it did not.
-/// - transmit(channel, level, ctcssCentiHz): transmits on the channel's
-///   transmit frequency at the power level, with a CTCSS tone in 0.01 Hz
-///   units (0 = none); the microphone is unmuted. Returns nullptr, or why
-///   it did not transmit (then nothing was switched on).
+///   frequency and receives, squelch level 1..5, listening for the
+///   channel's receive tone. Returns nullptr, or why it did not.
+/// - transmit(channel, level): transmits on the channel's transmit
+///   frequency and tone at the power level; the microphone is unmuted.
+///   Returns nullptr, or why it did not transmit (then nothing was
+///   switched on).
 /// - endTransmit(): power amplifier off first, then the transmit path,
 ///   microphone muted, idle. Safe at any time.
 /// - idle(): stops receiving or transmitting; the chip stays powered.
 /// - sleepReceiver(), wakeReceiver(), receiverAsleep(): battery save
 ///   switches the receiver and its front end off while receiving, keeping
 ///   the tuning; asleep until woken, or receive(), transmit() or idle().
-/// - receiving(), transmitting(), status().
+/// - receiving(), transmitting(), status(): what the receiver hears; the
+///   carrier and the tone separately.
 /// - logStatus(what): logs @p what, then what the receiver hears in the
 ///   chip's own figures.
 /// - setMicrophoneMuted(muted).
@@ -54,11 +59,11 @@ struct FmReceiveStatus
 ///   experiments; results go to the log. False if @p text is none of them.
 template <class T>
 concept FmTransceiver = requires(T &fm, const T &state, const FmChannel &channel, int squelchLevel, PowerLevel level,
-    std::uint16_t ctcssCentiHz, bool on, std::string_view text) {
+    bool on, std::string_view text) {
     { fm.present() } -> std::same_as<bool>;
     { fm.start() } -> std::same_as<bool>;
     { fm.receive(channel, squelchLevel) } -> std::same_as<const char *>;
-    { fm.transmit(channel, level, ctcssCentiHz) } -> std::same_as<const char *>;
+    { fm.transmit(channel, level) } -> std::same_as<const char *>;
     fm.endTransmit();
     fm.idle();
     fm.sleepReceiver();

@@ -50,13 +50,14 @@ public:
     };
     /// The radio's calibrated values for transmitting at one frequency and
     /// power level: RfHardware units, and the chip's deviation settings for
-    /// voice (10 bits) and for a CTCSS tone (6 bits).
+    /// voice (10 bits) and for a CTCSS or DCS tone (6 bits).
     struct TransmitTrims
     {
         std::uint16_t referenceTrim;
         std::uint16_t powerControl;
         std::uint16_t voiceDeviation;
         std::uint8_t ctcssDeviation;
+        std::uint8_t dcsDeviation;
     };
     /// The board's calibrated values; nothing for a frequency outside the
     /// calibrated bands, or before the calibration has been read.
@@ -74,7 +75,7 @@ public:
     bool present() { return m_chip.present(); }
     bool start();
     const char *receive(const FmChannel &channel, int squelchLevel);
-    const char *transmit(const FmChannel &channel, PowerLevel level, std::uint16_t ctcssCentiHz);
+    const char *transmit(const FmChannel &channel, PowerLevel level);
     void endTransmit();
     /// The power-amplifier control value of the running transmission, or 0.
     std::uint16_t transmitPower() const { return m_power; }

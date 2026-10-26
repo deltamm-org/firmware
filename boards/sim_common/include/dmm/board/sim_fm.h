@@ -23,7 +23,7 @@ public:
         m_mode = Mode::Receive;
         return nullptr;
     }
-    const char *transmit(const dmm::services::FmChannel &channel, dmm::services::PowerLevel, std::uint16_t)
+    const char *transmit(const dmm::services::FmChannel &channel, dmm::services::PowerLevel)
     {
         dmm::services::log::info("sim") << "transmit " << channel.transmitHz << " Hz";
         m_mode = Mode::Transmit;

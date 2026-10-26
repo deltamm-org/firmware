@@ -5,29 +5,13 @@
 
 #include "dmm/services/key_lock.h"
 #include "dmm/services/power_level.h"
+#include "dmm/services/tone.h"
 
 #include <cstdint>
 #include <optional>
 #include <span>
 
 namespace dmm::services {
-
-/// A sub-audio tone: CTCSS in 0.1 Hz, or a DCS code (the octal code's
-/// value, inverted or not).
-struct Tone
-{
-    enum class Kind : std::uint8_t
-    {
-        None,
-        Ctcss,
-        Dcs,
-    };
-    Kind kind = Kind::None;
-    std::uint16_t value = 0;
-    bool inverted = false;
-
-    bool operator==(const Tone &) const = default;
-};
 
 enum class ChannelMode : std::uint8_t
 {
