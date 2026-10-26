@@ -113,11 +113,11 @@ namespace {
 // A small tuning that exercises every list the driver walks.
 constexpr Rda1846::Setting TestStartUp[] = {{0x04, 0x0FD0}, {0x47, 0x7F2F}};
 constexpr Rda1846::Setting TestAfterCalibration[] = {{0x27, 0x74A4, 5}, {0x27, 0x6CA4}};
-constexpr Rda1846::WidthSetting TestWidth[] = {{0x32, 0x4495, 0x75E3}};
-constexpr Rda1846::WidthSetting TestWidthPage1[] = {{0x06, 0x0014, 0x0024}};
-constexpr Rda1846::RangeSetting TestRanges[] = {{200'000'000, 299'999'999, {0x34, 0x2B8E, 0x2B8B}}};
-constexpr Rda1846::WidthSetting TestReceive[] = {{0x0A, 0x4380, 0x43A0}, {0x58, 0x8085, 0x8085}};
-constexpr Rda1846::WidthSetting TestTransmit[] = {{0x0A, 0x3BA0, 0x3BA0}, {0x58, 0x8405, 0x8405}};
+constexpr Rda1846::WidthSetting TestWidth[] = {{0x32, 0x4495, 0x75E3, 0x4495}};
+constexpr Rda1846::WidthSetting TestWidthPage1[] = {{0x06, 0x0014, 0x0024, 0x0014}};
+constexpr Rda1846::RangeSetting TestRanges[] = {{200'000'000, 299'999'999, {0x34, 0x2B8E, 0x2B8B, 0x2B8E}}};
+constexpr Rda1846::WidthSetting TestReceive[] = {{0x0A, 0x4380, 0x43A0, 0x4380}, {0x58, 0x8085, 0x8085, 0x8085}};
+constexpr Rda1846::WidthSetting TestTransmit[] = {{0x0A, 0x3BA0, 0x3BA0, 0x3BA0}, {0x58, 0x8405, 0x8405, 0x8405}};
 constexpr Rda1846::BandWord TestBandWords[] = {
     {145'000'000, 145'000'000, 0x8643},
     {144'000'000, 146'000'000, 0x8543},
@@ -302,4 +302,23 @@ TEST_CASE("the tuning table's detector bits give way to the driver's")
     Rda1846 chip(bus);
     chip.setBandwidth(Rda1846::Bandwidth::Narrow);
     CHECK((bus.registers[0x3A] & 0x1F) == 0);
+}
+
+TEST_CASE("a digital channel takes the tuning's digital column, idle like a narrow one")
+{
+    using Setting = Rda1846::WidthSetting;
+    constexpr Setting Width[] = {{0x0A, 0x4380, 0x43A0, 0x4381}, {0x3C, 0x0408, 0x0408, 0x1A32}};
+    constexpr Setting Receive[] = {{0x0A, 0x4380, 0x43A0, 0x4381}};
+    Rda1846::Tuning tuning = Rda1846::makerTuning();
+    tuning.width = Width;
+    tuning.receive = Receive;
+    LoggingBus bus;
+    Rda1846 chip(bus, tuning);
+    chip.setBandwidth(Rda1846::Bandwidth::Digital);
+    CHECK(bus.registers[0x3C] == 0x1A32);
+    chip.setMode(Rda1846::Mode::Receive);
+    CHECK(bus.registers[0x0A] == 0x4381);
+    CHECK(bus.registers[0x30] == 0x4026);
+    chip.setBandwidth(Rda1846::Bandwidth::Narrow);
+    CHECK(bus.registers[0x3C] == 0x0408);
 }

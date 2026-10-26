@@ -399,7 +399,7 @@ std::size_t indexOf(const std::vector<std::string> &v, const std::string &s)
 namespace {
 
 // The chip's own values, plus the transmit drive the board sets.
-constexpr Rda1846::WidthSetting TransmitDrive[] = {{0x0A, 0x3BA0, 0x3BA0}};
+constexpr Rda1846::WidthSetting TransmitDrive[] = {{0x0A, 0x3BA0, 0x3BA0, 0x3BA0}};
 const Rda1846::Tuning &transmitTuning()
 {
     static const Rda1846::Tuning tuning = [] {

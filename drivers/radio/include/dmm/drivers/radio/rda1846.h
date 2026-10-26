@@ -44,10 +44,13 @@ public:
         bool inverted = false;
     };
 
+    /// What the channel carries: FM at 12.5 or 25 kHz, or a digital
+    /// (DMR) signal the baseband chip handles, on a 12.5 kHz channel.
     enum class Bandwidth : std::uint8_t
     {
-        Narrow, // 12.5 kHz channels
-        Wide,   // 25 kHz channels
+        Narrow,
+        Wide,
+        Digital,
     };
 
     enum class Mode : std::uint8_t
@@ -73,12 +76,13 @@ public:
         std::uint16_t value;
         std::uint8_t sleepMs = 0;
     };
-    /// One register with a value per channel width.
+    /// One register with a value per Bandwidth.
     struct WidthSetting
     {
         std::uint8_t reg;
         std::uint16_t narrow;
         std::uint16_t wide;
+        std::uint16_t digital;
     };
     /// A width setting used only from lowHz to highHz (both included).
     struct RangeSetting
