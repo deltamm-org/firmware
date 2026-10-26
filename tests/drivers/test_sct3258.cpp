@@ -146,3 +146,30 @@ TEST_CASE("a status line stuck at data waiting still lets the caller yield and t
     CHECK(sct.boot(Blob, ack, 10) == Sct3258::BootResult::NoAnswer);
     CHECK(delayedUs >= 10000);
 }
+
+TEST_CASE("reports from the chip survive a request and never pass for its reply")
+{
+    FakeSct3258 chip;
+    Sct3258 sct(chip, noDelay);
+    std::uint8_t ack = 0;
+    REQUIRE(sct.boot(std::vector<std::uint8_t>(2048, 0x11), ack) == Sct3258::BootResult::Ready);
+    chip.queue(0x30, {0x7F, 0x87});                  // waiting before the request
+    chip.reportsBeforeReply = {{0x30, {0x1B, 0x05}}, // a far-end event
+        {0x20, {0x17, 0x0A}}};                       // everything sent
+    const std::uint8_t cc[] = {Sct3258::DmrColourCode, 0x01};
+    CHECK(sct.control(cc) == 0);
+
+    Packet r;
+    REQUIRE(sct.nextReport(r));
+    CHECK(r.type == 0x30);
+    CHECK(r.fields[0] == 0x7F);
+    REQUIRE(sct.nextReport(r));
+    CHECK(r.fields[0] == 0x1B);
+    REQUIRE(sct.nextReport(r));
+    CHECK(r.field(0x17)[0] == 0x0A);
+    CHECK_FALSE(sct.nextReport(r));
+
+    chip.queue(0x30, {0x77, 0x01, 0x43, 0x01, 0x09, 0, 0, 0, 0, 0, 1, 0, 0, 1}); // arrives later
+    REQUIRE(sct.nextReport(r));
+    CHECK(r.length == 14);
+}

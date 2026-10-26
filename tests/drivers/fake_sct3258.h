@@ -21,6 +21,9 @@ public:
     std::vector<std::vector<std::uint8_t>> packets; // fields of each packet received, type first
     std::size_t bootBytes = 0;
     bool oddWriteSeen = false;
+    /// Packets (type, fields) the chip sends after the next request, before
+    /// its reply.
+    std::vector<std::pair<std::uint8_t, std::vector<std::uint8_t>>> reportsBeforeReply;
 
     void write(const std::uint8_t *bytes, std::size_t count) override
     {
@@ -82,6 +85,10 @@ private:
 
     void answer(const std::vector<std::uint8_t> &p)
     {
+        for (const auto &[t, f] : reportsBeforeReply) {
+            queue(t, f);
+        }
+        reportsBeforeReply.clear();
         const std::uint8_t type = p[0];
         const std::uint8_t field = p.size() > 1 ? p[1] : 0;
         if (type == 0x40) {
