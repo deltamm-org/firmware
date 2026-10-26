@@ -158,11 +158,13 @@ constexpr RangeSetting Ranges[] = {
 
 // Receive: PA bias by width, receive volume step 9 of 15, full DAC gain;
 // filters with the transceiver's de-emphasis bypassed (the baseband chip
-// does it) and the 250 Hz tone filter.
+// does it) and the 250 Hz tone filter. Digital channels bypass the audio
+// filters too and take a different audio path setting.
 constexpr WidthSetting Receive[] = {
     {0x0A, 0x4380, 0x43A0, 0x4381},
     {0x44, 0x09F9, 0x09F9, 0x09F9},
-    {0x58, 0x8085, 0x8085, 0x8085},
+    {0x58, 0x8085, 0x8085, 0x80E5},
+    {0x40, 0x0030, 0x0030, 0x0031},
 };
 
 // Transmit: driver step 7 (the drive the power calibration is made at) and
