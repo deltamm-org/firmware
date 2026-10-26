@@ -103,8 +103,8 @@ const char *bootProblem(Sct3258::BootResult r)
 } // namespace
 
 Sct3258Baseband::Sct3258Baseband(Sct3258 &chip, BasebandBoard &board, std::span<const std::uint8_t> bootBlob,
-    const Audio &audio, TrimsSource trims)
-    : m_chip(chip), m_board(board), m_blob(bootBlob), m_audio(audio), m_trims(trims)
+    const Audio &audio, TrimsSource trims, DigitalTrimsSource digitalTrims)
+    : m_chip(chip), m_board(board), m_blob(bootBlob), m_audio(audio), m_trims(trims), m_digitalTrims(digitalTrims)
 {
 }
 
@@ -237,10 +237,20 @@ bool Sct3258Baseband::selectVocoder(std::uint8_t vocoder)
     return true;
 }
 
-bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, bool repeater)
+bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, bool repeater)
 {
     if (!m_info.running || !selectVocoder(Sct3258::VocoderDigital)) {
         return false;
+    }
+    if (const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(receiveHz) : std::nullopt) {
+        std::uint8_t offset[1 + 12] = {Sct3258::DcOffset};
+        for (std::size_t i = 0; i < trims->dcOffset.size(); ++i) {
+            offset[1 + i] = trims->dcOffset[i];
+        }
+        const std::uint8_t gain[] = {Sct3258::DemodGain, trims->demodGain[0], trims->demodGain[1]};
+        if (m_chip.control(offset) != 0 || m_chip.control(gain) != 0) {
+            warn("digital calibration not taken");
+        }
     }
     const std::uint8_t process[] = {Sct3258::ProcessMode, Sct3258::ProcessLayer2};
     if (m_chip.control(process) != 0) {

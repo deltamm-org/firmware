@@ -317,6 +317,14 @@ void hal::boardMain()
                 return std::nullopt;
             }
             return dmm::services::Sct3258Baseband::Trims{*gains, {codec->leftOut, codec->rightOut, codec->rightInput}};
+        },
+        [](std::uint32_t hz) -> std::optional<dmm::services::Sct3258Baseband::DigitalTrims> {
+            const auto offset = calibration.basebandDcOffset(hz);
+            const auto gain = calibration.basebandDemodGain();
+            if (!offset || !gain) {
+                return std::nullopt;
+            }
+            return dmm::services::Sct3258Baseband::DigitalTrims{*offset, *gain};
         }};
     static dmm::drivers::radio::Rda1846 fmChip{fmBus};
     // Called from the radio task; empty until the system task has read the

@@ -86,6 +86,13 @@ public:
     /// The baseband chip's analog-mode gains, big-endian words: transmit
     /// before and after the limiter, CTCSS, DCS and receive volume.
     std::optional<std::array<std::uint8_t, 10>> basebandAnalogGains() const;
+    /// The baseband chip's converter offsets and output gains for @p hz, as
+    /// stored (big-endian words): the band block's ten bytes, then the
+    /// frequency range's own last word. The per-MHz correction of that last
+    /// word is not applied.
+    std::optional<std::array<std::uint8_t, 12>> basebandDcOffset(std::uint32_t hz) const;
+    /// The baseband chip's demodulator gain, as stored (big-endian).
+    std::optional<std::array<std::uint8_t, 2>> basebandDemodGain() const;
 
     const std::uint8_t *data() const { return m_data; }
 

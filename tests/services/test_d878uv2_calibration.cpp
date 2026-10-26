@@ -164,3 +164,27 @@ TEST_CASE("an uncalibrated radio gives no RF values")
     CHECK_FALSE(cal.squelchThreshold(440 * MHz, 1).has_value());
     CHECK_FALSE(cal.deviation().has_value());
 }
+
+TEST_CASE("baseband DC offset by band and frequency range, and the demodulator gain")
+{
+    auto d = sample();
+    for (std::uint8_t i = 0; i < 16; ++i) {
+        d[0x80 + i] = static_cast<std::uint8_t>(0x10 + i); // UHF block
+        d[0xC0 + i] = static_cast<std::uint8_t>(0x40 + i); // VHF block
+    }
+    d[0x97] = 0x08;
+    d[0x98] = 0x20;
+    const D878Uv2Calibration cal = loaded(d);
+    const auto u = cal.basebandDcOffset(438'075'000);
+    REQUIRE(u.has_value());
+    CHECK((*u)[0] == 0x10);
+    CHECK((*u)[9] == 0x19);
+    CHECK((*u)[10] == 0x1A); // below 460 MHz: the word at +10
+    CHECK((*u)[11] == 0x1B);
+    CHECK((*cal.basebandDcOffset(470 * MHz))[10] == 0x1C);
+    CHECK((*cal.basebandDcOffset(145 * MHz))[0] == 0x40);
+    CHECK((*cal.basebandDcOffset(145 * MHz))[10] == 0x4A);
+    CHECK((*cal.basebandDcOffset(160 * MHz))[10] == 0x4C);
+    CHECK_FALSE(cal.basebandDcOffset(300 * MHz).has_value());
+    CHECK(*cal.basebandDemodGain() == std::array<std::uint8_t, 2>{0x08, 0x20});
+}

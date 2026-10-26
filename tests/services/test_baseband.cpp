@@ -249,8 +249,9 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
     dmm::services::dmr::ChannelSettings settings;
     settings.colourCode = 7;
     settings.slot = 2;
-    REQUIRE(baseband.setDigital(settings, true));
+    REQUIRE(baseband.setDigital(settings, 433'450'000, true));
     REQUIRE(chip.packets.size() == 7);
+    // Without a calibration source, no DC offset or demodulator gain.
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x10, 0x0C});
     CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x1A, 0x02});
     CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x79, 0x41, 0x00, 0x13, 0x04, 0x00});
@@ -261,7 +262,7 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
 
     // Direct: both slots; the vocoder and the call options stay.
     chip.packets.clear();
-    REQUIRE(baseband.setDigital(settings, false));
+    REQUIRE(baseband.setDigital(settings, 433'450'000, false));
     REQUIRE(chip.packets.size() == 5);
     CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
 
@@ -317,4 +318,28 @@ TEST_CASE("the chip's reports become DMR events")
     REQUIRE(baseband.nextEvent(e));
     CHECK(e.kind == Kind::AllSent);
     CHECK_FALSE(baseband.nextEvent(e));
+}
+
+TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims,
+        [](std::uint32_t hz) -> std::optional<Sct3258Baseband::DigitalTrims> {
+            if (hz < 400'000'000) {
+                return std::nullopt;
+            }
+            return Sct3258Baseband::DigitalTrims{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, {0x08, 0x00}};
+        });
+    REQUIRE(baseband.start());
+    chip.packets.clear();
+    dmm::services::dmr::ChannelSettings settings;
+    REQUIRE(baseband.setDigital(settings, 438'075'000, true));
+    REQUIRE(chip.packets.size() == 9);
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x1C, 0x08, 0x00});
+    chip.packets.clear();
+    REQUIRE(baseband.setDigital(settings, 145'000'000, true));
+    CHECK(chip.packets.size() == 5); // no values for this band; the vocoder stays
 }

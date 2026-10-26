@@ -65,8 +65,18 @@ public:
     /// The calibrated values, or nothing until a calibration has been read.
     using TrimsSource = std::optional<Trims> (*)();
 
+    /// The radio's calibrated values for digital receive at one frequency.
+    struct DigitalTrims
+    {
+        /// DC_OFFSET: converter offsets and output gains.
+        std::array<std::uint8_t, 12> dcOffset;
+        /// DEMOD_GAIN.
+        std::array<std::uint8_t, 2> demodGain;
+    };
+    using DigitalTrimsSource = std::optional<DigitalTrims> (*)(std::uint32_t hz);
+
     Sct3258Baseband(drivers::baseband::Sct3258 &chip, BasebandBoard &board, std::span<const std::uint8_t> bootBlob,
-        const Audio &audio, TrimsSource trims);
+        const Audio &audio, TrimsSource trims, DigitalTrimsSource digitalTrims = nullptr);
 
     /// Also writes the codec trims if the calibration has been read.
     bool start();
@@ -80,7 +90,7 @@ public:
     bool setMicrophone(bool on);
     /// Also switches the vocoder over (a few seconds the first time) and
     /// sets the DMR call options once after start().
-    bool setDigital(const dmr::ChannelSettings &settings, bool repeater);
+    bool setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, bool repeater);
     bool nextEvent(dmr::Event &event);
     /// "codec <page> <reg> <value>", "packet <type> <bytes>" (hex).
     bool debugCommand(std::string_view command);
@@ -107,6 +117,7 @@ private:
     std::span<const std::uint8_t> m_blob;
     const Audio &m_audio;
     TrimsSource m_trims;
+    DigitalTrimsSource m_digitalTrims;
     BasebandInfo m_info;
     bool m_trimsWritten = false;
     std::uint8_t m_vocoder = 0;

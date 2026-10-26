@@ -24,8 +24,14 @@ constexpr std::uint32_t DeviationAt = 6;
 constexpr std::uint32_t SquelchBaseAt = 9;
 constexpr std::uint32_t TunePointsAt = 10;
 constexpr std::uint32_t BasebandGainsAt = 0x040;
-// In the first 39-byte modulator block: codec trims at +0x12..+0x14.
-constexpr std::uint32_t CodecTrimsAt = 0x080 + 0x12;
+// Two 39-byte baseband blocks, UHF then VHF. In each: converter offsets
+// and gains at +0..+9, last-word bases per frequency range at +10, +12
+// (and +14 on VHF); in the UHF block, codec trims at +0x12..+0x14 and the
+// demodulator gain at +0x17.
+constexpr std::uint32_t UhfBasebandBlock = 0x080;
+constexpr std::uint32_t VhfBasebandBlock = 0x0C0;
+constexpr std::uint32_t CodecTrimsAt = UhfBasebandBlock + 0x12;
+constexpr std::uint32_t DemodGainAt = UhfBasebandBlock + 0x17;
 
 // The calibration's slot for each power level, low to turbo.
 unsigned powerSlot(PowerLevel level)
@@ -222,6 +228,34 @@ std::optional<D878Uv2Calibration::Deviation> D878Uv2Calibration::deviation() con
     }
     const std::uint8_t *d = m_data + UhfBlock + DeviationAt;
     return Deviation{d[0], d[1], d[2]};
+}
+
+std::optional<std::array<std::uint8_t, 12>> D878Uv2Calibration::basebandDcOffset(std::uint32_t hz) const
+{
+    if (!present() || bandFor(hz) == nullptr) {
+        return std::nullopt;
+    }
+    // Last-word ranges: UHF below and from 460 MHz; VHF below 155 MHz,
+    // to 200 MHz and from 200 MHz.
+    const bool uhf = hz >= 300 * MHz;
+    const std::uint32_t block = uhf ? UhfBasebandBlock : VhfBasebandBlock;
+    const unsigned range = uhf ? (hz >= 460 * MHz ? 1 : 0) : (hz >= 200 * MHz ? 2 : hz >= 155 * MHz ? 1
+                                                                                                    : 0);
+    std::array<std::uint8_t, 12> d{};
+    for (std::size_t i = 0; i < 10; ++i) {
+        d[i] = m_data[block + i];
+    }
+    d[10] = m_data[block + 10 + 2 * range];
+    d[11] = m_data[block + 11 + 2 * range];
+    return d;
+}
+
+std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandDemodGain() const
+{
+    if (!present()) {
+        return std::nullopt;
+    }
+    return std::array<std::uint8_t, 2>{m_data[DemodGainAt], m_data[DemodGainAt + 1]};
 }
 
 std::optional<std::array<std::uint8_t, 10>> D878Uv2Calibration::basebandAnalogGains() const
