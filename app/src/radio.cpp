@@ -330,6 +330,9 @@ void onDmrEvent(const services::dmr::Event &e)
     using services::dmr::DataType;
     switch (e.kind) {
     case Kind::SlotFound:
+        log::debug("dmr") << "timing: " << (e.baseStation ? "repeater" : "direct") << (e.verified ? ", verified" : "")
+                          << (e.inverted ? ", inverted" : "") << (e.inboundBusy ? ", busy" : "") << ", next slot "
+                          << e.nextSlot;
         if (!timingFound && e.verified) {
             timingFound = true;
             log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing found"
