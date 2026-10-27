@@ -16,6 +16,7 @@
 #include "dmm/services/log.h"
 #include "dmm/version.h"
 
+#include <optional>
 #include <string_view>
 
 namespace dmm::app {
@@ -124,6 +125,59 @@ int powerLevel(std::string_view command)
     return -1;
 }
 
+// A frequency in kHz with up to three decimals ("145637.5"), as Hz; nothing
+// if @p word is not one or is below 100 MHz.
+std::optional<std::uint32_t> khzToHz(std::string_view word)
+{
+    const std::size_t dot = word.find('.');
+    const std::string_view whole(word.data(), dot == std::string_view::npos ? word.size() : dot);
+    const auto khz = lib::parseNumber(whole, 10);
+    if (!khz || *khz < 100'000 || *khz > 999'999) {
+        return std::nullopt;
+    }
+    std::uint32_t hz = static_cast<std::uint32_t>(*khz) * 1000;
+    if (dot != std::string_view::npos) {
+        const std::string_view fraction(word.data() + dot + 1, word.size() - dot - 1);
+        if (fraction.empty() || fraction.size() > 3) {
+            return std::nullopt;
+        }
+        std::uint32_t scale = 100;
+        for (const char c : fraction) {
+            if (c < '0' || c > '9') {
+                return std::nullopt;
+            }
+            hz += static_cast<std::uint32_t>(c - '0') * scale;
+            scale /= 10;
+        }
+    }
+    return hz;
+}
+
+// "<prefix><kHz>" as Hz.
+std::optional<std::uint32_t> frequencyAfter(std::string_view command, std::string_view prefix)
+{
+    if (!lib::startsWith(command, prefix)) {
+        return std::nullopt;
+    }
+    return khzToHz(std::string_view(command.data() + prefix.size(), command.size() - prefix.size()));
+}
+
+// "dmr rx <kHz> <colour code> <slot>".
+std::optional<radio::DmrReceive> dmrReceiveCommand(std::string_view command)
+{
+    std::string_view rest = command;
+    if (lib::takeWord(rest) != "dmr" || lib::takeWord(rest) != "rx") {
+        return std::nullopt;
+    }
+    const auto hz = khzToHz(lib::takeWord(rest));
+    const auto cc = lib::parseNumber(lib::takeWord(rest), 10);
+    const auto slot = lib::parseNumber(lib::takeWord(rest), 10);
+    if (!hz || !cc || *cc > 15 || !slot || *slot > 2 || !rest.empty()) {
+        return std::nullopt;
+    }
+    return radio::DmrReceive{*hz, static_cast<std::uint8_t>(*cc), static_cast<std::uint8_t>(*slot)};
+}
+
 bool numbersAfter(std::string_view command, std::string_view prefix, int base, std::int32_t *out, std::size_t count)
 {
     if (!lib::startsWith(command, prefix)) {
@@ -223,17 +277,18 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::Restart{});
     } else if (numbersAfter(command, "bbtone ", 10, n, 2) && n[0] > 0 && n[0] <= 8000 && n[1] > 0 && n[1] <= 10000) {
         posted = radio::post(radio::ChipTone{static_cast<std::uint16_t>(n[0]), static_cast<std::uint16_t>(n[1])});
-    } else if (numbersAfter(command, "dmr rx ", 10, n, 3) && n[0] >= 100'000 && n[1] <= 15 && n[2] <= 2) {
-        posted = radio::post(radio::DmrReceive{static_cast<std::uint32_t>(n[0]) * 1000, static_cast<std::uint8_t>(n[1]),
-            static_cast<std::uint8_t>(n[2])});
-    } else if ((numbersAfter(command, "fm rx ", 10, n, 1) || numbersAfter(command, "fm rxw ", 10, n, 1)) && n[0] >= 100'000) {
-        posted = radio::post(radio::FmReceive{static_cast<std::uint32_t>(n[0]) * 1000, lib::startsWith(command, "fm rxw ")});
+    } else if (const auto dmr = dmrReceiveCommand(command)) {
+        posted = radio::post(*dmr);
+    } else if (const auto rx = frequencyAfter(command, "fm rx ")) {
+        posted = radio::post(radio::FmReceive{*rx, false});
+    } else if (const auto rxw = frequencyAfter(command, "fm rxw ")) {
+        posted = radio::post(radio::FmReceive{*rxw, true});
     } else if (command == "fm off") {
         posted = radio::post(radio::FmIdle{});
     } else if (command == "fm tx off") {
         posted = radio::post(radio::FmTransmitFrequency{0});
-    } else if (numbersAfter(command, "fm tx ", 10, n, 1) && n[0] >= 100'000) {
-        posted = radio::post(radio::FmTransmitFrequency{static_cast<std::uint32_t>(n[0]) * 1000});
+    } else if (const auto tx = frequencyAfter(command, "fm tx ")) {
+        posted = radio::post(radio::FmTransmitFrequency{*tx});
     } else if (radio::FmTone tone{}; toneCommand(command, tone)) {
         posted = radio::post(tone);
     } else if (const int level = powerLevel(command); level >= 0) {
@@ -316,7 +371,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, "
-                                "fm rx|rxw <kHz> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+                                "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
     } else if (command == "fault") {

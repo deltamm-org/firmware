@@ -180,13 +180,18 @@ bool toneSquelch()
     return fmChannel.receiveTone.kind != services::Tone::Kind::None;
 }
 
-// MHz with three decimals, for the log.
+// MHz with three decimals, four when the frequency needs them, for the
+// log.
 lib::StaticString<12> mhz(std::uint32_t hz)
 {
-    const std::uint32_t khz = hz / 1000;
+    const std::uint32_t tenthKhz = hz / 100;
+    const std::uint32_t frac = tenthKhz % 10000;
     lib::StaticString<12> text;
-    text << khz / 1000 << '.' << static_cast<char>('0' + khz / 100 % 10) << static_cast<char>('0' + khz / 10 % 10)
-         << static_cast<char>('0' + khz % 10);
+    text << tenthKhz / 10000 << '.' << static_cast<char>('0' + frac / 1000) << static_cast<char>('0' + frac / 100 % 10)
+         << static_cast<char>('0' + frac / 10 % 10);
+    if (frac % 10 != 0) {
+        text << static_cast<char>('0' + frac % 10);
+    }
     return text;
 }
 
