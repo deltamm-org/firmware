@@ -93,6 +93,12 @@ public:
     std::optional<std::array<std::uint8_t, 12>> basebandDcOffset(std::uint32_t hz) const;
     /// The baseband chip's demodulator gain, as stored (big-endian).
     std::optional<std::array<std::uint8_t, 2>> basebandDemodGain() const;
+    /// The baseband chip's modulator gain for @p hz's band, as stored
+    /// (big-endian).
+    std::optional<std::array<std::uint8_t, 2>> basebandModGain(std::uint32_t hz) const;
+    /// The baseband chip's transmit slot timing offset and length, as
+    /// stored (big-endian words, 41.7 us units, then two more words).
+    std::optional<std::array<std::uint8_t, 8>> basebandSlotTiming() const;
 
     const std::uint8_t *data() const { return m_data; }
 

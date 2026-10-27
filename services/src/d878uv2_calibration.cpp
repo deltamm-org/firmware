@@ -32,6 +32,10 @@ constexpr std::uint32_t UhfBasebandBlock = 0x080;
 constexpr std::uint32_t VhfBasebandBlock = 0x0C0;
 constexpr std::uint32_t CodecTrimsAt = UhfBasebandBlock + 0x12;
 constexpr std::uint32_t DemodGainAt = UhfBasebandBlock + 0x17;
+constexpr std::uint32_t ModGainAt = 0x10; // in each baseband block
+// Slot timing: four big-endian words, then 'f' when written.
+constexpr std::uint32_t SlotTimingAt = 0x100;
+constexpr std::uint8_t SlotTimingValid = 'f';
 
 // The calibration's slot for each power level, low to turbo.
 unsigned powerSlot(PowerLevel level)
@@ -256,6 +260,27 @@ std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandDemodGain
         return std::nullopt;
     }
     return std::array<std::uint8_t, 2>{m_data[DemodGainAt], m_data[DemodGainAt + 1]};
+}
+
+std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandModGain(std::uint32_t hz) const
+{
+    if (!present() || bandFor(hz) == nullptr) {
+        return std::nullopt;
+    }
+    const std::uint32_t at = (hz >= 300 * MHz ? UhfBasebandBlock : VhfBasebandBlock) + ModGainAt;
+    return std::array<std::uint8_t, 2>{m_data[at], m_data[at + 1]};
+}
+
+std::optional<std::array<std::uint8_t, 8>> D878Uv2Calibration::basebandSlotTiming() const
+{
+    if (!present() || m_data[SlotTimingAt + 8] != SlotTimingValid) {
+        return std::nullopt;
+    }
+    std::array<std::uint8_t, 8> t{};
+    for (std::size_t i = 0; i < t.size(); ++i) {
+        t[i] = m_data[SlotTimingAt + i];
+    }
+    return t;
 }
 
 std::optional<std::array<std::uint8_t, 10>> D878Uv2Calibration::basebandAnalogGains() const
