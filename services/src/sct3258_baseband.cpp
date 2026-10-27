@@ -462,11 +462,16 @@ bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::ui
         return false;
     }
     // Several in a row when asked for: a repeater that is just starting
-    // its receiver may miss the first.
+    // its receiver may miss the first. Each waits
+    // until the one before has gone out; the caller awaits the last.
     for (int i = 0; i < WakeBursts; ++i) {
         if (!m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake)) {
-            warn("wake-up block not taken");
+            warn("wake-up block not taken, reply", m_chip.lastFrameReply());
             return i > 0;
+        }
+        if (i + 1 < WakeBursts && !m_chip.awaitSent()) {
+            warn("wake-up block did not go out");
+            return true;
         }
     }
     return true;

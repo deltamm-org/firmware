@@ -163,9 +163,17 @@ public:
 
     /// Hands one DMR data frame to the chip for sending, with the channel's
     /// colour code: @p property (voice or data burst and its data type) and
-    /// @p data. True when the chip acknowledged it.
+    /// @p data. True when the chip acknowledged it; else lastFrameReply()
+    /// tells what came instead. The first frame after the switch to
+    /// transmit may take a few hundred milliseconds to be acknowledged.
     bool sendFrame(std::uint8_t colourCode, std::uint8_t property, std::span<const std::uint8_t> data,
-        unsigned timeoutMs = 200);
+        unsigned timeoutMs = 500);
+    /// Waits until the chip reports the last frame sent; the next frame
+    /// must not be handed over before. Other reports are kept.
+    bool awaitSent(unsigned timeoutMs = 200);
+    /// After a refused sendFrame(): the reply's type and first field, or
+    /// -1 when nothing came.
+    int lastFrameReply() const { return m_lastFrameReply; }
 
     /// A packet the chip sent on its own: what it received from the far
     /// end, an event, or the note that everything queued has gone out.
@@ -176,6 +184,7 @@ public:
     static constexpr std::size_t ReportBytes = 48;
 
 private:
+    int m_lastFrameReply = -1;
     struct Report
     {
         std::uint8_t type;

@@ -161,11 +161,34 @@ bool Sct3258::sendFrame(std::uint8_t colourCode, std::uint8_t property, std::spa
         fields[5 + i] = data[i];
     }
     Packet reply;
+    m_lastFrameReply = -1;
     if (!request(TypeDmr, std::span(fields, 5 + data.size()), reply, timeoutMs)) {
         return false;
     }
     // The chip acknowledges each frame with the bare DIGC_DATA_FRAME field.
-    return reply.length >= 1 && reply.fields[0] == DataFrame;
+    if (reply.length >= 1 && reply.fields[0] == DataFrame) {
+        return true;
+    }
+    m_lastFrameReply = reply.type << 8 | (reply.length >= 1 ? reply.fields[0] : 0);
+    return false;
+}
+
+bool Sct3258::awaitSent(unsigned timeoutMs)
+{
+    Packet p;
+    for (int i = 0; i < 2 * MaxStalePackets; ++i) {
+        if (!receive(p, timeoutMs)) {
+            return false;
+        }
+        const auto ack = p.field(AckMessage);
+        if (!ack.empty() && ack[0] == AckAllSent) {
+            return true;
+        }
+        if (isReport(p)) {
+            keep(p);
+        }
+    }
+    return false;
 }
 
 bool Sct3258::isReport(const Packet &p)
