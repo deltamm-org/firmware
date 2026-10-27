@@ -179,18 +179,24 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
             }
         }
         const int detY = freqY + Medium.height + 6;
-        line(d, Body, 4, detY, w - 8, det.view(), p::Dim);
-        lib::StaticString<40> det2;
-        det2 << powerText(c->power);
-        if (c->transmitHz != c->receiveHz) {
-            const bool up = c->transmitHz > c->receiveHz;
-            const std::uint32_t off = up ? c->transmitHz - c->receiveHz : c->receiveHz - c->transmitHz;
-            det2 << "  " << (up ? '+' : '-') << mhz(off).view();
+        if (!s.callTarget.empty()) {
+            // A call being heard takes the detail lines.
+            line(d, Body, 4, detY, w - 8, s.callTarget, p::Text);
+            line(d, Body, 4, detY + Body.height + 1, w - 8, s.callSource, p::Text);
+        } else {
+            line(d, Body, 4, detY, w - 8, det.view(), p::Dim);
+            lib::StaticString<40> det2;
+            det2 << powerText(c->power);
+            if (c->transmitHz != c->receiveHz) {
+                const bool up = c->transmitHz > c->receiveHz;
+                const std::uint32_t off = up ? c->transmitHz - c->receiveHz : c->receiveHz - c->transmitHz;
+                det2 << "  " << (up ? '+' : '-') << mhz(off).view();
+            }
+            if (c->receiveOnly) {
+                det2 << "  RX ONLY";
+            }
+            line(d, Body, 4, detY + Body.height + 1, w - 8, det2.view(), p::Dim);
         }
-        if (c->receiveOnly) {
-            det2 << "  RX ONLY";
-        }
-        line(d, Body, 4, detY + Body.height + 1, w - 8, det2.view(), p::Dim);
     }
 
     // Bottom bar: the quick keys, or a short note.

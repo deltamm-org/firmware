@@ -294,6 +294,7 @@ void endCall(const char *why)
         return;
     }
     inCall = false;
+    ui::post(ui::DmrCall{false, false, 0, 0});
     logCallEnd(why, os::nowMs() - callStarted);
     setSpeaker(false);
 }
@@ -377,6 +378,7 @@ void onDmrEvent(const services::dmr::Event &e)
                              << " from "
                              << lc->source << " to " << lc->destination << ", colour code " << e.colourCode
                              << (lc->emergency() ? ", emergency" : "");
+            ui::post(ui::DmrCall{true, lc->groupCall(), lc->source, lc->destination});
             setSpeaker(true);
         }
         break;

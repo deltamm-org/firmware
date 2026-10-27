@@ -56,6 +56,14 @@ struct Transmitting
 {
     bool on;
 };
+/// A DMR call is heard (active) or over: who is calling and whom.
+struct DmrCall
+{
+    bool active;
+    bool group;
+    std::uint32_t source;
+    std::uint32_t destination;
+};
 /// The squelch opened (true) or closed.
 struct Receiving
 {
@@ -103,7 +111,7 @@ struct SwitchingOff
 };
 
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, ShowStandby, SetKeyLock, KeyLockSettings, KeyLockReport>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, KeyLockSettings, KeyLockReport>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels.

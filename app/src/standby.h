@@ -36,6 +36,10 @@ struct StandbyState
     std::string_view keys;
     /// A short message in the bottom bar instead of the key hints, or empty.
     std::string_view note;
+    /// The DMR call being heard, two lines (whom, from whom); empty when
+    /// there is none.
+    std::string_view callTarget;
+    std::string_view callSource;
     /// Volume step 0..15, or -1 when unknown.
     int volume = -1;
 };

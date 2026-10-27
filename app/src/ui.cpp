@@ -385,6 +385,9 @@ std::uint8_t batterySave = 0;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
+// The DMR call being heard, as the standby screen shows it.
+lib::StaticString<32> callTarget;
+lib::StaticString<32> callSource;
 // The standby screen's quick-key hint.
 lib::StaticString<40> quickKeys;
 // Frequency digits typed on the standby screen.
@@ -585,6 +588,8 @@ void uiMain(void *)
         s.entry = std::string_view(entry, entryLength);
         s.volume = volumeLevel;
         s.keys = quickKeys.view();
+        s.callTarget = callTarget.view();
+        s.callSource = callSource.view();
         return s;
     };
     auto barHeader = [&](bool bar) {
@@ -1077,6 +1082,28 @@ void uiMain(void *)
                                receiving = r.on;
                                useLight(d);
                                refreshLockMark();
+                           },
+                           [&](const DmrCall &c) {
+                               callTarget = {};
+                               callSource = {};
+                               if (c.active) {
+                                   std::array<char, CodeplugSource::ContactNameBytes + 1> name{};
+                                   callTarget << (c.group ? "TG " : "To ");
+                                   if (codeplug != nullptr && codeplug->contactName(c.destination, c.group, name)) {
+                                       callTarget << name.data();
+                                   } else {
+                                       callTarget << c.destination;
+                                   }
+                                   callSource << "From ";
+                                   if (codeplug != nullptr && codeplug->contactName(c.source, false, name)) {
+                                       callSource << name.data();
+                                   } else {
+                                       callSource << c.source;
+                                   }
+                               }
+                               if (view == View::Standby) {
+                                   redrawView();
+                               }
                            },
                            [&](const ShowStandby &) {
                                if (channels != nullptr) {
