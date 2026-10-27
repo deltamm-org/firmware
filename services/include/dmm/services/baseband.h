@@ -58,13 +58,20 @@ enum class BasebandWorkMode : std::uint8_t
 ///   direct. False if the chip did not take it.
 /// - nextEvent(event): the next thing heard on a digital channel; false
 ///   when there is none.
+/// - startDigitalCall(settings, lc, transmitHz): transmits on the
+///   channel's slot: the call's header, then voice from the microphone.
+///   The caller keys the RF path. False if the chip did not take it.
+/// - endDigitalCall(settings, lc): sends the call's terminator; the
+///   AllSent event follows once it has gone out.
+/// - wakeRepeater(settings, source): sends the control block that wakes
+///   an idle repeater.
 /// - debugCommand(text), debugHelp(): the chip's own console commands, for
 ///   experiments; results go to the log, also when start() failed. False
 ///   if @p text is none of them.
 template <class T>
 concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, std::uint16_t ms, int percent, bool on,
     BasebandWorkMode mode, std::string_view text, const dmr::ChannelSettings &dmrSettings, std::uint32_t receiveHz,
-    dmr::Event &event) {
+    dmr::Event &event, const dmr::FullLc &lc) {
     { bb.start() } -> std::same_as<bool>;
     { bb.info() } -> std::same_as<BasebandInfo>;
     { bb.setSpeakerVolume(step) } -> std::same_as<bool>;
@@ -75,6 +82,9 @@ concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, s
     { bb.setMicrophone(on) } -> std::same_as<bool>;
     { bb.setDigital(dmrSettings, receiveHz, on) } -> std::same_as<bool>;
     { bb.nextEvent(event) } -> std::same_as<bool>;
+    { bb.startDigitalCall(dmrSettings, lc, receiveHz) } -> std::same_as<bool>;
+    { bb.endDigitalCall(dmrSettings, lc) } -> std::same_as<bool>;
+    { bb.wakeRepeater(dmrSettings, receiveHz) } -> std::same_as<bool>;
     { bb.debugCommand(text) } -> std::same_as<bool>;
     { state.debugHelp() } -> std::same_as<const char *>;
 };

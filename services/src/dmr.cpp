@@ -24,6 +24,17 @@ std::uint32_t get24(const std::uint8_t *in)
 
 } // namespace
 
+std::array<std::uint8_t, 10> repeaterWake(std::uint32_t source)
+{
+    // Last block, standard feature set, then the target (all repeaters)
+    // and the source.
+    std::array<std::uint8_t, 10> b{};
+    b[0] = static_cast<std::uint8_t>(0x80 | static_cast<std::uint8_t>(CsbkOpcode::RepeaterWake));
+    put24(&b[4], AllCallId);
+    put24(&b[7], source);
+    return b;
+}
+
 FullLc FullLc::voiceCall(const Target &target, std::uint32_t source)
 {
     FullLc lc;

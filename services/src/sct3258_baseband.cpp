@@ -44,6 +44,7 @@ constexpr std::uint8_t SlotFoundChannel2 = 0x04;
 // DIGC_DATA_FRAME property: voice burst, else data of the low four bits'
 // type.
 constexpr std::uint8_t FrameVoice = 0x10;
+constexpr std::uint8_t FrameData = 0x00;
 constexpr std::uint8_t FrameTypeMask = 0x0F;
 
 // Analog mode byte: DCS high-pass on and 1.5 dB less at 3 kHz; the chip's
@@ -369,6 +370,62 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
         e.data[i] = p.fields[at + 3 + i];
     }
     return true;
+}
+
+bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc,
+    std::uint32_t transmitHz)
+{
+    if (!m_info.running) {
+        return false;
+    }
+    if (const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(transmitHz) : std::nullopt) {
+        const std::uint8_t gain[] = {Sct3258::ModGain, trims->modGain[0], trims->modGain[1]};
+        if (m_chip.control(gain) != 0) {
+            warn("modulator gain not taken");
+        }
+        if (trims->slotTiming) {
+            std::uint8_t timing[1 + 8] = {Sct3258::DmrOffset};
+            for (std::size_t i = 0; i < 8; ++i) {
+                timing[1 + i] = (*trims->slotTiming)[i];
+            }
+            if (m_chip.control(Sct3258::TypeDmr, timing) != 0) {
+                warn("slot timing not taken");
+            }
+        }
+    }
+    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | settings.slot)};
+    const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkTransmit, 0, 0};
+    if (m_chip.control(Sct3258::TypeDmr, slot) != 0 || !write(m_audio.transmit) || m_chip.control(work) != 0) {
+        return false;
+    }
+    std::array<std::uint8_t, dmr::FullLc::Bytes> b{};
+    lc.encode(b);
+    // The header, then the first voice superframe with the same link
+    // control; the chip sends voice from then on.
+    return m_chip.sendFrame(settings.colourCode, FrameData | static_cast<std::uint8_t>(dmr::DataType::VoiceLcHeader), b) &&
+        m_chip.sendFrame(settings.colourCode, FrameVoice | static_cast<std::uint8_t>(dmr::DataType::VoiceLcHeader), b);
+}
+
+bool Sct3258Baseband::endDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc)
+{
+    std::array<std::uint8_t, dmr::FullLc::Bytes> b{};
+    lc.encode(b);
+    const bool sent =
+        m_info.running && m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::TerminatorWithLc), b);
+    write(m_audio.receive);
+    return sent;
+}
+
+bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::uint32_t source)
+{
+    if (!m_info.running) {
+        return false;
+    }
+    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | settings.slot)};
+    const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkTransmit, 0, 0};
+    const auto wake = dmr::repeaterWake(source);
+    return m_chip.control(Sct3258::TypeDmr, slot) == 0 && m_chip.control(work) == 0 &&
+        m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake);
 }
 
 bool Sct3258Baseband::nextEvent(dmr::Event &event)

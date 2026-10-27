@@ -339,7 +339,7 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
             if (hz < 400'000'000) {
                 return std::nullopt;
             }
-            return Sct3258Baseband::DigitalTrims{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, {0x08, 0x00}};
+            return Sct3258Baseband::DigitalTrims{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, {0x08, 0x00}, {0x08, 0x00}, std::nullopt};
         });
     REQUIRE(baseband.start());
     chip.packets.clear();
@@ -351,4 +351,41 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 145'000'000, true));
     CHECK(chip.packets.size() == 5); // no values for this band; the vocoder stays
+}
+
+TEST_CASE("a DMR call: slot, microphone, transmit, header, voice; then the terminator")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    REQUIRE(baseband.start());
+    chip.packets.clear();
+    dmm::services::dmr::ChannelSettings settings;
+    settings.colourCode = 1;
+    settings.slot = 1;
+    using dmm::services::dmr::CallType;
+    const auto lc = dmm::services::dmr::FullLc::voiceCall({CallType::Group, 244}, 1234567);
+    REQUIRE(baseband.startDigitalCall(settings, lc, 145'637'500));
+    const std::vector<std::uint8_t> lcBytes = {0x00, 0x00, 0x00, 0x00, 0x00, 0xF4, 0x12, 0xD6, 0x87};
+    auto frame = [&](std::uint8_t property) {
+        std::vector<std::uint8_t> f = {0x08, 0x77, 0x01, 0x43, property, 0x09};
+        f.insert(f.end(), lcBytes.begin(), lcBytes.end());
+        return f;
+    };
+    REQUIRE(chip.packets.size() == 9);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0x81});
+    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 52, 0x80, 0x00, 0x00}); // microphone in
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x00, 0x18, 0x02, 0x00, 0x00});
+    CHECK(chip.packets[7] == frame(0x01));
+    CHECK(chip.packets[8] == frame(0x11));
+    chip.packets.clear();
+    REQUIRE(baseband.endDigitalCall(settings, lc));
+    CHECK(chip.packets[0] == frame(0x02));
+}
+
+TEST_CASE("the repeater wake block")
+{
+    const auto b = dmm::services::dmr::repeaterWake(1234567);
+    CHECK(b == std::array<std::uint8_t, 10>{0xB8, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x12, 0xD6, 0x87});
 }

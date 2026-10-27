@@ -81,6 +81,10 @@ public:
         std::array<std::uint8_t, 12> dcOffset;
         /// DEMOD_GAIN.
         std::array<std::uint8_t, 2> demodGain;
+        /// MOD_GAIN, for transmit.
+        std::array<std::uint8_t, 2> modGain;
+        /// DMR_OFFSET: transmit slot timing.
+        std::optional<std::array<std::uint8_t, 8>> slotTiming;
     };
     using DigitalTrimsSource = std::optional<DigitalTrims> (*)(std::uint32_t hz);
 
@@ -101,6 +105,9 @@ public:
     /// sets the DMR call options once after start().
     bool setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, bool repeater);
     bool nextEvent(dmr::Event &event);
+    bool startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc, std::uint32_t transmitHz);
+    bool endDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc);
+    bool wakeRepeater(const dmr::ChannelSettings &settings, std::uint32_t source);
     /// "codec <page> <reg> <value>", "packet <type> <bytes>" (hex).
     bool debugCommand(std::string_view command);
     const char *debugHelp() const;

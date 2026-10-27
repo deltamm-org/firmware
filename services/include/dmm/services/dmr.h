@@ -6,6 +6,7 @@
 // DMR protocol terms from ETSI TS 102 361-1 and -2, the same for every
 // radio: call types, the full link control word and burst data types.
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -103,6 +104,16 @@ struct Event
 
     std::span<const std::uint8_t> payload() const { return {data, length}; }
 };
+
+/// Control block opcodes.
+enum class CsbkOpcode : std::uint8_t
+{
+    /// Asks an idle repeater to start transmitting (BS_Dwn_Act).
+    RepeaterWake = 0x38,
+};
+
+/// The 10-byte control block that wakes a repeater, from @p source.
+std::array<std::uint8_t, 10> repeaterWake(std::uint32_t source);
 
 /// Full link control opcodes for voice calls.
 enum class Flco : std::uint8_t
