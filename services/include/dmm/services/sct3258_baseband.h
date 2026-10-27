@@ -131,6 +131,9 @@ public:
 private:
     bool fail(const char *problem);
     bool write(std::span<const CodecWrite> writes);
+    /// Tells the chip the carrier is gone, then puts it in transmit mode.
+    bool leaveReceive();
+    bool enterTransmit();
     /// The codec's receive levels for the current mode.
     std::span<const CodecWrite> receiveWrites() const;
     void writeTrims(const Trims &trims);

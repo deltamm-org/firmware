@@ -382,12 +382,13 @@ TEST_CASE("a DMR call: slot, microphone, transmit, header, voice; then the termi
         f.insert(f.end(), lcBytes.begin(), lcBytes.end());
         return f;
     };
-    REQUIRE(chip.packets.size() == 9);
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0x81});
-    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 52, 0x80, 0x00, 0x00}); // microphone in
-    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x00, 0x18, 0x02, 0x00, 0x00});
-    CHECK(chip.packets[7] == frame(0x01));
-    CHECK(chip.packets[8] == frame(0x11));
+    REQUIRE(chip.packets.size() == 10);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x19, 0x00}); // carrier off first
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0x81});
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 52, 0x80, 0x00, 0x00}); // microphone in
+    CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x00, 0x18, 0x02, 0x00, 0x00});
+    CHECK(chip.packets[8] == frame(0x01));
+    CHECK(chip.packets[9] == frame(0x11));
     chip.packets.clear();
     REQUIRE(baseband.endDigitalCall(settings, lc));
     CHECK(chip.packets[0] == frame(0x02));
@@ -412,5 +413,5 @@ TEST_CASE("through a repeater a DMR call's slots follow the repeater's timing")
     chip.packets.clear();
     using dmm::services::dmr::CallType;
     REQUIRE(baseband.startDigitalCall(settings, dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567), 430'475'000));
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0xC2});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0xC2});
 }

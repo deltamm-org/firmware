@@ -23,6 +23,8 @@ constexpr std::uint8_t ProcessAnalog = Sct3258::ProcessAnalog;
 // access channel report before the slot counts as verified, three repeated
 // LC headers; every CSBK and idle burst reported.
 constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x0C, 0x00};
+// How long the chip may take to switch between receive and transmit.
+constexpr unsigned SwitchMs = 500;
 // Repeater wake-up bursts per try.
 constexpr int WakeBursts = 5;
 // DMR_CALL_SLOT: receive on both slots (direct channels); 1 or 2 is that
@@ -426,8 +428,9 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
     // Through a repeater the call's slots follow the repeater's timing.
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot,
         static_cast<std::uint8_t>(Sct3258::SlotTransmit | (m_repeater ? Sct3258::SlotFollowReceive : 0) | settings.slot)};
-    const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkTransmit, 0, 0};
-    if (m_chip.control(Sct3258::TypeDmr, slot) != 0 || !write(m_audio.transmit) || m_chip.control(work) != 0) {
+    if (!leaveReceive() || m_chip.control(Sct3258::TypeDmr, slot, SwitchMs) != 0 || !write(m_audio.transmit) ||
+        !enterTransmit()) {
+        warn("digital transmit set-up not taken");
         return false;
     }
     std::array<std::uint8_t, dmr::FullLc::Bytes> b{};
@@ -454,17 +457,39 @@ bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::ui
         return false;
     }
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | settings.slot)};
-    const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkTransmit, 0, 0};
     const auto wake = dmr::repeaterWake(source);
-    if (m_chip.control(Sct3258::TypeDmr, slot) != 0 || m_chip.control(work) != 0) {
+    if (!leaveReceive() || m_chip.control(Sct3258::TypeDmr, slot, SwitchMs) != 0 || !enterTransmit()) {
         return false;
     }
     // Several in a row when asked for: a repeater that is just starting
     // its receiver may miss the first.
     for (int i = 0; i < WakeBursts; ++i) {
         if (!m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake)) {
+            warn("wake-up block not taken");
             return i > 0;
         }
+    }
+    return true;
+}
+
+bool Sct3258Baseband::leaveReceive()
+{
+    // No carrier any more: the chip is told before it transmits.
+    const std::uint8_t carrier[] = {Sct3258::CarrierReady, 0};
+    if (m_chip.control(carrier, SwitchMs) != 0) {
+        warn("carrier off not taken");
+        return false;
+    }
+    return true;
+}
+
+bool Sct3258Baseband::enterTransmit()
+{
+    const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkTransmit, 0, 0};
+    const int status = m_chip.control(work, SwitchMs);
+    if (status != 0) {
+        warn("transmit mode", status);
+        return false;
     }
     return true;
 }
