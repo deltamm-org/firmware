@@ -375,7 +375,7 @@ TEST_CASE("a DMR call: slot, microphone, transmit, header, voice; then the termi
     settings.slot = 1;
     using dmm::services::dmr::CallType;
     const auto lc = dmm::services::dmr::FullLc::voiceCall({CallType::Group, 244}, 1234567);
-    REQUIRE(baseband.startDigitalCall(settings, lc, 145'637'500));
+    REQUIRE(baseband.startDigitalCall(settings, lc, 145'637'500, false));
     const std::vector<std::uint8_t> lcBytes = {0x00, 0x00, 0x00, 0x00, 0x00, 0xF4, 0x12, 0xD6, 0x87};
     auto frame = [&](std::uint8_t property) {
         std::vector<std::uint8_t> f = {0x08, 0x77, 0x01, 0x43, property, 0x09};
@@ -383,8 +383,8 @@ TEST_CASE("a DMR call: slot, microphone, transmit, header, voice; then the termi
         return f;
     };
     REQUIRE(chip.packets.size() == 10);
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x19, 0x00}); // carrier off first
-    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0x81});
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x19, 0x00});                       // carrier off first
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0x80});                       // direct: the chip's own timing
     CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 52, 0x80, 0x00, 0x00}); // microphone in
     CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x00, 0x18, 0x02, 0x00, 0x00});
     CHECK(chip.packets[8] == frame(0x01));
@@ -400,7 +400,7 @@ TEST_CASE("the repeater wake block")
     CHECK(b == std::array<std::uint8_t, 10>{0xB8, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x12, 0xD6, 0x87});
 }
 
-TEST_CASE("through a repeater a DMR call's slots follow the repeater's timing")
+TEST_CASE("on a repeater's fresh timing a DMR call takes the channel's slot on it")
 {
     FakeSct3258 chip;
     FakeBoard board;
@@ -412,6 +412,22 @@ TEST_CASE("through a repeater a DMR call's slots follow the repeater's timing")
     REQUIRE(baseband.setDigital(settings, 438'075'000, true));
     chip.packets.clear();
     using dmm::services::dmr::CallType;
-    REQUIRE(baseband.startDigitalCall(settings, dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567), 430'475'000));
+    REQUIRE(baseband.startDigitalCall(settings, dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567), 430'475'000, true));
     CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0xC2});
+}
+
+TEST_CASE("the repeater wake-up goes on the chip's own timing")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    REQUIRE(baseband.start());
+    dmm::services::dmr::ChannelSettings settings;
+    settings.slot = 2;
+    chip.packets.clear();
+    REQUIRE(baseband.wakeRepeater(settings, 1234567));
+    REQUIRE(chip.packets.size() >= 3);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x19, 0x00}); // carrier off
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0x80}); // no slot: there is no timing yet
 }

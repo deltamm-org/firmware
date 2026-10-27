@@ -622,7 +622,9 @@ void startDigitalTransmit(services::FmChannel channel)
             }
             ok = ok && fm->transmit(channel, powerLevel) == nullptr;
         }
-        ok = ok && b.startDigitalCall(dmrSettings, callLc, channel.transmitHz);
+        // timingFound is cleared as soon as the repeater's carrier goes, so
+        // it is never stale here.
+        ok = ok && b.startDigitalCall(dmrSettings, callLc, channel.transmitHz, dmrRepeater && timingFound);
     });
     if (!ok) {
         fm->endTransmit();

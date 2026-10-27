@@ -81,6 +81,9 @@ public:
     static constexpr std::uint8_t DmrOffset = 0x7A;
     /// DMR_CALL_SLOT: transmit on the slot in the low bits.
     static constexpr std::uint8_t SlotTransmit = 0x80;
+    /// DMR_CALL_SLOT: no slot, on the chip's own timing; the only way it
+    /// transmits before it has received a repeater's timing.
+    static constexpr std::uint8_t SlotAny = 0x00;
     /// DMR_CALL_SLOT: take the transmit timing from the received timing.
     static constexpr std::uint8_t SlotFollowReceive = 0x40;
     static constexpr std::uint8_t ReportField = 0x1D;

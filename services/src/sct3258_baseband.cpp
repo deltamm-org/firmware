@@ -326,7 +326,6 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
         m_callOptionsSet = true;
     }
     const std::uint8_t cc[] = {Sct3258::DmrColourCode, static_cast<std::uint8_t>(settings.colourCode & 0x0F)};
-    m_repeater = repeater;
     // Through a repeater only the channel's slot is received; the other
     // slot's calls would reach the vocoder too. Direct: both slots.
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot, repeater ? static_cast<std::uint8_t>(settings.slot == 2 ? 2 : 1) : BothSlots};
@@ -404,7 +403,7 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
 }
 
 bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc,
-    std::uint32_t transmitHz)
+    std::uint32_t transmitHz, bool timed)
 {
     if (!m_info.running) {
         return false;
@@ -430,9 +429,12 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
             }
         }
     }
-    // Through a repeater the call's slots follow the repeater's timing.
+    // On fresh timing the call takes the channel's slot on it; without,
+    // the chip sends only on its own timing, as the packet manual's
+    // direct-call example does.
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot,
-        static_cast<std::uint8_t>(Sct3258::SlotTransmit | (m_repeater ? Sct3258::SlotFollowReceive : 0) | settings.slot)};
+        static_cast<std::uint8_t>(
+            Sct3258::SlotTransmit | (timed ? Sct3258::SlotFollowReceive | settings.slot : Sct3258::SlotAny))};
     if (!leaveReceive() || m_chip.control(Sct3258::TypeDmr, slot, SwitchMs) != 0 || !write(m_audio.transmit) ||
         !enterTransmit()) {
         warn("digital transmit set-up not taken");
@@ -461,7 +463,9 @@ bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::ui
     if (!m_info.running) {
         return false;
     }
-    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | settings.slot)};
+    // No timing yet, which is why the repeater is being woken: the chip
+    // sends only on its own timing then.
+    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | Sct3258::SlotAny)};
     const auto wake = dmr::repeaterWake(source);
     if (!leaveReceive() || m_chip.control(Sct3258::TypeDmr, slot, SwitchMs) != 0 || !enterTransmit()) {
         return false;

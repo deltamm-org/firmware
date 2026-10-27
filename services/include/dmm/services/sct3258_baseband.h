@@ -112,7 +112,7 @@ public:
     /// sets the DMR call options once after start().
     bool setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, bool repeater);
     bool nextEvent(dmr::Event &event);
-    bool startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc, std::uint32_t transmitHz);
+    bool startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc, std::uint32_t transmitHz, bool timed);
     bool endDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc);
     bool wakeRepeater(const dmr::ChannelSettings &settings, std::uint32_t source);
     /// "codec <page> <reg> <value>", "packet <type> <bytes>" (hex).
@@ -153,8 +153,6 @@ private:
     bool m_trimsWritten = false;
     std::uint8_t m_vocoder = 0;
     bool m_callOptionsSet = false;
-    // The last digital receive was through a repeater.
-    bool m_repeater = false;
 };
 
 } // namespace dmm::services
