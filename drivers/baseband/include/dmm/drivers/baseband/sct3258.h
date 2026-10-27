@@ -75,6 +75,10 @@ public:
     static constexpr std::uint8_t DemodGain = 0x1C;
     static constexpr std::uint8_t DcOffset = 0x39;
     static constexpr std::uint8_t SquelchLevel = 0x6C;
+    static constexpr std::uint8_t ModGain = 0x2C;
+    static constexpr std::uint8_t DmrOffset = 0x7A;
+    /// DMR_CALL_SLOT: transmit on the slot in the low bits.
+    static constexpr std::uint8_t SlotTransmit = 0x80;
     static constexpr std::uint8_t ReportField = 0x1D;
     static constexpr std::uint8_t SyncMissCount = 0x2F;
     static constexpr std::uint8_t DataFrame = 0x43;
@@ -152,6 +156,12 @@ public:
     /// value). The chip passes the fields (a zero, page, register, value, two
     /// zeros) to the codec. True when the chip accepted it.
     bool codecWrite(std::uint8_t page, std::uint8_t reg, std::uint8_t value);
+
+    /// Hands one DMR data frame to the chip for sending, with the channel's
+    /// colour code: @p property (voice or data burst and its data type) and
+    /// @p data. True when the chip acknowledged it.
+    bool sendFrame(std::uint8_t colourCode, std::uint8_t property, std::span<const std::uint8_t> data,
+        unsigned timeoutMs = 200);
 
     /// A packet the chip sent on its own: what it received from the far
     /// end, an event, or the note that everything queued has gone out.

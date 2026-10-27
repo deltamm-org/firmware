@@ -173,3 +173,18 @@ TEST_CASE("reports from the chip survive a request and never pass for its reply"
     REQUIRE(sct.nextReport(r));
     CHECK(r.length == 14);
 }
+
+TEST_CASE("a DMR data frame goes out with the colour code and is acknowledged")
+{
+    FakeSct3258 chip;
+    Sct3258 sct(chip, noDelay);
+    std::uint8_t ack = 0;
+    REQUIRE(sct.boot(std::vector<std::uint8_t>(2048, 0x11), ack) == Sct3258::BootResult::Ready);
+    const std::uint8_t lc[] = {0, 0, 0, 0, 0, 0xF4, 0x12, 0xD6, 0x87};
+    CHECK(sct.sendFrame(1, 0x01, lc));
+    REQUIRE(chip.packets.size() == 1);
+    CHECK(chip.packets[0] ==
+        std::vector<std::uint8_t>{0x08, 0x77, 0x01, 0x43, 0x01, 0x09, 0, 0, 0, 0, 0, 0xF4, 0x12, 0xD6, 0x87});
+    const std::vector<std::uint8_t> tooLong(37, 0);
+    CHECK_FALSE(sct.sendFrame(1, 0x01, tooLong));
+}

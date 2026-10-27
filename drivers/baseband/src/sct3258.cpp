@@ -148,6 +148,26 @@ bool Sct3258::receive(Packet &out, unsigned timeoutMs)
     return false;
 }
 
+bool Sct3258::sendFrame(std::uint8_t colourCode, std::uint8_t property, std::span<const std::uint8_t> data,
+    unsigned timeoutMs)
+{
+    constexpr std::size_t MaxData = 36;
+    if (data.size() > MaxData) {
+        return false;
+    }
+    std::uint8_t fields[5 + MaxData] = {DmrColourCode, static_cast<std::uint8_t>(colourCode & 0x0F), DataFrame, property,
+        static_cast<std::uint8_t>(data.size())};
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        fields[5 + i] = data[i];
+    }
+    Packet reply;
+    if (!request(TypeDmr, std::span(fields, 5 + data.size()), reply, timeoutMs)) {
+        return false;
+    }
+    // The chip acknowledges each frame with the bare DIGC_DATA_FRAME field.
+    return reply.length >= 1 && reply.fields[0] == DataFrame;
+}
+
 bool Sct3258::isReport(const Packet &p)
 {
     if ((p.type & TypeFarEnd) != 0) {

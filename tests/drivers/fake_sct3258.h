@@ -5,6 +5,7 @@
 
 #include "dmm/hal/host_port_bus.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <deque>
 #include <string>
@@ -101,6 +102,8 @@ private:
             std::vector<std::uint8_t> reply = {field, static_cast<std::uint8_t>(text.size())};
             reply.insert(reply.end(), text.begin(), text.end());
             queue(0x20, reply);
+        } else if (type == 0x08 && std::find(p.begin(), p.end(), std::uint8_t{0x43}) != p.end()) {
+            queue(0x20, {0x43}); // a data frame taken for sending
         } else if (field == 0x7E) {
             queue(0x00, {0x17, 0x04}); // unknown command
         } else {
