@@ -42,6 +42,7 @@ constexpr Sct3258Baseband::Audio TestAudio{
     .trims = {{{1, 0x12}, {1, 0x13}, {1, 0x3C}}},
     .digitalSquelch = {},
     .analogSquelch = {},
+    .demodulatorInverted = false,
 };
 
 std::optional<Sct3258Baseband::Trims> testTrims()

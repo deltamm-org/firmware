@@ -62,6 +62,7 @@ bool inCall = false;
 os::Ticks callStarted = 0;
 bool timingFound = false;
 bool timingSeen = false;
+bool idleLogged = false;
 services::BatterySaver saver;
 
 // FM transmit settings and state.
@@ -345,8 +346,17 @@ void onDmrEvent(const services::dmr::Event &e)
     case Kind::Burst: {
         const bool lcBurst = e.voice || e.type == DataType::VoiceLcHeader || e.type == DataType::TerminatorWithLc;
         const auto lc = lcBurst ? services::dmr::FullLc::decode(e.payload()) : std::nullopt;
-        log::debug("dmr") << "burst " << lib::hex(e.raw, 2) << ", colour code " << e.colourCode << ", " << e.length
-                          << " bytes";
+        // Idle bursts repeat the same fill; the first of each transmission
+        // is enough for the log.
+        if (e.type != DataType::Idle || !idleLogged) {
+            idleLogged = idleLogged || e.type == DataType::Idle;
+            lib::StaticString<40> bytes;
+            for (std::size_t i = 0; i < e.length; ++i) {
+                bytes << lib::hex(e.data[i], 2);
+            }
+            log::debug("dmr") << "burst " << lib::hex(e.raw, 2) << ", colour code " << e.colourCode << ": "
+                              << bytes.view();
+        }
         if (!lc) {
             break;
         }
@@ -372,6 +382,8 @@ void onDmrEvent(const services::dmr::Event &e)
         endCall("lost");
         break;
     case Kind::CarrierFound:
+        idleLogged = false;
+        [[fallthrough]];
     case Kind::CarrierLost:
         log::debug("dmr") << (e.kind == Kind::CarrierFound ? "carrier found" : "carrier lost");
         break;

@@ -25,9 +25,10 @@ constexpr std::uint8_t ProcessAnalog = Sct3258::ProcessAnalog;
 constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x0C, 0x00};
 // DMR_CALL_SLOT: receive on both slots (direct channels).
 constexpr std::uint8_t BothSlots = 3;
-// CARRIER_READY: a carrier is there; with the chip's own squelch detection
-// this starts it.
+// CARRIER_READY: a carrier is there, with the demodulated signal as is or
+// reversed; with the chip's own squelch detection this starts it.
 constexpr std::uint8_t CarrierReady = 1;
+constexpr std::uint8_t CarrierReadyReversed = 2;
 // NEW_EVENT codes.
 constexpr std::uint8_t EventSyncLost = 8;
 constexpr std::uint8_t EventCarrierFound = 12;
@@ -298,7 +299,8 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
     static_cast<void>(repeater);
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot, BothSlots};
     const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkReceive, 0, 0};
-    const std::uint8_t carrier[] = {Sct3258::CarrierReady, CarrierReady};
+    const std::uint8_t carrier[] = {
+        Sct3258::CarrierReady, m_audio.demodulatorInverted ? CarrierReadyReversed : CarrierReady};
     return m_chip.control(Sct3258::TypeDmr, cc) == 0 && m_chip.control(Sct3258::TypeDmr, slot) == 0 &&
         m_chip.control(work) == 0 && m_chip.control(carrier) == 0;
 }

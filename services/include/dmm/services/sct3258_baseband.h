@@ -58,6 +58,9 @@ public:
         /// low; big-endian words). Empty: the chip's defaults.
         std::span<const std::uint8_t> digitalSquelch;
         std::span<const std::uint8_t> analogSquelch;
+        /// The board's FM demodulator output reaches the chip with its
+        /// polarity reversed; digital receive tells the chip so.
+        bool demodulatorInverted;
     };
 
     /// The radio's calibrated values for the chip and codec.

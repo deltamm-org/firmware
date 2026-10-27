@@ -59,6 +59,9 @@ constexpr CodecWrite Transmit[] = {
     {Page1, LeftMicPositive, MicIn1Left20k},
 };
 
+// The demodulated FM signal reaches the baseband with its polarity
+// reversed: digital receive decodes nothing otherwise.
+
 // The baseband's own carrier squelch: no gain adjust, no forced RF gain,
 // a check every 80 ms (60 units), noise thresholds 0x0F3C high and 0x0A8C
 // low. On analog channels the analog thresholds are off.
@@ -79,6 +82,7 @@ constexpr dmm::services::Sct3258Baseband::Audio Audio{
     .trims = {{{Page1, LeftOutGain}, {Page1, RightOutGain}, {Page1, RightMicPgaVolume}}},
     .digitalSquelch = DigitalSquelch,
     .analogSquelch = AnalogSquelch,
+    .demodulatorInverted = true,
 };
 
 void outputLow(Pin pin)
