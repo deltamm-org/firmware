@@ -315,6 +315,12 @@ void hal::boardMain()
     storage.start();
     static dmm::services::D878Uv2Calibration calibration;
     static dmm::services::D878Uv2Codeplug codeplug{storage};
+    // Its own reader: the link task reads for the PC while the ui task
+    // reads for itself.
+    static dmm::services::D878Uv2Codeplug programmingCodeplug{storage};
+    static dmm::services::D878Uv2Programming programming{[](std::uint32_t address, std::span<std::uint8_t> data) {
+        return dmm::services::readable(programmingCodeplug.read(address, data));
+    }};
 
     adc().start();
     static BoardInput input;
@@ -397,6 +403,7 @@ void hal::boardMain()
         .battery = &battery,
         .storage = &storage,
         .dataChannel = &dataChannel,
+        .programming = &programming,
         .baseband = &baseband,
         .audio = &audio,
         .calibration = &calibration,

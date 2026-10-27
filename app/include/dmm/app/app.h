@@ -39,6 +39,8 @@ struct Platform
     services::Storage *storage = nullptr;
     /// The PC data port (DeltaMM's own protocol), or nullptr.
     board::DataChannel *dataChannel = nullptr;
+    /// The radio's own programming protocol on the data port, or nullptr.
+    board::Programming *programming = nullptr;
     /// The baseband processor and the codec behind it; nullptr on a board
     /// whose parts name NoBaseband.
     board::Baseband *baseband = nullptr;
