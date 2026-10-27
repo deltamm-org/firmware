@@ -6,6 +6,8 @@
 #include "dmm/lib/format.h"
 #include "dmm/services/font.h"
 
+#include <algorithm>
+
 namespace dmm::app::ui {
 
 namespace {
@@ -21,6 +23,12 @@ const Font &Large = fonts::Spleen12x24;
 int textWidth(const Font &f, std::string_view s)
 {
     return static_cast<int>(s.size()) * f.width;
+}
+
+// At most @p chars characters of @p s.
+std::string_view cut(std::string_view s, int chars)
+{
+    return {s.data(), chars <= 0 ? 0 : std::min(s.size(), static_cast<std::size_t>(chars))};
 }
 
 // A filled tag such as "TX" in the status bar; returns the x after it.
@@ -179,11 +187,7 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
             }
         }
         const int detY = freqY + Medium.height + 6;
-        if (!s.callTarget.empty()) {
-            // A call being heard takes the detail lines.
-            line(d, Body, 4, detY, w - 8, s.callTarget, p::Text);
-            line(d, Body, 4, detY + Body.height + 1, w - 8, s.callSource, p::Text);
-        } else {
+        {
             line(d, Body, 4, detY, w - 8, det.view(), p::Dim);
             lib::StaticString<40> det2;
             det2 << powerText(c->power);
@@ -204,6 +208,78 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
     d.fillRect(0, h - HintH + 1, w, HintH - 1, p::Ground);
     const std::string_view hints = s.note.empty() ? s.keys : s.note;
     drawText(d, Small, 3, h - HintH + 2, hints, p::Dim, p::Ground);
+}
+
+void StandbyScreen::drawCall(Display &d, const StandbyState &s, const CallInfo &c)
+{
+    const int w = d.width();
+    const int h = d.height();
+    drawStatus(d, s);
+    d.fillRect(0, StatusH, w, h - StatusH - HintH, p::Ground);
+    const Color ink = c.active ? p::Text : p::Dim;
+
+    // The call type, green while it is heard, and the slot.
+    const int typeY = StatusH + 3;
+    const char *type = c.allCall ? "ALL CALL" : c.group ? "GROUP CALL"
+                                                        : "PRIVATE CALL";
+    lib::StaticString<24> head;
+    head << (c.active ? "" : "LAST ") << type;
+    drawText(d, Body, 4, typeY, head.view(), c.active ? p::Receive : p::Dim, p::Ground);
+    if (c.slot != 0) {
+        lib::StaticString<4> ts;
+        ts << "TS" << c.slot;
+        drawText(d, Body, w - 4 - textWidth(Body, ts.view()), typeY, ts.view(), p::Dim, p::Ground);
+    }
+
+    // The caller: callsign or name large, or the ID when neither is
+    // known; under it the user's name and the ID.
+    const int callerY = typeY + Body.height + 4;
+    lib::StaticString<12> callerId;
+    callerId << c.callerId;
+    const bool known = !c.callerHeadline.empty();
+    const std::string_view caller = known ? c.callerHeadline : callerId.view();
+    const Font &cf = textWidth(Large, caller) <= w - 8 ? Large : Medium;
+    drawText(d, cf, 4, callerY + (Large.height - cf.height) / 2, caller, ink, p::Ground);
+    const int callerIdY = callerY + Large.height + 1;
+    if (known) {
+        const int idX = w - 4 - textWidth(Body, callerId.view());
+        drawText(d, Body, idX, callerIdY, callerId.view(), p::Dim, p::Ground);
+        const std::string_view name = cut(c.callerName, (idX - 10) / Body.width);
+        drawText(d, Body, 4, callerIdY, name, ink, p::Ground);
+    }
+
+    // Whom: the talkgroup's or contact's name, its number under it.
+    const int ruleY = callerIdY + Body.height + 3;
+    d.fillRect(4, ruleY, w - 8, 1, p::Rule);
+    const int targetY = ruleY + 4;
+    lib::StaticString<16> number;
+    if (c.allCall) {
+        number << "All";
+    } else {
+        number << (c.group ? "TG " : "To ") << c.targetId;
+    }
+    if (c.targetName.empty() || c.allCall) {
+        drawText(d, Medium, 4, targetY, number.view(), ink, p::Ground);
+    } else {
+        drawText(d, Medium, 4, targetY, c.targetName, ink, p::Ground);
+        drawText(d, Body, 4, targetY + Medium.height + 1, number.view(), p::Dim, p::Ground);
+    }
+    drawCallTime(d, c);
+}
+
+void StandbyScreen::drawCallTime(Display &d, const CallInfo &c)
+{
+    // The bottom bar: the call's time, the channel on the right.
+    const int w = d.width();
+    const int h = d.height();
+    d.fillRect(0, h - HintH, w, 1, p::Rule);
+    d.fillRect(0, h - HintH + 1, w, HintH - 1, p::Ground);
+    lib::StaticString<12> t;
+    t << c.seconds / 60 << ':' << static_cast<char>('0' + c.seconds % 60 / 10) << static_cast<char>('0' + c.seconds % 10);
+    drawText(d, Small, 3, h - HintH + 2, t.view(), c.active ? p::Text : p::Dim, p::Ground);
+    const int room = w - 6 - textWidth(Small, t.view()) - 8;
+    const std::string_view channel = cut(c.channel, room / Small.width);
+    drawText(d, Small, w - 3 - textWidth(Small, channel), h - HintH + 2, channel, p::Dim, p::Ground);
 }
 
 void ListPicker::open(std::string_view title)

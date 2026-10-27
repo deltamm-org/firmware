@@ -36,12 +36,29 @@ struct StandbyState
     std::string_view keys;
     /// A short message in the bottom bar instead of the key hints, or empty.
     std::string_view note;
-    /// The DMR call being heard, two lines (whom, from whom); empty when
-    /// there is none.
-    std::string_view callTarget;
-    std::string_view callSource;
     /// Volume step 0..15, or -1 when unknown.
     int volume = -1;
+};
+
+/// A DMR call for the call screen.
+struct CallInfo
+{
+    /// Heard now; else the last call, shown for a moment after it ended.
+    bool active = false;
+    bool group = false;
+    bool allCall = false;
+    /// The caller's callsign or contact name, the user's name under it;
+    /// empty when not known.
+    std::string_view callerHeadline;
+    std::string_view callerName;
+    std::uint32_t callerId = 0;
+    std::string_view targetName;
+    std::uint32_t targetId = 0;
+    /// The receive slot, 0 when both are heard.
+    std::uint8_t slot = 0;
+    /// How long the call has lasted, or lasted.
+    std::uint32_t seconds = 0;
+    std::string_view channel;
 };
 
 /// The radio's main screen: status bar, zone, channel name, frequency,
@@ -56,6 +73,11 @@ public:
     /// Only the status bar (transmit, receive, lock); battery is drawn by
     /// the caller at the right end.
     void drawStatus(services::Display &d, const StandbyState &s);
+    /// The call screen in place of the channel: call type, caller, target,
+    /// and the call's time in the bottom bar.
+    void drawCall(services::Display &d, const StandbyState &s, const CallInfo &c);
+    /// Only the call screen's bottom bar, for the running time.
+    void drawCallTime(services::Display &d, const CallInfo &c);
     /// Where the caller may draw the battery: x of its left edge.
     int batteryX(const services::Display &d) const { return d.width() - 48; }
 };

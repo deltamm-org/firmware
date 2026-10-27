@@ -385,9 +385,63 @@ std::uint8_t batterySave = 0;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
-// The DMR call being heard, as the standby screen shows it.
-lib::StaticString<32> callTarget;
-lib::StaticString<32> callSource;
+// The DMR call on the call screen: while it is heard, then for a moment
+// after it ends, unless a key or a channel change sends the screen back.
+struct HeardCall
+{
+    bool shown = false;
+    bool active = false;
+    bool group = false;
+    std::uint32_t source = 0;
+    std::uint32_t destination = 0;
+    // The caller's callsign (or contact name) and the user's name.
+    char caller[CodeplugSource::ContactNameBytes + 1] = {};
+    char callerName[CodeplugSource::ContactNameBytes + 1] = {};
+    char target[CodeplugSource::ContactNameBytes + 1] = {};
+    os::Ticks started = 0;
+    os::Ticks ended = 0;
+};
+HeardCall heard;
+char callChannel[Channel::NameBytes + 1] = {};
+constexpr os::Ticks CallHoldMs = 5000;
+constexpr std::uint32_t AllCallId = 0xFFFFFF;
+
+template <std::size_t N>
+void copyName(char (&out)[N], const char *text)
+{
+    std::size_t n = 0;
+    for (; n + 1 < N && text[n] != '\0'; ++n) {
+        out[n] = text[n];
+    }
+    out[n] = '\0';
+}
+
+// Names for a call from the codeplug: the caller's own contact entry
+// first, else the user directory's callsign and name.
+void nameCall(HeardCall &h, CodeplugSource *plug)
+{
+    h.caller[0] = h.callerName[0] = h.target[0] = '\0';
+    if (plug == nullptr) {
+        return;
+    }
+    std::array<char, CodeplugSource::ContactNameBytes + 1> name{};
+    if (plug->contactName(h.destination, h.group, name)) {
+        copyName(h.target, name.data());
+    }
+    CodeplugSource::DmrUser user;
+    const bool known = plug->dmrUser(h.source, user);
+    if (plug->contactName(h.source, false, name)) {
+        copyName(h.caller, name.data());
+    } else if (known && user.callsign[0] != '\0') {
+        copyName(h.caller, user.callsign.data());
+    } else if (known) {
+        copyName(h.caller, user.name.data());
+        return;
+    }
+    if (known && h.caller[0] != '\0' && std::string_view(user.name.data()) != h.caller) {
+        copyName(h.callerName, user.name.data());
+    }
+}
 // The standby screen's quick-key hint.
 lib::StaticString<40> quickKeys;
 // Frequency digits typed on the standby screen.
@@ -588,9 +642,29 @@ void uiMain(void *)
         s.entry = std::string_view(entry, entryLength);
         s.volume = volumeLevel;
         s.keys = quickKeys.view();
-        s.callTarget = callTarget.view();
-        s.callSource = callSource.view();
         return s;
+    };
+    auto callInfo = [&] {
+        CallInfo c;
+        c.active = heard.active;
+        c.allCall = heard.destination == AllCallId;
+        c.group = heard.group;
+        c.callerName = heard.callerName;
+        c.callerId = heard.source;
+        c.targetName = heard.target;
+        c.targetId = heard.destination;
+        c.callerHeadline = heard.caller;
+        const std::optional<Channel> ch = channels != nullptr ? channels->current() : std::nullopt;
+        if (ch && ch->receiveHz != ch->transmitHz) {
+            c.slot = ch->dmr.slot;
+        }
+        callChannel[0] = '\0';
+        if (ch) {
+            copyName(callChannel, ch->name);
+        }
+        c.channel = callChannel;
+        c.seconds = static_cast<std::uint32_t>(((heard.active ? os::nowMs() : heard.ended) - heard.started) / 1000);
+        return c;
     };
     auto barHeader = [&](bool bar) {
         headerGround = colors::Black;
@@ -602,7 +676,10 @@ void uiMain(void *)
         const bool radioScreen =
             view == View::Standby || view == View::ZonePicker || view == View::Menu || view == View::MenuValue;
         barHeader(radioScreen);
-        if (view == View::Standby) {
+        if (view == View::Standby && heard.shown) {
+            standby.drawCall(d, standbyState(), callInfo());
+            drawBattery(d);
+        } else if (view == View::Standby) {
             standby.draw(d, *channels, standbyState());
             drawBattery(d);
         } else if (view == View::ZonePicker || view == View::Menu || view == View::MenuValue) {
@@ -808,6 +885,7 @@ void uiMain(void *)
             n = codeplug->receiveGroups(c.dmr.groupList, groups);
         }
         radio::setReceiveGroups(std::span(groups, n));
+        heard.shown = false;
         radio::post(radio::UseChannel{c, channels->squelch()});
         if (view == View::Standby) {
             redrawView();
@@ -936,6 +1014,14 @@ void uiMain(void *)
                 show(View::Standby);
             }
             return;
+        }
+        // A key on the call screen goes back to standby; Exit does only that.
+        if (press && heard.shown) {
+            heard.shown = false;
+            redrawView();
+            if (key == Key::Exit) {
+                return;
+            }
         }
         if (step && (key == Key::Up || key == Key::Down)) {
             entryLength = 0;
@@ -1091,24 +1177,20 @@ void uiMain(void *)
                                refreshLockMark();
                            },
                            [&](const DmrCall &c) {
-                               callTarget = {};
-                               callSource = {};
                                if (c.active) {
-                                   std::array<char, CodeplugSource::ContactNameBytes + 1> name{};
-                                   callTarget << (c.group ? "TG " : "To ");
-                                   if (codeplug != nullptr && codeplug->contactName(c.destination, c.group, name)) {
-                                       callTarget << name.data();
-                                   } else {
-                                       callTarget << c.destination;
-                                   }
-                                   callSource << "From ";
-                                   if (codeplug != nullptr && codeplug->contactName(c.source, false, name)) {
-                                       callSource << name.data();
-                                   } else {
-                                       callSource << c.source;
-                                   }
+                                   heard.shown = true;
+                                   heard.active = true;
+                                   heard.group = c.group;
+                                   heard.source = c.source;
+                                   heard.destination = c.destination;
+                                   heard.started = os::nowMs();
+                                   nameCall(heard, codeplug);
+                                   lastLightUse = os::nowMs();
+                               } else if (heard.active) {
+                                   heard.active = false;
+                                   heard.ended = os::nowMs();
                                }
-                               if (view == View::Standby) {
+                               if (view == View::Standby && !noticeShown) {
                                    redrawView();
                                }
                            },
@@ -1219,6 +1301,18 @@ void uiMain(void *)
             backlightLit = false;
             d.setBacklight(0);
             services::power::release(services::power::AwakeReason::Display);
+        }
+        // The call screen: its time each second, back to standby a moment
+        // after the call.
+        if (view == View::Standby && heard.shown && !noticeShown) {
+            const os::Ticks second = os::nowMs() / 1000;
+            if (!heard.active && os::nowMs() - heard.ended >= CallHoldMs) {
+                heard.shown = false;
+                redrawView();
+            } else if (heard.active && second != lastSecond) {
+                lastSecond = second;
+                standby.drawCallTime(d, callInfo());
+            }
         }
         if (view == View::Log) {
             const os::Ticks second = os::nowMs() / 1000;
