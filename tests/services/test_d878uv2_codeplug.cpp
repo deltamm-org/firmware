@@ -247,7 +247,8 @@ TEST_CASE("the codeplug looks up a digital channel's contact and own ID")
     chip.put(0x024C1500, {0x01}); // channel 0 in use
     chip.put(0x024C1320, {0x04}); // radio ID 2 in use
     markValid(0x02640000);
-    chip.put(0x02640000 + 125, {0x02}); // contact 1001 in use
+    // The contact bitmap is inverted: a clear bit marks a contact in use.
+    chip.put(0x02640000 + 125, {0xFD}); // contact 1001 in use, 1000 not
     // Channel 0: digital, contact 1001, radio ID 2, colour code 3, slot 1.
     auto rec = sampleRecord();
     rec[8] = static_cast<std::uint8_t>((rec[8] & ~3) | 1);

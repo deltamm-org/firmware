@@ -307,7 +307,10 @@ std::optional<Channel> D878Uv2Codeplug::channel(std::uint16_t index)
 
 std::optional<dmr::Target> D878Uv2Codeplug::contact(std::uint32_t index)
 {
-    if (index >= MaxContacts || !bitSet(ContactBitmap, index)) {
+    // The contact bitmap is the one inverted: a clear bit marks a contact.
+    std::uint8_t used = 0xFF;
+    if (index >= MaxContacts || !readable(read(ContactBitmap + index / 8, std::span(&used, 1))) ||
+        (used >> (index % 8) & 1) != 0) {
         return std::nullopt;
     }
     const std::uint32_t address =
