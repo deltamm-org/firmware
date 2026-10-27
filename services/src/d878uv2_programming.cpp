@@ -32,10 +32,18 @@ std::uint32_t bigEndian(const std::uint8_t *p)
 bool D878Uv2Programming::active(os::Ticks now)
 {
     if (m_program && now - m_lastAt >= IdleMs) {
-        m_program = false;
-        m_have = 0;
+        // The PC went away: what was not completed is dropped.
+        m_changed = m_changed || m_writer.wrote();
+        m_writer.abandon();
+        leave();
     }
     return m_program;
+}
+
+void D878Uv2Programming::leave()
+{
+    m_program = false;
+    m_have = 0;
 }
 
 void D878Uv2Programming::feed(std::span<const std::uint8_t> bytes, os::Ticks now, Writer write)
@@ -84,7 +92,7 @@ void D878Uv2Programming::command(Writer write)
         for (std::size_t i = 1; i < 6; ++i) {
             answer[i] = m_command[i];
         }
-        if (!m_read(bigEndian(&m_command[1]), std::span(&answer[6], length))) {
+        if (!readable(m_codeplug.read(bigEndian(&m_command[1]), std::span(&answer[6], length)))) {
             return;
         }
         std::uint8_t sum = 0;
@@ -99,14 +107,23 @@ void D878Uv2Programming::command(Writer write)
             return;
         }
         m_have = 0;
-        write(std::span(&Refused, 1));
+        // 'W', address, length 16, data, sum, 06.
+        std::uint8_t sum = 0;
+        for (std::size_t i = 1; i < 22; ++i) {
+            sum = static_cast<std::uint8_t>(sum + m_command[i]);
+        }
+        const bool ok = m_command[5] == 16 && m_command[22] == sum && m_command[23] == Ack &&
+            m_writer.write(bigEndian(&m_command[1]), std::span<const std::uint8_t>(&m_command[6], 16));
+        write(std::span(ok ? &Ack : &Refused, 1));
     } else if (first == static_cast<std::uint8_t>(Leave[0])) {
         if (m_command[m_have - 1] != static_cast<std::uint8_t>(Leave[m_have - 1])) {
             m_have = 0;
         } else if (m_have == Leave.size()) {
-            m_have = 0;
-            m_program = false;
-            write(std::span(&Ack, 1));
+            const bool wrote = m_writer.wrote();
+            const bool ok = m_writer.finish();
+            m_changed = m_changed || wrote;
+            leave();
+            write(std::span(ok ? &Ack : &Refused, 1));
         }
     } else {
         // Not a command: skipped.

@@ -117,6 +117,15 @@ public:
     /// Completes the block in progress; false on a failure.
     bool finish();
 
+    /// Drops the block in progress, whose old copy stays valid; for a
+    /// write that never finished. Writing can start again.
+    void abandon()
+    {
+        m_open = false;
+        m_failed = false;
+        m_wrote = false;
+    }
+
     /// Something was written since the last finish.
     bool wrote() const { return m_wrote; }
 

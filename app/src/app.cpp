@@ -606,6 +606,11 @@ void linkMain(void *)
         }
         // In program mode the PC waits for each answer: look often.
         const bool programming = platform->programming != nullptr && platform->programming->active(os::nowMs());
+        if (platform->programming != nullptr && platform->programming->takeCodeplugChanged()) {
+            log::info("programming") << "codeplug written from the PC: restarting";
+            flushLog();
+            platform->system.restart();
+        }
         os::sleepUntil(wake, programming ? ProgrammingStepMs : LinkStepMs);
     }
     log::drain(platform->logSink);

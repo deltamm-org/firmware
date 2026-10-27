@@ -5,6 +5,7 @@
 
 #include "dmm/lib/fn_ref.h"
 #include "dmm/os/os.h"
+#include "dmm/services/d878uv2_codeplug.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,7 +14,7 @@
 namespace dmm::services {
 
 /// The D878UVII's PC programming protocol, as codeplug tools speak it on
-/// the radio's serial port, so far for reading:
+/// the radio's serial port:
 ///   "PROGRAM"                       enters program mode; answer "QX" 06
 ///   02                              identify; answer 'I', the model (7
 ///                                   bytes), the band code, the version
@@ -24,13 +25,12 @@ namespace dmm::services {
 ///                                   write; answer 06
 ///   "END"                           leaves program mode; answer 06
 /// Addresses are big-endian codeplug addresses. The sum is the low byte of
-/// the address, length and data bytes added up. A write is refused (answer
-/// 15) until writing exists.
+/// the address, length and data bytes added up. A write the codeplug
+/// writer refuses is answered 15. "END" completes the writing; program
+/// mode ending without it drops the block in progress.
 class D878Uv2Programming
 {
 public:
-    /// Reads @p data from codeplug address @p address; false on failure.
-    using Reader = lib::FnRef<bool(std::uint32_t, std::span<std::uint8_t>)>;
     using Writer = lib::FnRef<void(std::span<const std::uint8_t>)>;
 
     static constexpr std::size_t MaxRead = 64;
@@ -40,8 +40,8 @@ public:
     /// A command not completed in this time is dropped.
     static constexpr os::Ticks CommandTimeoutMs = 1000;
 
-    explicit D878Uv2Programming(Reader read)
-        : m_read(read)
+    D878Uv2Programming(D878Uv2Codeplug &codeplug, D878Uv2CodeplugWriter &writer)
+        : m_codeplug(codeplug), m_writer(writer)
     {
     }
 
@@ -52,11 +52,23 @@ public:
     /// In program mode, where the port carries only this protocol.
     bool active(os::Ticks now);
 
+    /// True once after a program mode in which the codeplug was written:
+    /// the radio should start again with it.
+    bool takeCodeplugChanged()
+    {
+        const bool changed = m_changed;
+        m_changed = false;
+        return changed;
+    }
+
 private:
     void command(Writer write);
+    void leave();
 
-    Reader m_read;
+    D878Uv2Codeplug &m_codeplug;
+    D878Uv2CodeplugWriter &m_writer;
     bool m_program = false;
+    bool m_changed = false;
     std::size_t m_matched = 0; // of "PROGRAM", outside program mode
     std::uint8_t m_command[24]{};
     std::size_t m_have = 0;

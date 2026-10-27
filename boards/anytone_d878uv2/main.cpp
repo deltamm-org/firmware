@@ -318,9 +318,8 @@ void hal::boardMain()
     // Its own reader: the link task reads for the PC while the ui task
     // reads for itself.
     static dmm::services::D878Uv2Codeplug programmingCodeplug{storage};
-    static dmm::services::D878Uv2Programming programming{[](std::uint32_t address, std::span<std::uint8_t> data) {
-        return dmm::services::readable(programmingCodeplug.read(address, data));
-    }};
+    static dmm::services::D878Uv2CodeplugWriter codeplugWriter{storage, programmingCodeplug};
+    static dmm::services::D878Uv2Programming programming{programmingCodeplug, codeplugWriter};
 
     adc().start();
     static BoardInput input;
