@@ -607,6 +607,8 @@ void startDigitalTransmit(services::FmChannel channel)
         return;
     }
     bool ok = true;
+    // On the air from here, the wake-up included.
+    ui::post(ui::Transmitting{true});
     withBaseband([&](auto &b) {
         // An idle repeater is woken first, then its timing awaited.
         if (dmrRepeater && !timingFound) {
@@ -631,12 +633,12 @@ void startDigitalTransmit(services::FmChannel channel)
         const bool silent = dmrRepeater && !timingFound;
         logDmrRefused(silent ? "the repeater did not answer" : "the baseband refused",
             silent ? "No repeater" : "TX refused");
+        ui::post(ui::Transmitting{false});
         receive();
         return;
     }
     transmitting = true;
     power::hold(power::AwakeReason::Transmit);
-    ui::post(ui::Transmitting{true});
     transmitStarted = os::nowMs();
     logDmrTransmitting();
 }
