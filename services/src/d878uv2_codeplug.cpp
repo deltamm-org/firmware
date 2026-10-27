@@ -245,6 +245,18 @@ bool D878Uv2Codeplug::copyValid(std::uint32_t block, bool &valid)
     return true;
 }
 
+void D878Uv2Codeplug::forget(std::uint32_t block)
+{
+    for (std::size_t i = 0; i < m_cachedCount; ++i) {
+        if (m_cachedBlock[i] == block) {
+            m_cachedBlock[i] = m_cachedBlock[m_cachedCount - 1];
+            m_cachedValid[i] = m_cachedValid[m_cachedCount - 1];
+            --m_cachedCount;
+            return;
+        }
+    }
+}
+
 StorageResult D878Uv2Codeplug::read(std::uint32_t address, std::span<std::uint8_t> data)
 {
     StorageResult worst = StorageResult::Ok;
@@ -551,6 +563,136 @@ std::uint16_t D878Uv2Codeplug::zoneSelection(std::uint8_t zone, bool sideB)
         return NoChannel;
     }
     return le16(raw);
+}
+
+namespace {
+
+// The copy markers in a block's last 8 bytes: superseded in the first
+// four, valid in the last four.
+constexpr std::uint8_t ValidMark[4] = {0x55, 0x55, 0xAA, 0xAA};
+constexpr std::uint8_t SupersededMark[4] = {0xAA, 0xAA, 0x55, 0x55};
+
+} // namespace
+
+bool D878Uv2CodeplugWriter::startBlock(std::uint32_t block)
+{
+    bool firstValid = false;
+    if (!m_codeplug.copyValid(block, firstValid)) {
+        return false;
+    }
+    m_block = block;
+    m_source = firstValid ? block : block + BlockBytes;
+    m_target = firstValid ? block + BlockBytes : block;
+    if (m_storage.eraseBlock(m_target) != StorageResult::Ok) {
+        return false;
+    }
+    m_open = true;
+    return loadPage(0);
+}
+
+// The buffer starts as page @p page of the valid copy.
+bool D878Uv2CodeplugWriter::loadPage(std::uint32_t page)
+{
+    m_page = page;
+    return readable(m_storage.read(m_source + page * PageBytes, m_buffer));
+}
+
+bool D878Uv2CodeplugWriter::programPage()
+{
+    if (m_page == Pages - 1) {
+        // The last page carries the markers: this copy valid, not
+        // superseded.
+        for (std::size_t i = 0; i < 4; ++i) {
+            m_buffer[PageBytes - 8 + i] = 0xFF;
+            m_buffer[PageBytes - 4 + i] = ValidMark[i];
+        }
+    }
+    return m_storage.program(m_target + m_page * PageBytes, m_buffer) == StorageResult::Ok;
+}
+
+bool D878Uv2CodeplugWriter::finishBlock()
+{
+    m_open = false;
+    // The rest of the block from the valid copy, then the old copy marked.
+    for (;;) {
+        if (!programPage()) {
+            return false;
+        }
+        if (m_page == Pages - 1) {
+            break;
+        }
+        if (!loadPage(m_page + 1)) {
+            return false;
+        }
+    }
+    const bool superseded = m_storage.program(m_source + BlockBytes - 8, SupersededMark) == StorageResult::Ok;
+    m_codeplug.forget(m_block);
+    return superseded;
+}
+
+bool D878Uv2CodeplugWriter::allowed(std::uint32_t address, std::size_t size) const
+{
+    // Codeplugs use the first block of each pair, below its last 8 bytes,
+    // which hold the markers; in rising order.
+    const std::uint32_t block = address - address % BlockBytes;
+    const std::uint32_t offset = address % BlockBytes;
+    bool inCodeplug = false;
+    for (const Range &r : Ranges) {
+        inCodeplug = inCodeplug || (address >= r.first && address < r.end);
+    }
+    if (size == 0 || !inCodeplug || (block / BlockBytes) % 2 != 0 || offset + size > BlockBytes - 8) {
+        return false;
+    }
+    if (m_open && (block < m_block || (block == m_block && offset / PageBytes < m_page))) {
+        return false;
+    }
+    return true;
+}
+
+bool D878Uv2CodeplugWriter::write(std::uint32_t address, std::span<const std::uint8_t> data)
+{
+    if (m_failed || !allowed(address, data.size())) {
+        return false;
+    }
+    while (!data.empty()) {
+        const std::uint32_t block = address - address % BlockBytes;
+        const std::uint32_t offset = address % BlockBytes;
+        if (m_open && block != m_block && !finishBlock()) {
+            m_failed = true;
+            return false;
+        }
+        if (!m_open && !startBlock(block)) {
+            m_failed = true;
+            return false;
+        }
+        const std::uint32_t page = offset / PageBytes;
+        while (page > m_page) {
+            if (!programPage() || !loadPage(m_page + 1)) {
+                m_failed = true;
+                return false;
+            }
+        }
+        const std::uint32_t column = offset % PageBytes;
+        std::size_t n = PageBytes - column;
+        if (n > data.size()) {
+            n = data.size();
+        }
+        for (std::size_t i = 0; i < n; ++i) {
+            m_buffer[column + i] = data[i];
+        }
+        m_wrote = true;
+        address += static_cast<std::uint32_t>(n);
+        data = data.subspan(n);
+    }
+    return true;
+}
+
+bool D878Uv2CodeplugWriter::finish()
+{
+    const bool ok = !m_failed && (!m_open || finishBlock());
+    m_failed = m_failed || !ok;
+    m_wrote = false;
+    return ok;
 }
 
 } // namespace dmm::services

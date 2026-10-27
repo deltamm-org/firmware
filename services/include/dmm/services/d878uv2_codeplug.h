@@ -4,7 +4,10 @@
 #pragma once
 
 #include "dmm/services/codeplug.h"
+#include "dmm/services/d878uv2_storage.h"
 #include "dmm/services/storage.h"
+
+#include <array>
 
 #include <cstdint>
 #include <optional>
@@ -64,8 +67,12 @@ public:
     std::optional<std::uint32_t> radioId(std::uint8_t index);
 
 private:
+    friend class D878Uv2CodeplugWriter;
+
     std::optional<Channel> readChannel(std::uint32_t address);
     bool copyValid(std::uint32_t block, bool &valid);
+    // Drops the remembered copy choice of @p block, after a write.
+    void forget(std::uint32_t block);
     bool bitSet(std::uint32_t bitmap, unsigned index);
 
     Storage &m_storage;
@@ -75,6 +82,67 @@ private:
     std::uint32_t m_cachedBlock[Cached] = {};
     bool m_cachedValid[Cached] = {};
     std::size_t m_cachedCount = 0;
+};
+
+/// Writes codeplug data as codeplug tools send it: in rising address
+/// order, in pieces of any size. Each 128 KB block it touches gets a new
+/// copy in the block's other half: erased, filled page by page from the
+/// valid copy with the new data on top, its last page marked valid, then
+/// the old copy marked superseded. Until then the old copy stays valid, so
+/// an interrupted write leaves the codeplug as it was. Only the codeplug's
+/// own blocks are written: never calibration, radio data or system areas.
+class D878Uv2CodeplugWriter
+{
+public:
+    /// The addresses codeplugs use: from the first channel bank to below
+    /// the radio's own data at 0x02F00000, and the contact ID table and
+    /// the callsign limits at 0x04800000.
+    struct Range
+    {
+        std::uint32_t first;
+        std::uint32_t end;
+    };
+    static constexpr Range Ranges[] = {{0x00800000, 0x02F00000}, {0x04800000, 0x04880000}};
+
+    D878Uv2CodeplugWriter(D878Uv2Storage &storage, D878Uv2Codeplug &codeplug)
+        : m_storage(storage), m_codeplug(codeplug)
+    {
+    }
+
+    /// Takes @p data for @p address. False if refused (outside the
+    /// codeplug, or below data already written) or the flash failed; after
+    /// a failure every write is refused.
+    bool write(std::uint32_t address, std::span<const std::uint8_t> data);
+
+    /// Completes the block in progress; false on a failure.
+    bool finish();
+
+    /// Something was written since the last finish.
+    bool wrote() const { return m_wrote; }
+
+private:
+    static constexpr std::uint32_t BlockBytes = D878Uv2Storage::BlockBytes;
+    static constexpr std::uint32_t PageBytes = drivers::storage::SpiNand::PageBytes;
+    static constexpr std::uint32_t Pages = BlockBytes / PageBytes;
+
+    // The whole of a write is checked before the flash is touched; one
+    // write stays within one block.
+    bool allowed(std::uint32_t address, std::size_t size) const;
+    bool startBlock(std::uint32_t block);
+    bool loadPage(std::uint32_t page);
+    bool programPage();
+    bool finishBlock();
+
+    D878Uv2Storage &m_storage;
+    D878Uv2Codeplug &m_codeplug;
+    bool m_open = false;
+    bool m_failed = false;
+    bool m_wrote = false;
+    std::uint32_t m_block = 0;  // the block as codeplugs address it
+    std::uint32_t m_source = 0; // its valid copy
+    std::uint32_t m_target = 0; // the copy being written
+    std::uint32_t m_page = 0;   // in the buffer
+    std::array<std::uint8_t, PageBytes> m_buffer{};
 };
 
 } // namespace dmm::services
