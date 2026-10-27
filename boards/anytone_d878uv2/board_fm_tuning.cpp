@@ -169,12 +169,15 @@ constexpr WidthSetting Receive[] = {
 
 // Transmit: driver step 7 (the drive the power calibration is made at) and
 // microphone amplifier gain 14; voice digital gain; transmit gain 9, full
-// DAC gain and volume; pre-emphasis on, 250 Hz tone filter.
+// DAC gain and volume; pre-emphasis on, 250 Hz tone filter. Digital
+// channels keep their receive filter setting, with pre-emphasis and the
+// audio filters off: the baseband's 4FSK must pass unshaped.
 constexpr WidthSetting Transmit[] = {
     {0x0A, 0x3BA0, 0x3BA0, 0x3BA0},
     {0x41, 0x070F, 0x070F, 0x4006},
     {0x44, 0x09FF, 0x09FF, 0x09FF},
-    {0x58, 0x8405, 0x8405, 0x8405},
+    {0x58, 0x8405, 0x8405, 0x80E5},
+    {0x40, 0x0030, 0x0030, 0x0031},
 };
 
 // Band register: two alternative settings for channels where the
