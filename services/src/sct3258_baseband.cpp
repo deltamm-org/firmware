@@ -30,8 +30,8 @@ constexpr unsigned SwitchMs = 500;
 // over and how long each wait for the chip to take it.
 constexpr int FirstFrameTries = 4;
 constexpr unsigned FirstFrameMs = 250;
-// Repeater wake-up bursts per try.
-constexpr int WakeBursts = 5;
+// Repeater wake-up bursts per try: one, as ETSI TS 102 361-1 has it.
+constexpr int WakeBursts = 1;
 // DMR_CALL_SLOT: receive on both slots (direct channels); 1 or 2 is that
 // slot alone.
 constexpr std::uint8_t BothSlots = 3;

@@ -76,9 +76,15 @@ bool callIgnored = false;
 constexpr std::uint32_t AllCallId = 0xFFFFFF;
 // How long the end of a DMR transmission may take to go out.
 constexpr os::Ticks DmrEndMs = 1000;
-// How long to wait for a woken repeater's timing, and how often to try.
-constexpr os::Ticks RepeaterWakeMs = 1500;
-constexpr int RepeaterWakeTries = 3;
+// Channel access through a repeater, as ETSI TS 102 361-1 has it: with a
+// repeater already on the air (a beacon, the end of a call), wait for its
+// timing up to T_TxCCSlot; else wake it with one block, then wait for its
+// timing up to T_SyncWu, at most N_Wakeup times.
+constexpr os::Ticks FindSyncMs = 720;
+constexpr os::Ticks RepeaterWakeMs = 360;
+constexpr int RepeaterWakeTries = 2;
+// The repeater's carrier is heard now.
+bool carrierHeard = false;
 bool timingSeen = false;
 bool idleLogged = false;
 services::BatterySaver saver;
@@ -451,10 +457,12 @@ void onDmrEvent(const services::dmr::Event &e)
         break;
     case Kind::CarrierFound:
         idleLogged = false;
+        carrierHeard = true;
         [[fallthrough]];
     case Kind::CarrierLost:
         log::debug("dmr") << (e.kind == Kind::CarrierFound ? "carrier found" : "carrier lost");
         if (e.kind == Kind::CarrierLost) {
+            carrierHeard = false;
             // A repeater that went quiet must be woken again before a call.
             timingFound = false;
             timingSeen = false;
@@ -599,6 +607,12 @@ void startDigitalTransmit(services::FmChannel channel)
     }
     callLc = services::dmr::FullLc::voiceCall(target, ownId);
     setSpeaker(false);
+    // A repeater on the air without known timing yet: its timing comes
+    // soon, without a wake-up.
+    if (dmrRepeater && !timingFound && carrierHeard) {
+        const bool found = awaitDmrEvent(services::dmr::Event::Kind::SlotFound, FindSyncMs);
+        log::info("dmr") << "repeater on the air: timing " << (found ? "found" : "not found");
+    }
     const char *problem = fm->transmit(channel, powerLevel);
     if (problem != nullptr) {
         fm->endTransmit();
