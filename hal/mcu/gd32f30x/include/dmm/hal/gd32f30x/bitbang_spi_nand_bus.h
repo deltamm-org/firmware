@@ -33,6 +33,18 @@ public:
 
 private:
     Pins m_pins;
+    // The bit set/clear registers of the clock and data-in ports, the
+    // input registers of the two data lines, and the pin masks, so each
+    // clock is one or two stores. Set/clear words: low half sets, high
+    // half clears.
+    volatile std::uint32_t *m_clockBop;
+    volatile std::uint32_t *m_dataBop;
+    const volatile std::uint32_t *m_dataInState;
+    const volatile std::uint32_t *m_dataOutState;
+    std::uint32_t m_clockMask;
+    std::uint32_t m_dataInMask;
+    std::uint32_t m_dataOutMask;
+    bool m_clockAndDataShared;
 };
 
 } // namespace dmm::hal::gd32f30x
