@@ -278,6 +278,13 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
         return false;
     }
     if (!m_callOptionsSet) {
+        // Every report the chip can give, also the burst sync events, and a
+        // sync miss count of 1.
+        const std::uint8_t report[] = {Sct3258::ReportField, 0xFF};
+        const std::uint8_t syncMiss[] = {Sct3258::SyncMissCount, 1};
+        if (m_chip.control(report) != 0 || m_chip.control(syncMiss) != 0) {
+            warn("DMR report settings not taken");
+        }
         const int status = m_chip.control(Sct3258::TypeDmr, CallOptions, CodecSelectMs);
         if (status != 0) {
             warn("DMR call options", status);
