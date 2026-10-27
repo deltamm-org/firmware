@@ -252,6 +252,11 @@ extern "C" void irq20Handler()
     usbd.handleInterrupt();
 }
 
+extern "C" void irq6Handler()
+{
+    BoardRf::onSlotEdge();
+}
+
 extern "C" void irq23Handler()
 {
     BoardInput::onEncoderEdge();

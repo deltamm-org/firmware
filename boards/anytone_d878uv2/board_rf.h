@@ -22,6 +22,10 @@ public:
     void setTransmitPath(bool on) override;
     void setPowerAmplifier(bool on) override;
     void setPowerControl(std::uint16_t value) override;
+    void setSlotKeying(std::uint16_t value) override;
+
+    /// From the transmit slot line's interrupt.
+    static void onSlotEdge();
 
 private:
     bool m_trimStarted = false;

@@ -156,8 +156,13 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     setPin(m_pins.receiveLowBand, false);
     setPin(m_pins.transmitMidBand, hz >= m_pins.midLowHz && hz <= m_pins.splitHz);
     m_rf.setReferenceTrim(trims->referenceTrim);
-    m_rf.setTransmitPath(true);
-    muteMicrophone(false);
+    // FM: the transmit path now, the microphone straight in. Digital: the
+    // modulation comes from the baseband, and the path and amplifier
+    // follow its transmit slots.
+    if (!channel.digital) {
+        m_rf.setTransmitPath(true);
+    }
+    muteMicrophone(channel.digital);
     m_chip.setFrequency(hz);
     m_chip.setBandwidth(bandwidth(channel));
     const Tone &tone = channel.transmitTone;
@@ -165,11 +170,17 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
         : tone.kind == Tone::Kind::Dcs                                ? trims->dcsDeviation
                                                                       : 0;
     m_chip.setDeviation(trims->voiceDeviation, toneDeviation);
-    m_chip.setTransmitTone(chipTone(tone));
+    m_chip.setTransmitTone(channel.digital ? Chip::SubTone{} : chipTone(tone));
     m_chip.setMode(Chip::Mode::Transmit);
     setPin(m_pins.transmitHighBand, hz > m_pins.splitHz);
     // Power last.
     m_sleepMs(TransmitSettleMs);
+    if (channel.digital) {
+        m_rf.setSlotKeying(power);
+        m_power = power;
+        logNumber("power control by slot", m_power, "");
+        return nullptr;
+    }
     m_rf.setPowerAmplifier(true);
     m_sleepMs(AmplifierSettleMs);
     m_rf.setPowerControl(static_cast<std::uint16_t>(power / 3));
@@ -195,6 +206,7 @@ void Rda1846Transceiver::idle()
 {
     // The power amplifier goes off before the transceiver stops
     // transmitting.
+    m_rf.setSlotKeying(0);
     m_rf.setPowerAmplifier(false);
     m_rf.setTransmitPath(false);
     m_rf.setPowerControl(0);

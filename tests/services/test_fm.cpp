@@ -7,6 +7,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <array>
 #include <map>
 #include <string>
@@ -55,6 +56,11 @@ public:
         power = v;
         note("power " + std::to_string(v));
     }
+    void setSlotKeying(std::uint16_t v) override
+    {
+        slotPower = v;
+        note("slots " + std::to_string(v));
+    }
     void note(const std::string &s)
     {
         if (events != nullptr) {
@@ -69,6 +75,7 @@ public:
     bool path = true;
     bool amplifier = true;
     int power = -1;
+    int slotPower = -1;
 };
 
 void noSleep(unsigned) {}
@@ -539,4 +546,29 @@ TEST_CASE("a digital channel receives without listening for a tone")
     CHECK(fm.receiving());
     CHECK((bus.registers[0x3A] & 0x1F) == 0); // no tone detector
     CHECK(bus.registers[0x30] == 0x4026);     // receiving, 12.5 kHz
+}
+
+TEST_CASE("digital transmit leaves the amplifier to the slot keying and stops it")
+{
+    using dmm::services::PowerLevel;
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    Rda1846 chip(bus);
+    FakeRf rf;
+    Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+    REQUIRE(fm.start());
+    const D878Uv2Calibration cal = calibration();
+    testCalibration = &cal;
+    std::vector<std::string> events;
+    rf.events = &events;
+    FmChannel channel{433'450'000, 433'450'000, false, {}, {}, true};
+    REQUIRE(fm.transmit(channel, PowerLevel::Low) == nullptr);
+    CHECK(fm.transmitting());
+    CHECK(rf.slotPower == 40 * 16);
+    CHECK(std::find(events.begin(), events.end(), "pa on") == events.end());
+    CHECK(std::find(events.begin(), events.end(), "path on") == events.end());
+    CHECK(gpioField(bus.registers[0x1F], 3) == 3); // own microphone muted
+    fm.endTransmit();
+    CHECK(rf.slotPower == 0);
+    CHECK_FALSE(rf.amplifier);
 }

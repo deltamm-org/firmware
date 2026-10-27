@@ -23,6 +23,10 @@ public:
     /// Power amplifier output control, from the radio's calibration; 0 = no
     /// output.
     virtual void setPowerControl(std::uint16_t value) = 0;
+    /// Digital transmit: the transmit path and the power amplifier, at
+    /// output control @p value, follow the baseband's transmit slots from
+    /// now on. 0 stops that and switches both off at once.
+    virtual void setSlotKeying(std::uint16_t value) = 0;
 
 protected:
     ~RfHardware() = default;
