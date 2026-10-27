@@ -23,7 +23,8 @@ constexpr std::uint8_t ProcessAnalog = Sct3258::ProcessAnalog;
 // access channel report before the slot counts as verified, three repeated
 // LC headers; every CSBK and idle burst reported.
 constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x0C, 0x00};
-// DMR_CALL_SLOT: receive on both slots (direct channels).
+// DMR_CALL_SLOT: receive on both slots (direct channels); 1 or 2 is that
+// slot alone.
 constexpr std::uint8_t BothSlots = 3;
 // CARRIER_READY: a carrier is there, with the demodulated signal as is or
 // reversed; with the chip's own squelch detection this starts it.
@@ -295,10 +296,9 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
         m_callOptionsSet = true;
     }
     const std::uint8_t cc[] = {Sct3258::DmrColourCode, static_cast<std::uint8_t>(settings.colourCode & 0x0F)};
-    // Both slots are received, also through a repeater; the caller picks
-    // its slot's calls from what is heard.
-    static_cast<void>(repeater);
-    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, BothSlots};
+    // Through a repeater only the channel's slot is received; the other
+    // slot's calls would reach the vocoder too. Direct: both slots.
+    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, repeater ? static_cast<std::uint8_t>(settings.slot == 2 ? 2 : 1) : BothSlots};
     const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkReceive, 0, 0};
     const std::uint8_t carrier[] = {
         Sct3258::CarrierReady, m_audio.demodulatorInverted ? CarrierReadyReversed : CarrierReady};

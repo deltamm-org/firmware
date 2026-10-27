@@ -261,7 +261,7 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
     CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x00, 0x2F, 0x01});
     CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x08, 0x79, 0x41, 0x00, 0x13, 0x0C, 0x00});
     CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x08, 0x77, 0x07});
-    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02}); // the channel's slot alone
     CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
     CHECK(chip.packets[8] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
 
