@@ -330,8 +330,8 @@ void hal::boardMain()
             if (!offset || !gain || !modulation) {
                 return std::nullopt;
             }
-            return dmm::services::Sct3258Baseband::DigitalTrims{
-                *offset, *gain, *modulation, calibration.basebandSlotTiming()};
+            return dmm::services::Sct3258Baseband::DigitalTrims{*offset, *gain, *modulation,
+                calibration.basebandSpeakerGain(), calibration.basebandMicGain(), calibration.basebandSlotTiming()};
         }};
     static dmm::drivers::radio::Rda1846 fmChip{fmBus};
     // Called from the radio task; empty until the system task has read the

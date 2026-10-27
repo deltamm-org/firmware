@@ -75,6 +75,11 @@ constexpr unsigned VocoderSelectMs = 3500;
     log::warning("baseband") << what << " answered " << code;
 }
 
+[[gnu::noinline, gnu::cold]] void logSpeakerGain(const std::array<std::uint8_t, 2> &gain)
+{
+    log::info("baseband") << "digital speaker gain " << lib::hex(gain[0], 2) << lib::hex(gain[1], 2);
+}
+
 // One received packet as hex, 24 bytes per line.
 [[gnu::noinline]] void logReply(const drivers::baseband::Packet &p)
 {
@@ -229,8 +234,12 @@ bool Sct3258Baseband::setAnalog(bool wide)
     if (!m_trimsWritten) {
         writeTrims(*trims);
     }
+    const bool fromDigital = m_vocoder == Sct3258::VocoderDigital;
     if (!selectVocoder(VocoderAnalog)) {
         return false;
+    }
+    if (fromDigital && !write(m_audio.receive)) {
+        warn("codec did not take the receive levels");
     }
     if (!sendSquelch(m_chip, m_audio.analogSquelch)) {
         warn("analog squelch levels not taken");
@@ -260,8 +269,12 @@ bool Sct3258Baseband::selectVocoder(std::uint8_t vocoder)
 
 bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, bool repeater)
 {
+    const bool fromAnalog = m_vocoder != Sct3258::VocoderDigital;
     if (!m_info.running || !selectVocoder(Sct3258::VocoderDigital)) {
         return false;
+    }
+    if (fromAnalog && !write(m_audio.digitalReceive)) {
+        warn("codec did not take the digital receive levels");
     }
     if (const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(receiveHz) : std::nullopt) {
         std::uint8_t offset[1 + 12] = {Sct3258::DcOffset};
@@ -271,6 +284,14 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
         const std::uint8_t gain[] = {Sct3258::DemodGain, trims->demodGain[0], trims->demodGain[1]};
         if (m_chip.control(offset) != 0 || m_chip.control(gain) != 0) {
             warn("digital calibration not taken");
+        }
+        if (trims->speakerGain) {
+            const std::uint8_t speaker[] = {Sct3258::DigitalSpeakerGain, (*trims->speakerGain)[0], (*trims->speakerGain)[1]};
+            if (m_chip.control(speaker) != 0) {
+                warn("digital speaker gain not taken");
+            } else if (fromAnalog) {
+                logSpeakerGain(*trims->speakerGain);
+            }
         }
     }
     if (!sendSquelch(m_chip, m_audio.digitalSquelch)) {
@@ -383,6 +404,12 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
         if (m_chip.control(gain) != 0) {
             warn("modulator gain not taken");
         }
+        if (trims->micGain) {
+            const std::uint8_t mic[] = {Sct3258::DigitalMicGain, (*trims->micGain)[0], (*trims->micGain)[1]};
+            if (m_chip.control(mic) != 0) {
+                warn("digital microphone gain not taken");
+            }
+        }
         if (trims->slotTiming) {
             std::uint8_t timing[1 + 8] = {Sct3258::DmrOffset};
             for (std::size_t i = 0; i < 8; ++i) {
@@ -412,7 +439,7 @@ bool Sct3258Baseband::endDigitalCall(const dmr::ChannelSettings &settings, const
     lc.encode(b);
     const bool sent =
         m_info.running && m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::TerminatorWithLc), b);
-    write(m_audio.receive);
+    write(receiveWrites());
     return sent;
 }
 
@@ -458,7 +485,12 @@ bool Sct3258Baseband::setMicrophone(bool on)
     if (!m_info.running) {
         return false;
     }
-    return write(on ? m_audio.transmit : m_audio.receive);
+    return write(on ? m_audio.transmit : receiveWrites());
+}
+
+std::span<const Sct3258Baseband::CodecWrite> Sct3258Baseband::receiveWrites() const
+{
+    return m_vocoder == Sct3258::VocoderDigital ? m_audio.digitalReceive : m_audio.receive;
 }
 
 bool Sct3258Baseband::write(std::span<const CodecWrite> writes)

@@ -188,3 +188,15 @@ TEST_CASE("baseband DC offset by band and frequency range, and the demodulator g
     CHECK_FALSE(cal.basebandDcOffset(300 * MHz).has_value());
     CHECK(*cal.basebandDemodGain() == std::array<std::uint8_t, 2>{0x08, 0x20});
 }
+
+TEST_CASE("the digital voice gains come from the UHF block, nothing when erased")
+{
+    auto d = sample();
+    d[0x99] = 0x05;
+    d[0x9A] = 0x40;
+    const D878Uv2Calibration cal = loaded(d);
+    CHECK(*cal.basebandSpeakerGain() == std::array<std::uint8_t, 2>{0x05, 0x40});
+    d[0x9B] = 0xFF;
+    d[0x9C] = 0xFF;
+    CHECK_FALSE(loaded(d).basebandMicGain().has_value());
+}

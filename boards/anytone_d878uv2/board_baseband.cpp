@@ -48,6 +48,13 @@ constexpr CodecWrite Receive[] = {
     {Page0, LeftDacVolume, DacMinus22Db},
 };
 
+// Digital receive: the voice comes from the vocoder at its calibrated
+// level, so the DAC stays at 0 dB.
+constexpr CodecWrite DigitalReceive[] = {
+    {Page1, LeftMicPositive, 0x00},
+    {Page0, LeftDacVolume, 0},
+};
+
 // Transmit: DAC back to 0 dB, the microphone on the left input through
 // 20 kOhm, input amplifier +16 dB, left AGC on with the same target; the
 // microphone is connected last.
@@ -73,6 +80,7 @@ constexpr std::uint8_t AnalogSquelch[] = {0x00, 0x00, 0x00, 0x3C, 0x0F, 0x3C, 0x
 constexpr dmm::services::Sct3258Baseband::Audio Audio{
     .codec = dmm::drivers::baseband::Sct3258::CodecTlv320aic3204,
     .receive = Receive,
+    .digitalReceive = DigitalReceive,
     .transmit = Transmit,
     .speakerPage = Page1,
     .speakerRegister = HplGain,

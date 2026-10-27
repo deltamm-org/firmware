@@ -76,6 +76,8 @@ public:
     static constexpr std::uint8_t DcOffset = 0x39;
     static constexpr std::uint8_t SquelchLevel = 0x6C;
     static constexpr std::uint8_t ModGain = 0x2C;
+    static constexpr std::uint8_t DigitalMicGain = 0x68;
+    static constexpr std::uint8_t DigitalSpeakerGain = 0x69;
     static constexpr std::uint8_t DmrOffset = 0x7A;
     /// DMR_CALL_SLOT: transmit on the slot in the low bits.
     static constexpr std::uint8_t SlotTransmit = 0x80;

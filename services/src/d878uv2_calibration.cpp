@@ -32,6 +32,9 @@ constexpr std::uint32_t UhfBasebandBlock = 0x080;
 constexpr std::uint32_t VhfBasebandBlock = 0x0C0;
 constexpr std::uint32_t CodecTrimsAt = UhfBasebandBlock + 0x12;
 constexpr std::uint32_t DemodGainAt = UhfBasebandBlock + 0x17;
+// The digital voice gains, also in the UHF block, for both bands.
+constexpr std::uint32_t SpeakerGainAt = UhfBasebandBlock + 0x19;
+constexpr std::uint32_t MicGainAt = UhfBasebandBlock + 0x1B;
 constexpr std::uint32_t ModGainAt = 0x10; // in each baseband block
 // Slot timing: four big-endian words, then 'f' when written.
 constexpr std::uint32_t SlotTimingAt = 0x100;
@@ -260,6 +263,24 @@ std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandDemodGain
         return std::nullopt;
     }
     return std::array<std::uint8_t, 2>{m_data[DemodGainAt], m_data[DemodGainAt + 1]};
+}
+
+std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::word(std::uint32_t at) const
+{
+    if (!present() || (m_data[at] == 0xFF && m_data[at + 1] == 0xFF)) {
+        return std::nullopt;
+    }
+    return std::array<std::uint8_t, 2>{m_data[at], m_data[at + 1]};
+}
+
+std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandSpeakerGain() const
+{
+    return word(SpeakerGainAt);
+}
+
+std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandMicGain() const
+{
+    return word(MicGainAt);
 }
 
 std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandModGain(std::uint32_t hz) const
