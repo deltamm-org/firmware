@@ -1194,6 +1194,11 @@ void uiMain(void *)
                                    redrawView();
                                }
                            },
+                           [&](const Notice &n) {
+                               if (view != View::Start) {
+                                   notice(n.text);
+                               }
+                           },
                            [&](const ShowStandby &) {
                                if (channels != nullptr) {
                                    show(View::Standby);

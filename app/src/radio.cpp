@@ -544,9 +544,16 @@ bool awaitDmrEvent(services::dmr::Event::Kind kind, os::Ticks ms)
     return seen;
 }
 
-[[gnu::noinline]] void logDmrRefused(const char *why)
+// A refused PTT: the reason to the log, a short one on the screen.
+[[gnu::noinline]] void refused(const char *tag, const char *why, const char *shown)
 {
-    log::info("dmr") << "PTT: " << why;
+    log::info(tag) << "PTT: " << why;
+    ui::post(ui::Notice{shown});
+}
+
+void logDmrRefused(const char *why, const char *shown)
+{
+    refused("dmr", why, shown);
 }
 
 [[gnu::noinline]] void logDmrTransmitting()
@@ -559,25 +566,25 @@ bool awaitDmrEvent(services::dmr::Event::Kind kind, os::Ticks ms)
 void startDigitalTransmit(services::FmChannel channel)
 {
     if (!HasBaseband) {
-        logDmrRefused("no baseband");
+        logDmrRefused("no baseband", "No DMR");
         return;
     }
     if (inCall) {
-        logDmrRefused("the channel is busy");
+        logDmrRefused("the channel is busy", "Channel busy");
         return;
     }
     if (dmrRepeater && channel.transmitHz == fmChannel.receiveHz) {
-        logDmrRefused("no repeater input frequency (fm tx <kHz>)");
+        logDmrRefused("no repeater input frequency (fm tx <kHz>)", "No TX frequency");
         return;
     }
     const services::dmr::Target target = targetOverride.id != 0 ? targetOverride : dmrSettings.contact;
     const std::uint32_t ownId = ownIdOverride != 0 ? ownIdOverride : dmrSettings.ownId;
     if (target.id == 0 && target.type != services::dmr::CallType::All) {
-        logDmrRefused("no contact to call (dmr tg <id>)");
+        logDmrRefused("no contact to call (dmr tg <id>)", "No contact");
         return;
     }
     if (ownId == 0) {
-        logDmrRefused("no own DMR ID (dmr id <id>)");
+        logDmrRefused("no own DMR ID (dmr id <id>)", "No own DMR ID");
         return;
     }
     callLc = services::dmr::FullLc::voiceCall(target, ownId);
@@ -585,7 +592,7 @@ void startDigitalTransmit(services::FmChannel channel)
     const char *problem = fm->transmit(channel, powerLevel);
     if (problem != nullptr) {
         fm->endTransmit();
-        logDmrRefused(problem);
+        logDmrRefused(problem, "TX refused");
         receive();
         return;
     }
@@ -603,7 +610,9 @@ void startDigitalTransmit(services::FmChannel channel)
     });
     if (!ok) {
         fm->endTransmit();
-        logDmrRefused(dmrRepeater && !timingFound ? "the repeater did not answer" : "the baseband refused");
+        const bool silent = dmrRepeater && !timingFound;
+        logDmrRefused(silent ? "the repeater did not answer" : "the baseband refused",
+            silent ? "No repeater" : "TX refused");
         receive();
         return;
     }
@@ -620,27 +629,28 @@ void startTransmit()
         return;
     }
     if (!fm->receiving() || system::calibration() == nullptr) {
-        log::info("fm") << "PTT: no FM channel set (fm rx first)";
+        refused("fm", "no FM channel set (fm rx first)", "No channel");
         return;
     }
     services::FmChannel channel = fmChannel;
     channel.transmitHz = transmitHz != 0 ? transmitHz : fmChannel.receiveHz;
     if (fmChannel.digital) {
         if (receiveOnly) {
-            logDmrRefused("this channel is receive only");
+            logDmrRefused("this channel is receive only", "Receive only");
         } else if (!transmitAllowed(channel.transmitHz)) {
-            logDmrRefused("outside the 2 m and 70 cm bands");
+            logDmrRefused("outside the 2 m and 70 cm bands", "TX not allowed");
         } else {
             startDigitalTransmit(channel);
         }
         return;
     }
     if (receiveOnly) {
-        log::info("fm") << "PTT: this channel is receive only";
+        refused("fm", "this channel is receive only", "Receive only");
         return;
     }
     if (!transmitAllowed(channel.transmitHz)) {
         log::warning("fm") << "PTT: " << mhz(channel.transmitHz).view() << " MHz is outside the 2 m and 70 cm bands";
+        ui::post(ui::Notice{"TX not allowed"});
         return;
     }
     setSpeaker(false);
@@ -654,6 +664,7 @@ void startTransmit()
         fm->endTransmit();
         withBaseband([](auto &b) { b.setMicrophone(false); });
         log::error("fm") << "transmit refused at " << mhz(channel.transmitHz).view() << " MHz: " << problem;
+        ui::post(ui::Notice{"TX refused"});
         receive();
         return;
     }
@@ -679,7 +690,7 @@ void stopTransmit(const char *why)
         bool sent = false;
         withBaseband([&sent](auto &b) { sent = b.endDigitalCall(dmrSettings, callLc); });
         if (sent && !awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs)) {
-            logDmrRefused("the terminator did not finish in time");
+            log::warning("dmr") << "the terminator did not finish in time";
         }
     }
     fm->endTransmit();

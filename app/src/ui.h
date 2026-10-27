@@ -105,13 +105,19 @@ struct Battery
     std::uint8_t level;
     bool low;
 };
+/// A short message for the user, up to 20 characters; the text must
+/// stay valid (a string literal).
+struct Notice
+{
+    const char *text;
+};
 /// The "switching off" screen.
 struct SwitchingOff
 {
 };
 
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, KeyLockSettings, KeyLockReport>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, KeyLockSettings, KeyLockReport, Notice>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels.
