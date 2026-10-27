@@ -454,6 +454,9 @@ void onDmrEvent(const services::dmr::Event &e)
     case Kind::CarrierLost:
         log::debug("dmr") << (e.kind == Kind::CarrierFound ? "carrier found" : "carrier lost");
         if (e.kind == Kind::CarrierLost) {
+            // A repeater that went quiet must be woken again before a call.
+            timingFound = false;
+            timingSeen = false;
             endCall("lost");
         }
         break;
