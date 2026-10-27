@@ -33,6 +33,11 @@ constexpr unsigned ContactsPerBank = 1000;
 constexpr std::uint32_t ContactBytes = 0x64;
 constexpr std::uint32_t ContactBitmap = 0x02640000;
 constexpr unsigned MaxContacts = 10'000;
+// Every contact's ID, sorted: 8-byte entries, the ID in BCD shifted left
+// by one with the talkgroup flag in bit 0, then the contact index (both
+// little-endian); unused entries are all ones.
+constexpr std::uint32_t ContactIds = 0x04340000;
+constexpr std::uint32_t ContactIdBytes = 8;
 constexpr std::uint32_t RadioIds = 0x02580000;
 constexpr std::uint32_t RadioIdBytes = 0x20;
 constexpr std::uint32_t RadioIdBitmap = 0x024C1320;
@@ -288,6 +293,57 @@ std::optional<dmr::Target> D878Uv2Codeplug::contact(std::uint32_t index)
     }
     constexpr dmr::CallType Types[] = {dmr::CallType::Private, dmr::CallType::Group, dmr::CallType::All};
     return dmr::Target{Types[r[0]], *id};
+}
+
+bool D878Uv2Codeplug::contactName(std::uint32_t id, bool group, std::span<char, ContactNameBytes + 1> name)
+{
+    // The ID as BCD digits, which sort like the number.
+    std::uint32_t key = 0;
+    for (std::uint32_t v = id, shift = 0; shift < 32; v /= 10, shift += 4) {
+        key |= (v % 10) << shift;
+    }
+    // The first entry with this ID.
+    std::uint32_t low = 0;
+    std::uint32_t high = MaxContacts;
+    std::uint8_t e[ContactIdBytes];
+    while (low < high) {
+        const std::uint32_t mid = (low + high) / 2;
+        if (!readable(read(ContactIds + mid * ContactIdBytes, e))) {
+            return false;
+        }
+        if ((le32(e) >> 1) < key) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    // A private ID and a talkgroup may share the number: take the matching
+    // kind.
+    for (std::uint32_t i = low; i < low + 2 && i < MaxContacts; ++i) {
+        if (!readable(read(ContactIds + i * ContactIdBytes, e)) || (le32(e) >> 1) != key) {
+            return false;
+        }
+        if (((le32(e) & 1) != 0) != group) {
+            continue;
+        }
+        const std::uint32_t index = le32(&e[4]);
+        if (index >= MaxContacts) {
+            return false;
+        }
+        char text[ContactNameBytes];
+        const std::uint32_t address =
+            ContactBanks + (index / ContactsPerBank) * ContactBankStride + (index % ContactsPerBank) * ContactBytes;
+        if (!readable(read(address + 1, std::span(reinterpret_cast<std::uint8_t *>(text), sizeof text)))) {
+            return false;
+        }
+        std::size_t n = 0;
+        for (; n < ContactNameBytes && text[n] != '\0'; ++n) {
+            name[n] = text[n];
+        }
+        name[n] = '\0';
+        return n != 0;
+    }
+    return false;
 }
 
 std::optional<std::uint32_t> D878Uv2Codeplug::radioId(std::uint8_t index)

@@ -282,3 +282,49 @@ TEST_CASE("the codeplug looks up a digital channel's contact and own ID")
     CHECK_FALSE(cp.contact(1000).has_value()); // not in the bitmap
     CHECK_FALSE(cp.radioId(1).has_value());
 }
+
+TEST_CASE("contact names are found by ID through the sorted ID table")
+{
+    FakeSpiNand chip;
+    auto markValid = [&](std::uint32_t block) {
+        chip.put(block + 0x1FFF8, {0xFF, 0xFF, 0xFF, 0xFF, 0x55, 0x55, 0xAA, 0xAA});
+    };
+    // Sorted IDs: private 244 (index 2), talkgroup 244 (index 0), private
+    // 1234567 (index 1); the rest erased.
+    auto entry = [](std::uint32_t bcd, bool group, std::uint32_t index) {
+        const std::uint32_t v = bcd << 1 | (group ? 1u : 0u);
+        return std::vector<std::uint8_t>{static_cast<std::uint8_t>(v), static_cast<std::uint8_t>(v >> 8),
+            static_cast<std::uint8_t>(v >> 16), static_cast<std::uint8_t>(v >> 24), static_cast<std::uint8_t>(index),
+            0, 0, 0};
+    };
+    std::vector<std::uint8_t> table;
+    for (const auto &e : {entry(0x244, false, 2), entry(0x244, true, 0), entry(0x1234567, false, 1)}) {
+        table.insert(table.end(), e.begin(), e.end());
+    }
+    table.resize(0x2000, 0xFF);
+    markValid(0x04340000);
+    chip.put(0x04340000, table);
+    markValid(0x02680000);
+    auto named = [&](std::uint32_t index, const char *name) {
+        std::vector<std::uint8_t> r(0x10, 0);
+        std::memcpy(&r[1], name, std::strlen(name));
+        chip.put(0x02680000 + index * 0x64, r);
+    };
+    named(0, "Suomi");
+    named(1, "Caller One");
+    named(2, "Somebody");
+
+    SpiNand nand(chip, noDelay);
+    D878Uv2Storage storage(nand);
+    storage.start();
+    D878Uv2Codeplug cp(storage);
+    std::array<char, D878Uv2Codeplug::ContactNameBytes + 1> name{};
+    REQUIRE(cp.contactName(244, true, name));
+    CHECK(std::string(name.data()) == "Suomi");
+    REQUIRE(cp.contactName(244, false, name));
+    CHECK(std::string(name.data()) == "Somebody");
+    REQUIRE(cp.contactName(1234567, false, name));
+    CHECK(std::string(name.data()) == "Caller One");
+    CHECK_FALSE(cp.contactName(1234568, false, name));
+    CHECK_FALSE(cp.contactName(1, true, name));
+}

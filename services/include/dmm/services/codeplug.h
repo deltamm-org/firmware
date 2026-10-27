@@ -81,6 +81,7 @@ public:
     static constexpr std::uint8_t MaxZoneChannels = 250;
     static constexpr std::size_t ZoneNameBytes = 16;
     static constexpr std::uint16_t NoChannel = 0xFFFF;
+    static constexpr std::size_t ContactNameBytes = 16;
 
     virtual std::optional<CodeplugSettings> settings() = 0;
     /// Channel @p index (0-based), if it is in use.
@@ -98,6 +99,9 @@ public:
     /// The position in @p zone's channel list last selected on side A or
     /// B, or NoChannel.
     virtual std::uint16_t zoneSelection(std::uint8_t zone, bool sideB) = 0;
+    /// The name of the DMR contact with @p id, a talkgroup when @p group,
+    /// zero-terminated; false when there is none.
+    virtual bool contactName(std::uint32_t id, bool group, std::span<char, ContactNameBytes + 1> name) = 0;
 
 protected:
     ~CodeplugSource() = default;

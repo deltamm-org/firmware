@@ -53,6 +53,7 @@ public:
         }
         return list.size();
     }
+    bool contactName(std::uint32_t, bool, std::span<char, ContactNameBytes + 1>) override { return false; }
     std::uint16_t zoneSelection(std::uint8_t zone, bool sideB) override
     {
         const auto it = (sideB ? selectionB : selectionA).find(zone);
