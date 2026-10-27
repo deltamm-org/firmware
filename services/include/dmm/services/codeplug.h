@@ -8,6 +8,7 @@
 #include "dmm/services/power_level.h"
 #include "dmm/services/tone.h"
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -102,6 +103,16 @@ public:
     /// The name of the DMR contact with @p id, a talkgroup when @p group,
     /// zero-terminated; false when there is none.
     virtual bool contactName(std::uint32_t id, bool group, std::span<char, ContactNameBytes + 1> name) = 0;
+    static constexpr std::size_t CallsignBytes = 8;
+    /// A radio user from the codeplug's user directory.
+    struct DmrUser
+    {
+        std::array<char, CallsignBytes + 1> callsign{};
+        std::array<char, ContactNameBytes + 1> name{};
+    };
+    /// Looks up the user with radio ID @p id in the user directory; false
+    /// when there is none.
+    virtual bool dmrUser(std::uint32_t id, DmrUser &user) = 0;
     static constexpr std::size_t MaxReceiveGroups = 64;
     /// The talkgroup IDs in receive group list @p list; returns how many.
     virtual std::size_t receiveGroups(std::uint8_t list, std::span<std::uint32_t> out) = 0;

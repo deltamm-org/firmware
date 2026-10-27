@@ -10,6 +10,7 @@
 #include <array>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 using dmm::drivers::storage::SpiNand;
@@ -327,4 +328,60 @@ TEST_CASE("contact names are found by ID through the sorted ID table")
     CHECK(std::string(name.data()) == "Caller One");
     CHECK_FALSE(cp.contactName(1234568, false, name));
     CHECK_FALSE(cp.contactName(1, true, name));
+}
+
+TEST_CASE("users are found in the user directory by radio ID, also across a bank end")
+{
+    FakeSpiNand chip;
+    auto markValid = [&](std::uint32_t block) {
+        chip.put(block + 0x1FFF8, {0xFF, 0xFF, 0xFF, 0xFF, 0x55, 0x55, 0xAA, 0xAA});
+    };
+    auto le = [](std::uint32_t v) {
+        return std::vector<std::uint8_t>{static_cast<std::uint8_t>(v), static_cast<std::uint8_t>(v >> 8),
+            static_cast<std::uint8_t>(v >> 16), static_cast<std::uint8_t>(v >> 24)};
+    };
+    auto record = [](const char *name, const char *city, const char *call) {
+        std::vector<std::uint8_t> r = {0x00, 0, 0, 0, 0, 0};
+        for (const char *t : {name, city, call}) {
+            r.insert(r.end(), t, t + std::strlen(t) + 1);
+        }
+        r.push_back(0); // state
+        r.push_back(0); // country
+        r.push_back(0); // comment
+        return r;
+    };
+    // Two users: 1000001 at the start, 7654321 split over the first bank's
+    // end (100000 bytes of records per bank).
+    const auto first = record("Caller", "Town", "AB1CD");
+    const auto second = record("Second Caller", "City", "XY9ZZ");
+    const std::uint32_t secondAt = 100'000 - 10;
+    std::vector<std::uint8_t> ids;
+    for (const auto &[bcd, at] : {std::pair{0x1000001u, 0u}, std::pair{0x7654321u, secondAt}}) {
+        const auto k = le(bcd << 1);
+        const auto i = le(at);
+        ids.insert(ids.end(), k.begin(), k.end());
+        ids.insert(ids.end(), i.begin(), i.end());
+    }
+    markValid(0x04000000);
+    chip.put(0x04000000, ids);
+    markValid(0x04840000);
+    chip.put(0x04840000, le(2));
+    markValid(0x05500000);
+    chip.put(0x05500000, first);
+    chip.put(0x05500000 + secondAt, std::vector<std::uint8_t>(second.begin(), second.begin() + 10));
+    markValid(0x05540000);
+    chip.put(0x05540000, std::vector<std::uint8_t>(second.begin() + 10, second.end()));
+
+    SpiNand nand(chip, noDelay);
+    D878Uv2Storage storage(nand);
+    storage.start();
+    D878Uv2Codeplug cp(storage);
+    D878Uv2Codeplug::DmrUser user;
+    REQUIRE(cp.dmrUser(1000001, user));
+    CHECK(std::string(user.name.data()) == "Caller");
+    CHECK(std::string(user.callsign.data()) == "AB1CD");
+    REQUIRE(cp.dmrUser(7654321, user));
+    CHECK(std::string(user.name.data()) == "Second Caller");
+    CHECK(std::string(user.callsign.data()) == "XY9ZZ");
+    CHECK_FALSE(cp.dmrUser(1234567, user));
 }

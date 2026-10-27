@@ -44,6 +44,19 @@ constexpr std::uint32_t GroupLists = 0x02980000;
 constexpr std::uint32_t GroupListStride = 0x200;
 constexpr std::uint32_t GroupListBitmap = 0x025C0B10;
 constexpr unsigned MaxGroupLists = 250;
+// The user directory: the number of users; their IDs sorted as in the
+// contact ID table, the index being the user's place in the records; the
+// records packed one after another across banks: call type, BCD ID, flags,
+// then name, city and callsign, each zero-terminated.
+constexpr std::uint32_t UserCount = 0x04840000;
+constexpr unsigned MaxUsers = 500'000;
+constexpr std::uint32_t UserIds = 0x04000000;
+constexpr std::uint32_t UserIdsPerBank = 16'000;
+constexpr std::uint32_t UserRecords = 0x05500000;
+constexpr std::uint32_t UserRecordBank = 100'000;
+constexpr std::uint32_t UserBankStride = 0x00040000;
+constexpr std::uint32_t UserHeaderBytes = 6;
+constexpr std::uint32_t UserCityBytes = 15;
 constexpr std::uint32_t RadioIds = 0x02580000;
 constexpr std::uint32_t RadioIdBytes = 0x20;
 constexpr std::uint32_t RadioIdBitmap = 0x024C1320;
@@ -59,6 +72,16 @@ constexpr std::uint16_t CtcssTable[] = {625, 670, 693, 719, 744, 770, 797, 825, 
     1738, 1773, 1799, 1835, 1862, 1899, 1928, 1966, 1995, 2035, 2065, 2107, 2181, 2257, 2291, 2336, 2418, 2503,
     2541};
 constexpr std::uint8_t CustomCtcss = 51;
+
+// An ID as BCD digits, which sort like the number.
+std::uint32_t bcdKey(std::uint32_t id)
+{
+    std::uint32_t key = 0;
+    for (std::uint32_t v = id, shift = 0; shift < 32; v /= 10, shift += 4) {
+        key |= (v % 10) << shift;
+    }
+    return key;
+}
 
 std::uint16_t le16(const std::uint8_t *p)
 {
@@ -303,11 +326,7 @@ std::optional<dmr::Target> D878Uv2Codeplug::contact(std::uint32_t index)
 
 bool D878Uv2Codeplug::contactName(std::uint32_t id, bool group, std::span<char, ContactNameBytes + 1> name)
 {
-    // The ID as BCD digits, which sort like the number.
-    std::uint32_t key = 0;
-    for (std::uint32_t v = id, shift = 0; shift < 32; v /= 10, shift += 4) {
-        key |= (v % 10) << shift;
-    }
+    const std::uint32_t key = bcdKey(id);
     // The first entry with this ID.
     std::uint32_t low = 0;
     std::uint32_t high = MaxContacts;
@@ -350,6 +369,68 @@ bool D878Uv2Codeplug::contactName(std::uint32_t id, bool group, std::span<char, 
         return n != 0;
     }
     return false;
+}
+
+bool D878Uv2Codeplug::dmrUser(std::uint32_t id, DmrUser &user)
+{
+    std::uint8_t c[4];
+    if (!readable(read(UserCount, c))) {
+        return false;
+    }
+    const std::uint32_t count = le32(c);
+    if (count == 0 || count > MaxUsers) {
+        return false;
+    }
+    const std::uint32_t key = bcdKey(id);
+    const auto entryAt = [](std::uint32_t i) { return UserIds + (i / UserIdsPerBank) * UserBankStride + (i % UserIdsPerBank) * ContactIdBytes; };
+    std::uint32_t low = 0;
+    std::uint32_t high = count;
+    std::uint8_t e[ContactIdBytes];
+    while (low < high) {
+        const std::uint32_t mid = (low + high) / 2;
+        if (!readable(read(entryAt(mid), e))) {
+            return false;
+        }
+        if ((le32(e) >> 1) < key) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    if (low >= count || !readable(read(entryAt(low), e)) || (le32(e) >> 1) != key) {
+        return false;
+    }
+    // The record, which may run over into the next bank.
+    std::uint8_t r[UserHeaderBytes + ContactNameBytes + 1 + UserCityBytes + 1 + CallsignBytes + 1];
+    std::uint32_t at = le32(&e[4]);
+    for (std::size_t done = 0; done < sizeof r;) {
+        const std::uint32_t inBank = UserRecordBank - at % UserRecordBank;
+        const std::size_t n = std::min<std::size_t>(sizeof r - done, inBank);
+        if (!readable(read(UserRecords + (at / UserRecordBank) * UserBankStride + at % UserRecordBank, std::span(r + done, n)))) {
+            return false;
+        }
+        done += n;
+        at += static_cast<std::uint32_t>(n);
+    }
+    // Name, city, callsign: each up to its length and zero-terminated.
+    std::size_t i = UserHeaderBytes;
+    const auto take = [&r, &i](std::span<char> out, std::size_t most) {
+        std::size_t n = 0;
+        for (; i < sizeof r && r[i] != 0; ++i) {
+            if (n < most && n + 1 < out.size()) {
+                out[n++] = static_cast<char>(r[i]);
+            }
+        }
+        if (!out.empty()) {
+            out[n] = '\0';
+        }
+        ++i;
+    };
+    char city[UserCityBytes + 1];
+    take(user.name, ContactNameBytes);
+    take(city, UserCityBytes);
+    take(user.callsign, CallsignBytes);
+    return user.name[0] != '\0' || user.callsign[0] != '\0';
 }
 
 std::size_t D878Uv2Codeplug::receiveGroups(std::uint8_t list, std::span<std::uint32_t> out)
