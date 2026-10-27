@@ -37,3 +37,9 @@ SPDX-License-Identifier = "MIT"
 path = ["third_party/spleen/**"]
 SPDX-FileCopyrightText = "2018-2024 Frederic Cambus"
 SPDX-License-Identifier = "BSD-2-Clause"
+
+# Docs added with codeplug programming.
+[[annotations]]
+path = ["docs/hw-tests/programming.md"]
+SPDX-FileCopyrightText = "2026 Henri Lavikainen"
+SPDX-License-Identifier = "MIT"
