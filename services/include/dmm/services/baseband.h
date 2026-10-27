@@ -63,8 +63,8 @@ enum class BasebandWorkMode : std::uint8_t
 ///   The caller keys the RF path. False if the chip did not take it.
 /// - endDigitalCall(settings, lc): sends the call's terminator; the
 ///   AllSent event follows once it has gone out.
-/// - wakeRepeater(settings, source): sends the control block that wakes
-///   an idle repeater.
+/// - wakeRepeater(settings, source): sends the control blocks that wake
+///   an idle repeater; the AllSent event follows once they have gone out.
 /// - debugCommand(text), debugHelp(): the chip's own console commands, for
 ///   experiments; results go to the log, also when start() failed. False
 ///   if @p text is none of them.

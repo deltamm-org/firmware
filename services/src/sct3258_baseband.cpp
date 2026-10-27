@@ -23,6 +23,8 @@ constexpr std::uint8_t ProcessAnalog = Sct3258::ProcessAnalog;
 // access channel report before the slot counts as verified, three repeated
 // LC headers; every CSBK and idle burst reported.
 constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x0C, 0x00};
+// Repeater wake-up bursts per try.
+constexpr int WakeBursts = 5;
 // DMR_CALL_SLOT: receive on both slots (direct channels); 1 or 2 is that
 // slot alone.
 constexpr std::uint8_t BothSlots = 3;
@@ -454,8 +456,17 @@ bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::ui
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | settings.slot)};
     const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkTransmit, 0, 0};
     const auto wake = dmr::repeaterWake(source);
-    return m_chip.control(Sct3258::TypeDmr, slot) == 0 && m_chip.control(work) == 0 &&
-        m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake);
+    if (m_chip.control(Sct3258::TypeDmr, slot) != 0 || m_chip.control(work) != 0) {
+        return false;
+    }
+    // Several in a row when asked for: a repeater that is just starting
+    // its receiver may miss the first.
+    for (int i = 0; i < WakeBursts; ++i) {
+        if (!m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake)) {
+            return i > 0;
+        }
+    }
+    return true;
 }
 
 bool Sct3258Baseband::nextEvent(dmr::Event &event)

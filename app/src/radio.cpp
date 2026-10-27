@@ -76,8 +76,9 @@ bool callIgnored = false;
 constexpr std::uint32_t AllCallId = 0xFFFFFF;
 // How long the end of a DMR transmission may take to go out.
 constexpr os::Ticks DmrEndMs = 1000;
-// How long to wait for a woken repeater's timing.
-constexpr os::Ticks RepeaterWakeMs = 1000;
+// How long to wait for a woken repeater's timing, and how often to try.
+constexpr os::Ticks RepeaterWakeMs = 1500;
+constexpr int RepeaterWakeTries = 3;
 bool timingSeen = false;
 bool idleLogged = false;
 services::BatterySaver saver;
@@ -547,6 +548,12 @@ bool awaitDmrEvent(services::dmr::Event::Kind kind, os::Ticks ms)
     return seen;
 }
 
+[[gnu::noinline]] void logWakeTry(int attempt, bool sent, bool answered)
+{
+    log::info("dmr") << "repeater wake-up " << attempt << ": " << (!sent ? "not sent" : answered ? "answered"
+                                                                                                 : "no answer");
+}
+
 // A refused PTT: the reason to the log, a short one on the screen.
 [[gnu::noinline]] void refused(const char *tag, const char *why, const char *shown)
 {
@@ -603,10 +610,16 @@ void startDigitalTransmit(services::FmChannel channel)
     withBaseband([&](auto &b) {
         // An idle repeater is woken first, then its timing awaited.
         if (dmrRepeater && !timingFound) {
-            ok = b.wakeRepeater(dmrSettings, ownId) && awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs);
-            fm->endTransmit();
-            ok = ok && b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater) && fm->receive(fmChannel, 1) == nullptr &&
-                awaitDmrEvent(services::dmr::Event::Kind::SlotFound, RepeaterWakeMs);
+            ok = false;
+            for (int t = 0; t < RepeaterWakeTries && !ok; ++t) {
+                const bool keyed = t == 0 || fm->transmit(channel, powerLevel) == nullptr;
+                const bool sent = keyed && b.wakeRepeater(dmrSettings, ownId) &&
+                    awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs);
+                fm->endTransmit();
+                ok = sent && b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater) &&
+                    fm->receive(fmChannel, 1) == nullptr && awaitDmrEvent(services::dmr::Event::Kind::SlotFound, RepeaterWakeMs);
+                logWakeTry(t + 1, sent, ok);
+            }
             ok = ok && fm->transmit(channel, powerLevel) == nullptr;
         }
         ok = ok && b.startDigitalCall(dmrSettings, callLc, channel.transmitHz);
