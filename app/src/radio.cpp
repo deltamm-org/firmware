@@ -377,6 +377,14 @@ void onDmrEvent(const services::dmr::Event &e)
         break;
     case Kind::AllSent:
         break;
+    case Kind::Other: {
+        lib::StaticString<64> bytes;
+        for (std::size_t i = 0; i < e.length; ++i) {
+            bytes << lib::hex(e.data[i], 2) << ' ';
+        }
+        log::debug("dmr") << "report " << lib::hex(e.raw, 2) << ": " << bytes.view();
+        break;
+    }
     }
 }
 

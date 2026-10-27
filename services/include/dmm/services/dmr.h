@@ -79,6 +79,9 @@ struct Event
         CarrierLost,
         /// Everything queued for sending has gone out.
         AllSent,
+        /// A report the baseband's service does not decode; its first
+        /// bytes are in @c data, for diagnostics.
+        Other,
     };
     static constexpr std::size_t MaxData = 12;
 

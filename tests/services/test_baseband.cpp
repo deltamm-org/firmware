@@ -256,7 +256,7 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
     // Without a calibration source, no DC offset or demodulator gain.
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x10, 0x0C});
     CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x1A, 0x02});
-    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x79, 0x41, 0x00, 0x13, 0x04, 0x00});
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x79, 0x41, 0x00, 0x13, 0x0C, 0x00});
     CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x08, 0x77, 0x07});
     CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
     CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
@@ -284,8 +284,8 @@ TEST_CASE("the chip's reports become DMR events")
     Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
     REQUIRE(baseband.start());
 
-    chip.queue(0x30, {0x7F, 0xC9}); // repeater timing, verified, inbound busy, next slot 1
-    chip.queue(0x30, {0x1B, 0x05}); // voice sync: not an event of its own
+    chip.queue(0x30, {0x7F, 0xA9}); // repeater timing, verified, inbound busy, next slot 1
+    chip.queue(0x30, {0x1B, 0x05}); // voice sync: passed on as an undecoded report
     chip.queue(0x30, {0x77, 0x01, 0x43, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x89, 0x74, 0xCB, 0xB1});
     chip.queue(0x30, {0x77, 0x01, 0x43, 0x11, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x89, 0x74, 0xCB, 0xB1});
     chip.queue(0x30, {0x1B, 0x08}); // timing lost
@@ -299,6 +299,10 @@ TEST_CASE("the chip's reports become DMR events")
     CHECK_FALSE(e.inverted);
     CHECK(e.inboundBusy);
     CHECK(e.nextSlot == 1);
+
+    REQUIRE(baseband.nextEvent(e));
+    CHECK(e.kind == Kind::Other);
+    CHECK(e.data[0] == 0x1B);
 
     REQUIRE(baseband.nextEvent(e));
     CHECK(e.kind == Kind::Burst);

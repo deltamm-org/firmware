@@ -21,8 +21,8 @@ constexpr std::uint8_t ProcessAnalog = Sct3258::ProcessAnalog;
 // DMR call options: the chip does squelch detection, direct mode without a
 // reverse channel (repeaters work with it too), no voice delay; one good
 // access channel report before the slot counts as verified, three repeated
-// LC headers; every CSBK reported.
-constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x04, 0x00};
+// LC headers; every CSBK and idle burst reported.
+constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x0C, 0x00};
 // DMR_CALL_SLOT: receive on both slots (direct channels).
 constexpr std::uint8_t BothSlots = 3;
 // CARRIER_READY: a carrier is there; with the chip's own squelch detection
@@ -34,8 +34,10 @@ constexpr std::uint8_t EventCarrierFound = 12;
 constexpr std::uint8_t EventCarrierLost = 13;
 // DMR_SLOT_FOUND bits.
 constexpr std::uint8_t SlotFoundBaseStation = 0x80;
-constexpr std::uint8_t SlotFoundVerified = 0x40;
-constexpr std::uint8_t SlotFoundInverted = 0x20;
+// The packet interface's example reports "verified, no inversion" as 0xA9,
+// which puts the verified flag in bit 5 and the inversion flag in bit 6.
+constexpr std::uint8_t SlotFoundVerified = 0x20;
+constexpr std::uint8_t SlotFoundInverted = 0x40;
 constexpr std::uint8_t SlotFoundInboundBusy = 0x08;
 constexpr std::uint8_t SlotFoundChannel2 = 0x04;
 // DIGC_DATA_FRAME property: voice burst, else data of the low four bits'
@@ -297,6 +299,16 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
 bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e) const
 {
     using Kind = dmr::Event::Kind;
+    // Anything not decoded below goes out raw, for diagnostics.
+    const auto other = [&p, &e] {
+        e.kind = Kind::Other;
+        e.raw = p.type;
+        e.length = static_cast<std::uint8_t>(p.length < dmr::Event::MaxData ? p.length : dmr::Event::MaxData);
+        for (std::size_t i = 0; i < e.length; ++i) {
+            e.data[i] = p.fields[i];
+        }
+        return true;
+    };
     if (p.length >= 2 && p.fields[0] == Sct3258::NewEvent) {
         switch (p.fields[1]) {
         case EventSyncLost:
@@ -309,7 +321,7 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
             e.kind = Kind::CarrierLost;
             return true;
         default:
-            return false;
+            return other();
         }
     }
     if (p.length >= 2 && p.fields[0] == Sct3258::AckMessage) {
@@ -334,7 +346,7 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
         at = 2;
     }
     if (at + 3 > p.length || p.fields[at] != Sct3258::DataFrame) {
-        return false;
+        return other();
     }
     const std::uint8_t property = p.fields[at + 1];
     const std::size_t length = p.fields[at + 2];
