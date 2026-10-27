@@ -111,15 +111,25 @@ drawing goes straight to the panel.
 ## Storage
 
 The data flash is read through `services::Storage`, which follows the
-radio's bad-block table. It is read only: the driver has no write or erase
-operation, and the tasks that read it share it behind a lock.
+radio's bad-block table; the tasks that read it share it behind a lock.
+Only the codeplug is written, by `D878Uv2CodeplugWriter`, for the PC
+programming protocol. Each 128 KB codeplug block is kept twice, and the
+last 8 bytes of a copy mark it: 55 55 AA AA in bytes 4-7 when valid, AA AA
+55 55 in bytes 0-3 once superseded. A write fills the other copy page by
+page from the valid one with the new data on top, marks it valid, then
+marks the old one superseded, so an interrupted write leaves the old
+block. Writes are limited to the codeplug's blocks, the contact ID table
+and callsign limits among them; calibration and the radio's own data are
+never written.
 
 ## PC protocol
 
 The radio has two USB serial ports: a data port and the log. The data
 port speaks DeltaMM's own binary protocol (`services/data_link.h`):
 requests start with 0xDD, which no command of the radio's programming
-protocol starts with.
+protocol starts with. The same port speaks that programming protocol
+(`d878uv2_programming`). In program mode the port carries only that
+protocol, and the link task looks at it every millisecond.
 
 ## Update mode
 
