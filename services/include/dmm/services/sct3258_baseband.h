@@ -52,6 +52,12 @@ public:
         std::array<std::uint8_t, SpeakerVolumeSteps> speakerSteps;
         /// The registers the calibrated codec trims go to.
         std::array<CodecRegister, 3> trims;
+        /// SQ_LEVEL for the chip's own carrier squelch, on digital and on
+        /// analog channels: gain adjust, LNA, forced RF gain, check
+        /// interval, then the digital and analog noise thresholds (high,
+        /// low; big-endian words). Empty: the chip's defaults.
+        std::span<const std::uint8_t> digitalSquelch;
+        std::span<const std::uint8_t> analogSquelch;
     };
 
     /// The radio's calibrated values for the chip and codec.

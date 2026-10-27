@@ -40,6 +40,8 @@ constexpr Sct3258Baseband::Audio TestAudio{
     .speakerMuted = 0x40,
     .speakerSteps = {0x3A, 0x3C, 0x3F, 2, 6, 8, 10, 12, 13, 15, 16, 18, 20, 22, 23},
     .trims = {{{1, 0x12}, {1, 0x13}, {1, 0x3C}}},
+    .digitalSquelch = {},
+    .analogSquelch = {},
 };
 
 std::optional<Sct3258Baseband::Trims> testTrims()

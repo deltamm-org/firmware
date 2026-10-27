@@ -100,6 +100,19 @@ const char *bootProblem(Sct3258::BootResult r)
     return "?";
 }
 
+// Sends the board's SQ_LEVEL, if it gives one.
+bool sendSquelch(Sct3258 &chip, std::span<const std::uint8_t> level)
+{
+    if (level.empty() || level.size() > 12) {
+        return level.empty();
+    }
+    std::uint8_t field[1 + 12] = {Sct3258::SquelchLevel};
+    for (std::size_t i = 0; i < level.size(); ++i) {
+        field[1 + i] = level[i];
+    }
+    return chip.control(std::span(field, 1 + level.size())) == 0;
+}
+
 } // namespace
 
 Sct3258Baseband::Sct3258Baseband(Sct3258 &chip, BasebandBoard &board, std::span<const std::uint8_t> bootBlob,
@@ -214,6 +227,9 @@ bool Sct3258Baseband::setAnalog(bool wide)
     if (!selectVocoder(VocoderAnalog)) {
         return false;
     }
+    if (!sendSquelch(m_chip, m_audio.analogSquelch)) {
+        warn("analog squelch levels not taken");
+    }
     const std::uint8_t process[] = {Sct3258::ProcessMode, ProcessAnalog};
     std::uint8_t config[2 + 10] = {Sct3258::AnalogConfig, wide ? AnalogWide : AnalogNarrow};
     for (std::size_t i = 0; i < trims->analogGains.size(); ++i) {
@@ -251,6 +267,9 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
         if (m_chip.control(offset) != 0 || m_chip.control(gain) != 0) {
             warn("digital calibration not taken");
         }
+    }
+    if (!sendSquelch(m_chip, m_audio.digitalSquelch)) {
+        warn("digital squelch levels not taken");
     }
     const std::uint8_t process[] = {Sct3258::ProcessMode, Sct3258::ProcessLayer2};
     if (m_chip.control(process) != 0) {

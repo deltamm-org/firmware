@@ -59,6 +59,12 @@ constexpr CodecWrite Transmit[] = {
     {Page1, LeftMicPositive, MicIn1Left20k},
 };
 
+// The baseband's own carrier squelch: no gain adjust, no forced RF gain,
+// a check every 80 ms (60 units), noise thresholds 0x0F3C high and 0x0A8C
+// low. On analog channels the analog thresholds are off.
+constexpr std::uint8_t DigitalSquelch[] = {0x00, 0x00, 0x00, 0x3C, 0x0F, 0x3C, 0x0A, 0x8C, 0x0F, 0x3C, 0x0A, 0x8C};
+constexpr std::uint8_t AnalogSquelch[] = {0x00, 0x00, 0x00, 0x3C, 0x0F, 0x3C, 0x0A, 0x8C, 0xFF, 0xFF, 0xFF, 0xFF};
+
 // The driver gain spans -6 to +23 dB over the volume steps, more finely at
 // the bottom.
 constexpr dmm::services::Sct3258Baseband::Audio Audio{
@@ -71,6 +77,8 @@ constexpr dmm::services::Sct3258Baseband::Audio Audio{
     .speakerSteps = {hplDb(-6), hplDb(-4), hplDb(-1), hplDb(2), hplDb(6), hplDb(8), hplDb(10), hplDb(12), hplDb(13),
         hplDb(15), hplDb(16), hplDb(18), hplDb(20), hplDb(22), hplDb(23)},
     .trims = {{{Page1, LeftOutGain}, {Page1, RightOutGain}, {Page1, RightMicPgaVolume}}},
+    .digitalSquelch = DigitalSquelch,
+    .analogSquelch = AnalogSquelch,
 };
 
 void outputLow(Pin pin)

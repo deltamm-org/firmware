@@ -74,6 +74,7 @@ public:
     static constexpr std::uint8_t NewEvent = 0x1B;
     static constexpr std::uint8_t DemodGain = 0x1C;
     static constexpr std::uint8_t DcOffset = 0x39;
+    static constexpr std::uint8_t SquelchLevel = 0x6C;
     static constexpr std::uint8_t ReportField = 0x1D;
     static constexpr std::uint8_t SyncMissCount = 0x2F;
     static constexpr std::uint8_t DataFrame = 0x43;
