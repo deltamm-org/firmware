@@ -486,8 +486,14 @@ bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::ui
 bool Sct3258Baseband::sendFirstFrame(std::uint8_t colourCode, std::uint8_t property, std::span<const std::uint8_t> data)
 {
     // Just after the switch to transmit the chip may let a frame pass
-    // without a word; it is handed over again until taken.
+    // without a word, the first time after start-up for one; it is handed
+    // over again until taken.
+    // A chip that let it pass is put back to receive and into transmit
+    // again first: it takes no frame until then.
     for (int i = 0; i < FirstFrameTries; ++i) {
+        if (i > 0 && (!setWorkMode(BasebandWorkMode::Receive) || !enterTransmit())) {
+            return false;
+        }
         if (m_chip.sendFrame(colourCode, property, data, FirstFrameMs)) {
             if (i > 0) {
                 log::info("baseband") << "frame taken on try " << i + 1;
