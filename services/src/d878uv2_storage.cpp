@@ -26,6 +26,8 @@ StorageResult fromNand(SpiNand::Result r)
         return StorageResult::Corrected;
     case SpiNand::Result::Uncorrectable:
         return StorageResult::Uncorrectable;
+    case SpiNand::Result::Failed:
+        return StorageResult::Failed;
     case SpiNand::Result::Timeout:
         break;
     }
@@ -60,6 +62,8 @@ const char *resultName(StorageResult r)
         return "no chip";
     case StorageResult::OutOfRange:
         return "out of range";
+    case StorageResult::Failed:
+        return "failed";
     }
     return "?";
 }

@@ -11,13 +11,14 @@
 
 namespace dmm::drivers::storage {
 
-/// A serial NAND flash with 2 KB pages and on-chip ECC, read only: the
-/// driver has no program or erase operation. Commands from the common SPI
-/// NAND command set (Toshiba serial NAND datasheets).
+/// A serial NAND flash with 2 KB pages, 64 pages to an erase block and
+/// on-chip ECC. Commands from the common SPI NAND command set (Toshiba
+/// serial NAND datasheets).
 class SpiNand
 {
 public:
     static constexpr std::uint32_t PageBytes = 2048;
+    static constexpr std::uint32_t PagesPerBlock = 64;
     static constexpr unsigned LoadTries = 4;
 
     struct Id
@@ -37,6 +38,9 @@ public:
         Uncorrectable,
         /// The chip did not finish loading the page.
         Timeout,
+        /// The chip reported that an erase or a program failed: a worn
+        /// block.
+        Failed,
     };
 
     /// @p delayUs waits at least the given number of microseconds.
@@ -56,8 +60,23 @@ public:
     /// uncorrectable is loaded up to LoadTries times.
     Result read(std::uint32_t page, std::uint16_t column, std::uint8_t *data, std::size_t count);
 
+    /// Lifts the chip's block protection, which it may come up with; call
+    /// before erasing or programming.
+    void unlock();
+
+    /// Erases the 64-page block holding @p page to all 0xFF.
+    Result eraseBlock(std::uint32_t page);
+
+    /// Programs @p count bytes into page @p page from byte @p column on.
+    /// Programming only clears bits, so the page is normally erased first;
+    /// a page programmed more than once reads back flagged by its ECC.
+    Result program(std::uint32_t page, std::uint16_t column, const std::uint8_t *data, std::size_t count);
+
 private:
     Result loadPage(std::uint32_t page);
+    void writeEnable();
+    // Waits for an operation to finish; the status, or nothing on timeout.
+    bool waitReady(unsigned maxPolls, std::uint8_t &status);
 
     hal::SpiNandBus &m_bus;
     lib::FnRef<void(unsigned)> m_delayUs;

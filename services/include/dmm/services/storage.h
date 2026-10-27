@@ -22,6 +22,8 @@ enum class StorageResult : std::uint8_t
     NoChip,
     /// Past the end of the chip.
     OutOfRange,
+    /// The chip reported that an erase or a program failed.
+    Failed,
 };
 
 constexpr bool usable(StorageResult r)

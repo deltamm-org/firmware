@@ -85,7 +85,7 @@ TEST_CASE("a page flagged uncorrectable is loaded again, a few times at most")
     CHECK(chip.pageLoads == static_cast<int>(SpiNand::LoadTries));
 }
 
-TEST_CASE("the driver never sends a write, program or erase command")
+TEST_CASE("reading never sends a write, program or erase command")
 {
     FakeSpiNand chip;
     SpiNand nand(chip, noDelay);
@@ -98,4 +98,45 @@ TEST_CASE("the driver never sends a write, program or erase command")
     for (std::uint8_t op : chip.opcodes) {
         CHECK(std::find(std::begin(allowed), std::end(allowed), op) != std::end(allowed));
     }
+}
+
+TEST_CASE("erase and program need the blocks unlocked, and program clears bits only")
+{
+    FakeSpiNand chip;
+    SpiNand nand(chip, noDelay);
+    REQUIRE(nand.identify());
+    std::uint8_t data[2048];
+    std::fill(std::begin(data), std::end(data), 0x5A);
+    // Locked, as the chip comes up: refused.
+    CHECK(nand.program(64, 0, data, sizeof data) == SpiNand::Result::Failed);
+    nand.unlock();
+    CHECK(chip.blockLock == 0);
+    CHECK(nand.program(64, 0, data, sizeof data) == SpiNand::Result::Ok);
+    std::uint8_t back[2048] = {};
+    CHECK(nand.read(64, 0, back, sizeof back) == SpiNand::Result::Ok);
+    CHECK(std::equal(std::begin(data), std::end(data), std::begin(back)));
+    // A second program of the same page clears more bits and breaks its ECC.
+    const std::uint8_t more[] = {0x0F};
+    CHECK(nand.program(64, 10, more, 1) == SpiNand::Result::Ok);
+    CHECK(nand.read(64, 10, back, 1) == SpiNand::Result::Uncorrectable);
+    CHECK(back[0] == (0x5A & 0x0F));
+    // Erase works on the whole block holding the page.
+    CHECK(nand.eraseBlock(100) == SpiNand::Result::Ok);
+    CHECK(nand.read(64, 0, back, 4) == SpiNand::Result::Ok);
+    CHECK(back[0] == 0xFF);
+    CHECK(chip.erases == 1);
+}
+
+TEST_CASE("a failed erase or program is reported")
+{
+    FakeSpiNand chip;
+    SpiNand nand(chip, noDelay);
+    REQUIRE(nand.identify());
+    nand.unlock();
+    chip.failErases[128] = true;
+    chip.failPrograms[200] = true;
+    CHECK(nand.eraseBlock(130) == SpiNand::Result::Failed);
+    const std::uint8_t one[] = {0x00};
+    CHECK(nand.program(200, 0, one, 1) == SpiNand::Result::Failed);
+    CHECK(nand.program(201, 0, one, 1) == SpiNand::Result::Ok);
 }

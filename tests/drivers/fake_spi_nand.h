@@ -9,9 +9,12 @@
 #include <map>
 #include <vector>
 
-// A Toshiba-style SPI NAND chip: understands read ID, page read, get
-// feature and dual-output cache read, and records every command byte it
-// sees. Unwritten bytes read 0xFF.
+// A Toshiba-style SPI NAND chip: understands read ID, page read, get and
+// set feature, dual-output cache read, write enable, program load and
+// execute and block erase, and records every command byte it sees.
+// Unwritten bytes read 0xFF. Erase and program need write enable and
+// unlocked blocks; programming only clears bits, and a page programmed
+// more than once loads as uncorrectable, as on the real chip.
 class FakeSpiNand final : public dmm::hal::SpiNandBus
 {
 public:
@@ -27,6 +30,14 @@ public:
     std::map<std::uint32_t, std::uint8_t> memory;
     std::vector<std::uint8_t> opcodes;
     int pageLoads = 0;
+    /// The block lock register; the chip comes up with every block locked.
+    std::uint8_t blockLock = 0x38;
+    /// Pages whose program, and blocks (first page) whose erase, fail.
+    std::map<std::uint32_t, bool> failPrograms;
+    std::map<std::uint32_t, bool> failErases;
+    /// Times each page was programmed since its block's last erase.
+    std::map<std::uint32_t, int> programs;
+    int erases = 0;
 
     void put(std::uint32_t address, const std::vector<std::uint8_t> &bytes)
     {
@@ -52,6 +63,48 @@ public:
                 --f->second;
                 m_flagged = true;
             }
+            if (auto p = programs.find(m_page); p != programs.end() && p->second > 1) {
+                m_flagged = true;
+            }
+        } else if (m_command.size() == 1 && m_command[0] == 0x06) {
+            m_writeEnabled = true;
+        } else if (m_command.size() == 3 && m_command[0] == 0x1F && m_command[1] == 0xA0) {
+            blockLock = m_command[2];
+        } else if (m_command.size() >= 3 && m_command[0] == 0x02) {
+            m_cache.assign(2048, 0xFF);
+            const std::uint32_t column = static_cast<std::uint32_t>(m_command[1] << 8 | m_command[2]);
+            for (std::size_t i = 3; i < m_command.size() && column + i - 3 < 2048; ++i) {
+                m_cache[column + i - 3] = m_command[i];
+            }
+        } else if (m_command.size() == 4 && m_command[0] == 0x10) {
+            const auto page = static_cast<std::uint32_t>(m_command[1] << 16 | m_command[2] << 8 | m_command[3]);
+            m_failed = !m_writeEnabled || blockLock != 0 || failPrograms.count(page) != 0;
+            if (!m_failed) {
+                for (std::uint32_t i = 0; i < 2048; ++i) {
+                    if (m_cache[i] != 0xFF) {
+                        const auto it = memory.find(page * 2048 + i);
+                        memory[page * 2048 + i] = static_cast<std::uint8_t>((it == memory.end() ? 0xFF : it->second) & m_cache[i]);
+                    }
+                }
+                ++programs[page];
+            }
+            m_failBit = 0x08;
+            m_writeEnabled = false;
+            m_busyLeft = busyPolls;
+        } else if (m_command.size() == 4 && m_command[0] == 0xD8) {
+            const auto page = static_cast<std::uint32_t>(m_command[1] << 16 | m_command[2] << 8 | m_command[3]);
+            const std::uint32_t first = page - page % 64;
+            m_failed = !m_writeEnabled || blockLock != 0 || failErases.count(first) != 0;
+            if (!m_failed) {
+                memory.erase(memory.lower_bound(first * 2048), memory.lower_bound((first + 64) * 2048));
+                for (std::uint32_t p = first; p < first + 64; ++p) {
+                    programs.erase(p);
+                }
+                ++erases;
+            }
+            m_failBit = 0x04;
+            m_writeEnabled = false;
+            m_busyLeft = busyPolls;
         }
         m_selected = false;
     }
@@ -91,6 +144,10 @@ private:
                 --m_busyLeft;
                 return 0x01;
             }
+            if (m_failed) {
+                m_failed = false;
+                return m_failBit;
+            }
             if (m_flagged) {
                 return 0x20;
             }
@@ -112,4 +169,8 @@ private:
     int m_busyLeft = 0;
     bool m_flagged = false;
     int m_idIndex = 0;
+    bool m_writeEnabled = false;
+    bool m_failed = false;
+    std::uint8_t m_failBit = 0;
+    std::vector<std::uint8_t> m_cache = std::vector<std::uint8_t>(2048, 0xFF);
 };
