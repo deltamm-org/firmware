@@ -9,6 +9,7 @@
 #include "dmm/services/fm_transceiver.h"
 
 #include <cstdint>
+#include <span>
 #include <variant>
 
 namespace dmm::app::radio {
@@ -151,5 +152,9 @@ void start(board::Fm &fm, board::Baseband *baseband);
 /// Queues a message for the radio task; false when the queue is full or
 /// the task has not started.
 bool post(const Message &message);
+
+/// The talkgroups heard besides the channel's own contact (the channel's
+/// receive group list); set before posting the channel.
+void setReceiveGroups(std::span<const std::uint32_t> ids);
 
 } // namespace dmm::app::radio

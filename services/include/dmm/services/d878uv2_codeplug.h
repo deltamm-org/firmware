@@ -52,6 +52,7 @@ public:
     std::size_t zoneChannels(std::uint8_t zone, std::span<std::uint16_t> out) override;
     std::uint16_t zoneSelection(std::uint8_t zone, bool sideB) override;
     bool contactName(std::uint32_t id, bool group, std::span<char, ContactNameBytes + 1> name) override;
+    std::size_t receiveGroups(std::uint8_t list, std::span<std::uint32_t> out) override;
 
     /// Contact @p index, if it is in use.
     std::optional<dmr::Target> contact(std::uint32_t index);

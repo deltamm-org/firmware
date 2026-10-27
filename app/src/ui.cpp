@@ -801,7 +801,14 @@ void uiMain(void *)
         if (channels == nullptr || !channels->current()) {
             return;
         }
-        radio::post(radio::UseChannel{*channels->current(), channels->squelch()});
+        const Channel &c = *channels->current();
+        static std::uint32_t groups[CodeplugSource::MaxReceiveGroups];
+        std::size_t n = 0;
+        if (c.digital() && c.dmr.groupList != services::dmr::ChannelSettings::NoGroupList && codeplug != nullptr) {
+            n = codeplug->receiveGroups(c.dmr.groupList, groups);
+        }
+        radio::setReceiveGroups(std::span(groups, n));
+        radio::post(radio::UseChannel{c, channels->squelch()});
         if (view == View::Standby) {
             redrawView();
         }

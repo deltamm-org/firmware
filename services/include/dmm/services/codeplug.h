@@ -102,6 +102,9 @@ public:
     /// The name of the DMR contact with @p id, a talkgroup when @p group,
     /// zero-terminated; false when there is none.
     virtual bool contactName(std::uint32_t id, bool group, std::span<char, ContactNameBytes + 1> name) = 0;
+    static constexpr std::size_t MaxReceiveGroups = 64;
+    /// The talkgroup IDs in receive group list @p list; returns how many.
+    virtual std::size_t receiveGroups(std::uint8_t list, std::span<std::uint32_t> out) = 0;
 
 protected:
     ~CodeplugSource() = default;

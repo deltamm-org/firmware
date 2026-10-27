@@ -15,6 +15,7 @@
 #include "dmm/services/power.h"
 #include "dmm/services/squelch_gate.h"
 
+#include <algorithm>
 #include <span>
 #include <string_view>
 
@@ -66,6 +67,13 @@ bool timingFound = false;
 services::dmr::Target targetOverride;
 std::uint32_t ownIdOverride = 0;
 services::dmr::FullLc callLc;
+// The receive group list's talkgroups, set by the UI task.
+os::Mutex groupsLock;
+std::uint32_t receiveGroupIds[services::CodeplugSource::MaxReceiveGroups];
+std::size_t receiveGroupCount = 0;
+// The call being left muted because it is not for this radio.
+bool callIgnored = false;
+constexpr std::uint32_t AllCallId = 0xFFFFFF;
 // How long the end of a DMR transmission may take to go out.
 constexpr os::Ticks DmrEndMs = 1000;
 // How long to wait for a woken repeater's timing.
@@ -303,8 +311,38 @@ void fmReceive()
                      << (dmrRepeater ? static_cast<int>(dmrSettings.slot) : 0) << (ok ? "" : "; baseband refused");
 }
 
+// Whether a call is for this radio: to the channel's or chosen
+// talkgroup, one in the receive group list, its own ID or everyone. With
+// no talkgroup or ID set at all (console listening) every call is heard.
+[[gnu::noinline]] bool forUs(const services::dmr::FullLc &lc)
+{
+    using services::dmr::CallType;
+    const std::uint32_t ownId = ownIdOverride != 0 ? ownIdOverride : dmrSettings.ownId;
+    if (lc.destination == AllCallId) {
+        return true;
+    }
+    if (lc.privateCall()) {
+        return ownId == 0 || lc.destination == ownId;
+    }
+    if (!lc.groupCall()) {
+        return true;
+    }
+    const auto talkgroup = [&lc](const services::dmr::Target &t) {
+        return t.id != 0 && t.type == CallType::Group && t.id == lc.destination;
+    };
+    if (talkgroup(dmrSettings.contact) || talkgroup(targetOverride)) {
+        return true;
+    }
+    groupsLock.lock();
+    const std::size_t groups = receiveGroupCount;
+    const bool listed = std::find(receiveGroupIds, receiveGroupIds + groups, lc.destination) != receiveGroupIds + groups;
+    groupsLock.unlock();
+    return listed || (dmrSettings.contact.id == 0 && targetOverride.id == 0 && groups == 0);
+}
+
 void endCall(const char *why)
 {
+    callIgnored = false;
     if (!inCall) {
         return;
     }
@@ -385,6 +423,13 @@ void onDmrEvent(const services::dmr::Event &e)
             endCall("ended");
             break;
         }
+        if (!inCall && !forUs(*lc)) {
+            if (!callIgnored) {
+                callIgnored = true;
+                log::info("dmr") << "call from " << lc->source << " to " << lc->destination << ": not for us";
+            }
+            break;
+        }
         if (!inCall) {
             inCall = true;
             callStarted = os::nowMs();
@@ -408,6 +453,9 @@ void onDmrEvent(const services::dmr::Event &e)
         [[fallthrough]];
     case Kind::CarrierLost:
         log::debug("dmr") << (e.kind == Kind::CarrierFound ? "carrier found" : "carrier lost");
+        if (e.kind == Kind::CarrierLost) {
+            endCall("lost");
+        }
         break;
     case Kind::AllSent:
         break;
@@ -910,6 +958,14 @@ void start(board::Fm &f, board::Baseband *b)
     fm = &f;
     baseband = b;
     radioTask.start("radio", 7, radioMain, nullptr);
+}
+
+void setReceiveGroups(std::span<const std::uint32_t> ids)
+{
+    groupsLock.lock();
+    receiveGroupCount = std::min(ids.size(), std::size(receiveGroupIds));
+    std::copy_n(ids.begin(), receiveGroupCount, receiveGroupIds);
+    groupsLock.unlock();
 }
 
 bool post(const Message &message)

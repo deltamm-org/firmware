@@ -38,6 +38,12 @@ constexpr unsigned MaxContacts = 10'000;
 // little-endian); unused entries are all ones.
 constexpr std::uint32_t ContactIds = 0x04340000;
 constexpr std::uint32_t ContactIdBytes = 8;
+// Receive group lists: 0x200 bytes each, 64 little-endian contact indices
+// first (unused ones all ones); a bitmap of the lists in use.
+constexpr std::uint32_t GroupLists = 0x02980000;
+constexpr std::uint32_t GroupListStride = 0x200;
+constexpr std::uint32_t GroupListBitmap = 0x025C0B10;
+constexpr unsigned MaxGroupLists = 250;
 constexpr std::uint32_t RadioIds = 0x02580000;
 constexpr std::uint32_t RadioIdBytes = 0x20;
 constexpr std::uint32_t RadioIdBitmap = 0x024C1320;
@@ -344,6 +350,28 @@ bool D878Uv2Codeplug::contactName(std::uint32_t id, bool group, std::span<char, 
         return n != 0;
     }
     return false;
+}
+
+std::size_t D878Uv2Codeplug::receiveGroups(std::uint8_t list, std::span<std::uint32_t> out)
+{
+    if (list >= MaxGroupLists || !bitSet(GroupListBitmap, list)) {
+        return 0;
+    }
+    std::uint8_t members[MaxReceiveGroups * 4];
+    if (!readable(read(GroupLists + list * GroupListStride, members))) {
+        return 0;
+    }
+    std::size_t n = 0;
+    for (std::size_t i = 0; i < MaxReceiveGroups && n < out.size(); ++i) {
+        const std::uint32_t index = le32(&members[i * 4]);
+        if (index == 0xFFFFFFFF) {
+            continue;
+        }
+        if (const auto c = contact(index); c && c->type == dmr::CallType::Group) {
+            out[n++] = c->id;
+        }
+    }
+    return n;
 }
 
 std::optional<std::uint32_t> D878Uv2Codeplug::radioId(std::uint8_t index)
