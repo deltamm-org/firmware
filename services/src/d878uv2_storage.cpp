@@ -187,4 +187,50 @@ StorageResult D878Uv2Storage::read(std::uint32_t address, std::span<std::uint8_t
     return result;
 }
 
+std::uint32_t D878Uv2Storage::remapped(std::uint32_t address) const
+{
+    return static_cast<std::uint32_t>(remapBlock(static_cast<std::uint16_t>(address / BlockBytes))) * BlockBytes +
+        address % BlockBytes;
+}
+
+// Called with the lock held.
+bool D878Uv2Storage::writable()
+{
+    if (m_present && !m_unlocked) {
+        m_nand.unlock();
+        m_unlocked = true;
+    }
+    return m_present;
+}
+
+StorageResult D878Uv2Storage::eraseBlock(std::uint32_t address)
+{
+    m_lock.lock();
+    StorageResult result = StorageResult::NoChip;
+    if (writable()) {
+        result = address >= m_nand.pageCount() * SpiNand::PageBytes
+            ? StorageResult::OutOfRange
+            : fromNand(m_nand.eraseBlock(remapped(address) / SpiNand::PageBytes));
+    }
+    m_lock.unlock();
+    return result;
+}
+
+StorageResult D878Uv2Storage::program(std::uint32_t address, std::span<const std::uint8_t> data)
+{
+    m_lock.lock();
+    StorageResult result = StorageResult::NoChip;
+    if (writable()) {
+        const std::uint32_t column = address % SpiNand::PageBytes;
+        if (address >= m_nand.pageCount() * SpiNand::PageBytes || data.size() > SpiNand::PageBytes - column) {
+            result = StorageResult::OutOfRange;
+        } else {
+            result = fromNand(m_nand.program(remapped(address) / SpiNand::PageBytes, static_cast<std::uint16_t>(column),
+                data.data(), data.size()));
+        }
+    }
+    m_lock.unlock();
+    return result;
+}
+
 } // namespace dmm::services

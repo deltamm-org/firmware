@@ -166,3 +166,32 @@ TEST_CASE("calibration pages the flash flags as uncorrectable are still used")
     CHECK(std::string_view(cal.source()).starts_with("copy A (flash check failed"));
     CHECK(cal.batteryOffsetMv() == 50);
 }
+
+TEST_CASE("erase and program follow the remap table and unlock the chip first")
+{
+    FakeSpiNand chip;
+    putRecord(chip, 0, {{0x40, 0x190}});
+    chip.put(0x190 * 0x20000 + 0x800, {0x12, 0x34});
+    SpiNand nand(chip, noDelay);
+    D878Uv2Storage storage(nand);
+    storage.start();
+    REQUIRE(chip.blockLock != 0);
+
+    // Block 0x40 lives in block 0x190: that one is erased and written.
+    CHECK(storage.eraseBlock(0x40 * 0x20000 + 0x1234) == StorageResult::Ok);
+    CHECK(chip.blockLock == 0);
+    CHECK(chip.memory.count(0x190 * 0x20000 + 0x800) == 0);
+    const std::uint8_t data[] = {0xA5, 0x5A};
+    CHECK(storage.program(0x40 * 0x20000 + 0x1000, data) == StorageResult::Ok);
+    CHECK(chip.memory[0x190 * 0x20000 + 0x1000] == 0xA5);
+    CHECK(chip.memory.count(0x40 * 0x20000 + 0x1000) == 0);
+    std::uint8_t back[2] = {};
+    CHECK(storage.read(0x40 * 0x20000 + 0x1000, back) == StorageResult::Ok);
+    CHECK(back[1] == 0x5A);
+
+    // A program stays within one page; a failure is reported.
+    std::uint8_t two[2] = {};
+    CHECK(storage.program(0x40 * 0x20000 + 0x7FF, two) == StorageResult::OutOfRange);
+    chip.failPrograms[0x50 * 64] = true;
+    CHECK(storage.program(0x50 * 0x20000, data) == StorageResult::Failed);
+}
