@@ -284,7 +284,10 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
         m_callOptionsSet = true;
     }
     const std::uint8_t cc[] = {Sct3258::DmrColourCode, static_cast<std::uint8_t>(settings.colourCode & 0x0F)};
-    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, repeater ? settings.slot : BothSlots};
+    // Both slots are received, also through a repeater; the caller picks
+    // its slot's calls from what is heard.
+    static_cast<void>(repeater);
+    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, BothSlots};
     const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkReceive, 0, 0};
     const std::uint8_t carrier[] = {Sct3258::CarrierReady, CarrierReady};
     return m_chip.control(Sct3258::TypeDmr, cc) == 0 && m_chip.control(Sct3258::TypeDmr, slot) == 0 &&
@@ -337,6 +340,7 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
     const std::size_t length = p.fields[at + 2];
     const std::size_t have = p.length - (at + 3) < length ? p.length - (at + 3) : length;
     e.kind = Kind::Burst;
+    e.raw = property;
     e.voice = (property & FrameVoice) != 0;
     e.type = static_cast<dmr::DataType>(property & FrameTypeMask);
     e.length = static_cast<std::uint8_t>(have < dmr::Event::MaxData ? have : dmr::Event::MaxData);

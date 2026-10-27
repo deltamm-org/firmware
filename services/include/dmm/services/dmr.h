@@ -95,6 +95,8 @@ struct Event
     DataType type = DataType::Idle;
     std::uint8_t length = 0;
     std::uint8_t data[MaxData] = {};
+    /// The burst's kind as the receiver reported it, for diagnostics.
+    std::uint8_t raw = 0;
 
     std::span<const std::uint8_t> payload() const { return {data, length}; }
 };

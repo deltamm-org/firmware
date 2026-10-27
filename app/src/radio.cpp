@@ -345,8 +345,9 @@ void onDmrEvent(const services::dmr::Event &e)
     case Kind::Burst: {
         const bool lcBurst = e.voice || e.type == DataType::VoiceLcHeader || e.type == DataType::TerminatorWithLc;
         const auto lc = lcBurst ? services::dmr::FullLc::decode(e.payload()) : std::nullopt;
+        log::debug("dmr") << "burst " << lib::hex(e.raw, 2) << ", colour code " << e.colourCode << ", " << e.length
+                          << " bytes";
         if (!lc) {
-            log::debug("dmr") << "burst type " << static_cast<int>(e.type) << ", colour code " << e.colourCode;
             break;
         }
         if (!e.voice && e.type == DataType::TerminatorWithLc) {
