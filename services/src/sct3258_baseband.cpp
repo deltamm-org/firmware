@@ -317,6 +317,7 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
         m_callOptionsSet = true;
     }
     const std::uint8_t cc[] = {Sct3258::DmrColourCode, static_cast<std::uint8_t>(settings.colourCode & 0x0F)};
+    m_repeater = repeater;
     // Through a repeater only the channel's slot is received; the other
     // slot's calls would reach the vocoder too. Direct: both slots.
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot, repeater ? static_cast<std::uint8_t>(settings.slot == 2 ? 2 : 1) : BothSlots};
@@ -420,7 +421,9 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
             }
         }
     }
-    const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | settings.slot)};
+    // Through a repeater the call's slots follow the repeater's timing.
+    const std::uint8_t slot[] = {Sct3258::DmrCallSlot,
+        static_cast<std::uint8_t>(Sct3258::SlotTransmit | (m_repeater ? Sct3258::SlotFollowReceive : 0) | settings.slot)};
     const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkTransmit, 0, 0};
     if (m_chip.control(Sct3258::TypeDmr, slot) != 0 || !write(m_audio.transmit) || m_chip.control(work) != 0) {
         return false;

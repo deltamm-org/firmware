@@ -358,7 +358,7 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
     CHECK(chip.packets[10] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02}); // the channel's slot alone
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 145'000'000, false));
-    REQUIRE(chip.packets.size() == 5); // no values for this band; the vocoder stays
+    REQUIRE(chip.packets.size() == 5);                                     // no values for this band; the vocoder stays
     CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03}); // direct: both slots
 }
 
@@ -397,4 +397,20 @@ TEST_CASE("the repeater wake block")
 {
     const auto b = dmm::services::dmr::repeaterWake(1234567);
     CHECK(b == std::array<std::uint8_t, 10>{0xB8, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x12, 0xD6, 0x87});
+}
+
+TEST_CASE("through a repeater a DMR call's slots follow the repeater's timing")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    REQUIRE(baseband.start());
+    dmm::services::dmr::ChannelSettings settings;
+    settings.slot = 2;
+    REQUIRE(baseband.setDigital(settings, 438'075'000, true));
+    chip.packets.clear();
+    using dmm::services::dmr::CallType;
+    REQUIRE(baseband.startDigitalCall(settings, dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567), 430'475'000));
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0xC2});
 }

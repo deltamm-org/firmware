@@ -147,6 +147,8 @@ private:
     bool m_trimsWritten = false;
     std::uint8_t m_vocoder = 0;
     bool m_callOptionsSet = false;
+    // The last digital receive was through a repeater.
+    bool m_repeater = false;
 };
 
 } // namespace dmm::services
