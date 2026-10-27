@@ -131,6 +131,9 @@ public:
 private:
     bool fail(const char *problem);
     bool write(std::span<const CodecWrite> writes);
+    /// Hands over the first frame after the switch to transmit, again if
+    /// the chip does not take it.
+    bool sendFirstFrame(std::uint8_t colourCode, std::uint8_t property, std::span<const std::uint8_t> data);
     /// Tells the chip the carrier is gone, then puts it in transmit mode.
     bool leaveReceive();
     bool enterTransmit();

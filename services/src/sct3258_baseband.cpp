@@ -5,6 +5,7 @@
 
 #include "dmm/lib/format.h"
 #include "dmm/lib/strings.h"
+#include "dmm/os/os.h"
 #include "dmm/services/log.h"
 
 namespace dmm::services {
@@ -25,6 +26,10 @@ constexpr std::uint8_t ProcessAnalog = Sct3258::ProcessAnalog;
 constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x0C, 0x00};
 // How long the chip may take to switch between receive and transmit.
 constexpr unsigned SwitchMs = 500;
+// The first frame after the switch to transmit: how often it is handed
+// over and how long each wait for the chip to take it.
+constexpr int FirstFrameTries = 4;
+constexpr unsigned FirstFrameMs = 250;
 // Repeater wake-up bursts per try.
 constexpr int WakeBursts = 5;
 // DMR_CALL_SLOT: receive on both slots (direct channels); 1 or 2 is that
@@ -437,7 +442,7 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
     lc.encode(b);
     // The header, then the first voice superframe with the same link
     // control; the chip sends voice from then on.
-    return m_chip.sendFrame(settings.colourCode, FrameData | static_cast<std::uint8_t>(dmr::DataType::VoiceLcHeader), b) &&
+    return sendFirstFrame(settings.colourCode, FrameData | static_cast<std::uint8_t>(dmr::DataType::VoiceLcHeader), b) &&
         m_chip.sendFrame(settings.colourCode, FrameVoice | static_cast<std::uint8_t>(dmr::DataType::VoiceLcHeader), b);
 }
 
@@ -465,7 +470,8 @@ bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::ui
     // its receiver may miss the first. Each waits
     // until the one before has gone out; the caller awaits the last.
     for (int i = 0; i < WakeBursts; ++i) {
-        if (!m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake)) {
+        if (!(i == 0 ? sendFirstFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake)
+                     : m_chip.sendFrame(settings.colourCode, static_cast<std::uint8_t>(dmr::DataType::Csbk), wake))) {
             warn("wake-up block not taken, reply", m_chip.lastFrameReply());
             return i > 0;
         }
@@ -475,6 +481,21 @@ bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::ui
         }
     }
     return true;
+}
+
+bool Sct3258Baseband::sendFirstFrame(std::uint8_t colourCode, std::uint8_t property, std::span<const std::uint8_t> data)
+{
+    // Just after the switch to transmit the chip may let a frame pass
+    // without a word; it is handed over again until taken.
+    for (int i = 0; i < FirstFrameTries; ++i) {
+        if (m_chip.sendFrame(colourCode, property, data, FirstFrameMs)) {
+            if (i > 0) {
+                log::info("baseband") << "frame taken on try " << i + 1;
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Sct3258Baseband::leaveReceive()
@@ -599,6 +620,26 @@ bool Sct3258Baseband::debugCommand(std::string_view command)
                               << lib::hex(static_cast<std::uint32_t>(n[2]), 2) << ": " << (ok ? "accepted" : "refused");
         return true;
     }
+    if (verb == "txtest") {
+        // The switch to transmit and one wake-up block after @p ms, with
+        // the RF path left off: nothing goes on the air.
+        const auto ms = lib::parseNumber(lib::takeWord(rest), 10);
+        if (!ms || *ms < 0 || *ms > 5000 || !rest.empty()) {
+            return false;
+        }
+        const std::uint8_t slot[] = {Sct3258::DmrCallSlot, static_cast<std::uint8_t>(Sct3258::SlotTransmit | 1)};
+        const bool ready = leaveReceive() && m_chip.control(Sct3258::TypeDmr, slot, SwitchMs) == 0 && enterTransmit();
+        os::sleepMs(static_cast<os::Ticks>(*ms));
+        const os::Ticks start = os::nowMs();
+        const bool taken = ready && m_chip.sendFrame(1, static_cast<std::uint8_t>(dmr::DataType::Csbk), dmr::repeaterWake(1), 1000);
+        const os::Ticks took = os::nowMs() - start;
+        const bool sent = taken && m_chip.awaitSent(500);
+        setWorkMode(BasebandWorkMode::Receive);
+        log::info("baseband") << "txtest after " << *ms << " ms: " << (!ready ? "switch refused" : !taken ? "block not taken"
+                                                                                                          : "taken")
+                              << " in " << took << " ms" << (taken ? (sent ? ", sent" : ", not sent") : "");
+        return true;
+    }
     if (verb == "packet") {
         const auto type = lib::parseNumber(lib::takeWord(rest), 16);
         if (!type || *type > 0xFF) {
@@ -625,7 +666,7 @@ bool Sct3258Baseband::debugCommand(std::string_view command)
 
 const char *Sct3258Baseband::debugHelp() const
 {
-    return "bb codec <page> <reg> <value>, bb packet <type> <bytes> (hex)";
+    return "bb codec <page> <reg> <value>, bb packet <type> <bytes> (hex), bb txtest <ms> (no RF)";
 }
 
 static_assert(Baseband<Sct3258Baseband>);
