@@ -126,13 +126,23 @@ struct DmrReceive
     std::uint8_t colourCode;
     std::uint8_t slot;
 };
+/// DMR transmit for the session: whom to call (id 0 = the channel's own
+/// contact) and the radio's own ID (0 = the channel's).
+struct DmrTarget
+{
+    services::dmr::Target target;
+};
+struct DmrOwnId
+{
+    std::uint32_t id;
+};
 struct UseChannel
 {
     services::Channel channel;
     std::uint8_t squelch;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, UseChannel, BatterySave, BatterySaveStatus>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, BatterySave, BatterySaveStatus>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.

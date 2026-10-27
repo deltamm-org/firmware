@@ -61,6 +61,15 @@ bool dmrRepeater = false;
 bool inCall = false;
 os::Ticks callStarted = 0;
 bool timingFound = false;
+// DMR transmit for the session: a target and own ID override the
+// channel's when set.
+services::dmr::Target targetOverride;
+std::uint32_t ownIdOverride = 0;
+services::dmr::FullLc callLc;
+// How long the end of a DMR transmission may take to go out.
+constexpr os::Ticks DmrEndMs = 1000;
+// How long to wait for a woken repeater's timing.
+constexpr os::Ticks RepeaterWakeMs = 1000;
 bool timingSeen = false;
 bool idleLogged = false;
 services::BatterySaver saver;
@@ -182,6 +191,12 @@ bool toneSquelch()
 
 // MHz with three decimals, four when the frequency needs them, for the
 // log.
+// The frequency a DMR call goes out on.
+std::uint32_t callChannelHz()
+{
+    return transmitHz != 0 ? transmitHz : fmChannel.receiveHz;
+}
+
 lib::StaticString<12> mhz(std::uint32_t hz)
 {
     const std::uint32_t tenthKhz = hz / 100;
@@ -459,13 +474,101 @@ void pollFm()
     }
 }
 
+// Waits up to @p ms for the baseband event @p kind, handling every other
+// event as usual. True if it came.
+bool awaitDmrEvent(services::dmr::Event::Kind kind, os::Ticks ms)
+{
+    bool seen = false;
+    const os::Ticks start = os::nowMs();
+    while (!seen && os::nowMs() - start < ms) {
+        withBaseband([&](auto &b) {
+            services::dmr::Event e;
+            while (!seen && b.nextEvent(e)) {
+                onDmrEvent(e);
+                // Slot timing counts once it is verified.
+                seen = kind == services::dmr::Event::Kind::SlotFound ? timingFound : e.kind == kind;
+            }
+        });
+        if (!seen) {
+            os::sleepMs(10);
+        }
+    }
+    return seen;
+}
+
+[[gnu::noinline]] void logDmrRefused(const char *why)
+{
+    log::info("dmr") << "PTT: " << why;
+}
+
+[[gnu::noinline]] void logDmrTransmitting()
+{
+    log::info("dmr") << "transmitting " << mhz(callChannelHz()).view() << " MHz, slot " << dmrSettings.slot << ", "
+                     << (callLc.groupCall() ? "TG " : "private ") << callLc.destination << " from " << callLc.source
+                     << ", power " << powerName(powerLevel);
+}
+
+void startDigitalTransmit(services::FmChannel channel)
+{
+    if (!HasBaseband) {
+        logDmrRefused("no baseband");
+        return;
+    }
+    if (inCall) {
+        logDmrRefused("the channel is busy");
+        return;
+    }
+    if (dmrRepeater && channel.transmitHz == fmChannel.receiveHz) {
+        logDmrRefused("no repeater input frequency (fm tx <kHz>)");
+        return;
+    }
+    const services::dmr::Target target = targetOverride.id != 0 ? targetOverride : dmrSettings.contact;
+    const std::uint32_t ownId = ownIdOverride != 0 ? ownIdOverride : dmrSettings.ownId;
+    if (target.id == 0 && target.type != services::dmr::CallType::All) {
+        logDmrRefused("no contact to call (dmr tg <id>)");
+        return;
+    }
+    if (ownId == 0) {
+        logDmrRefused("no own DMR ID (dmr id <id>)");
+        return;
+    }
+    callLc = services::dmr::FullLc::voiceCall(target, ownId);
+    setSpeaker(false);
+    const char *problem = fm->transmit(channel, powerLevel);
+    if (problem != nullptr) {
+        fm->endTransmit();
+        logDmrRefused(problem);
+        receive();
+        return;
+    }
+    bool ok = true;
+    withBaseband([&](auto &b) {
+        // An idle repeater is woken first, then its timing awaited.
+        if (dmrRepeater && !timingFound) {
+            ok = b.wakeRepeater(dmrSettings, ownId) && awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs);
+            fm->endTransmit();
+            ok = ok && b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater) && fm->receive(fmChannel, 1) == nullptr &&
+                awaitDmrEvent(services::dmr::Event::Kind::SlotFound, RepeaterWakeMs);
+            ok = ok && fm->transmit(channel, powerLevel) == nullptr;
+        }
+        ok = ok && b.startDigitalCall(dmrSettings, callLc, channel.transmitHz);
+    });
+    if (!ok) {
+        fm->endTransmit();
+        logDmrRefused(dmrRepeater && !timingFound ? "the repeater did not answer" : "the baseband refused");
+        receive();
+        return;
+    }
+    transmitting = true;
+    power::hold(power::AwakeReason::Transmit);
+    ui::post(ui::Transmitting{true});
+    transmitStarted = os::nowMs();
+    logDmrTransmitting();
+}
+
 void startTransmit()
 {
     if (transmitting) {
-        return;
-    }
-    if (fmChannel.digital) {
-        log::info("dmr") << "PTT: DMR transmit is not built yet";
         return;
     }
     if (!fm->receiving() || system::calibration() == nullptr) {
@@ -474,6 +577,16 @@ void startTransmit()
     }
     services::FmChannel channel = fmChannel;
     channel.transmitHz = transmitHz != 0 ? transmitHz : fmChannel.receiveHz;
+    if (fmChannel.digital) {
+        if (receiveOnly) {
+            logDmrRefused("this channel is receive only");
+        } else if (!transmitAllowed(channel.transmitHz)) {
+            logDmrRefused("outside the 2 m and 70 cm bands");
+        } else {
+            startDigitalTransmit(channel);
+        }
+        return;
+    }
     if (receiveOnly) {
         log::info("fm") << "PTT: this channel is receive only";
         return;
@@ -512,6 +625,14 @@ void stopTransmit(const char *why)
 {
     if (!transmitting) {
         return;
+    }
+    if (fmChannel.digital) {
+        // The terminator goes out before the RF path drops.
+        bool sent = false;
+        withBaseband([&sent](auto &b) { sent = b.endDigitalCall(dmrSettings, callLc); });
+        if (sent && !awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs)) {
+            logDmrRefused("the terminator did not finish in time");
+        }
     }
     fm->endTransmit();
     withBaseband([](auto &b) { b.setMicrophone(false); });
@@ -692,8 +813,23 @@ void handle(Message &message)
                        dmrSettings.colourCode = r.colourCode;
                        dmrSettings.slot = r.slot == 2 ? 2 : 1;
                        dmrRepeater = r.slot != 0;
-                       transmitHz = r.receiveHz;
+                       // Direct: transmit where it receives. Through a
+                       // repeater the input frequency comes from fm tx.
+                       transmitHz = r.slot == 0 ? r.receiveHz : 0;
                        dmrReceive();
+                   },
+                   [](const DmrTarget &t) {
+                       targetOverride = t.target;
+                       if (t.target.id == 0) {
+                           log::info("dmr") << "calling the channel's contact";
+                       } else {
+                           log::info("dmr") << "calling " << (t.target.type == services::dmr::CallType::Group ? "TG " : "private ")
+                                            << t.target.id;
+                       }
+                   },
+                   [](const DmrOwnId &o) {
+                       ownIdOverride = o.id;
+                       log::info("dmr") << "own ID " << o.id << (o.id == 0 ? " (the channel's)" : "");
                    },
                    [](const UseChannel &u) {
                        const services::Channel &c = u.channel;
