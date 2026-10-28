@@ -28,7 +28,8 @@ struct ChannelLinks
 };
 ChannelLinks channelLinks(std::span<const std::uint8_t, 64> record);
 
-/// Decodes the start of the D878UVII general settings block (at least 0xC0 bytes).
+/// Decodes the start of the D878UVII general settings block (at least 0xC0
+/// bytes; the roaming settings need 0xE8).
 CodeplugSettings decodeSettings(std::span<const std::uint8_t> block);
 /// Adds what the extended general settings block holds (at least 0x40
 /// bytes): the GPS satellite systems.
@@ -60,6 +61,8 @@ public:
     bool contactName(std::uint32_t id, bool group, std::span<char, ContactNameBytes + 1> name) override;
     std::size_t receiveGroups(std::uint8_t list, std::span<std::uint32_t> out) override;
     bool dmrUser(std::uint32_t id, DmrUser &user) override;
+    std::size_t roamingSites(std::uint8_t zone, std::span<RoamingSite> out) override;
+    bool roamingSiteName(std::uint8_t zone, std::size_t position, std::span<char, SiteNameBytes + 1> name) override;
 
     /// Contact @p index, if it is in use.
     std::optional<dmr::Target> contact(std::uint32_t index);
@@ -74,6 +77,8 @@ private:
     // Drops the remembered copy choice of @p block, after a write.
     void forget(std::uint32_t block);
     bool bitSet(std::uint32_t bitmap, unsigned index);
+    std::size_t roamingMembers(std::uint8_t zone, std::span<std::uint8_t, MaxRoamingSites> out);
+    std::optional<RoamingSite> roamingRepeater(unsigned index);
 
     Storage &m_storage;
     // Copy choice per block, remembered: blocks and whether the first copy

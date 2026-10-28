@@ -7,6 +7,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <string>
@@ -410,4 +411,106 @@ TEST_CASE("users are found in the user directory by radio ID, also across a bank
     CHECK(std::string(user.name.data()) == "Second Caller");
     CHECK(std::string(user.callsign.data()) == "XY9ZZ");
     CHECK_FALSE(cp.dmrUser(1234567, user));
+}
+
+TEST_CASE("a digital channel roams unless its exclusion bit is set")
+{
+    auto r = sampleRecord();
+    r[0x34] = 0xFB;
+    CHECK_FALSE(dmm::services::decodeChannel(r)->roaming); // analog
+    r[8] = static_cast<std::uint8_t>((r[8] & ~3) | 1);
+    CHECK(dmm::services::decodeChannel(r)->roaming);
+    r[0x34] = 0x04;
+    CHECK_FALSE(dmm::services::decodeChannel(r)->roaming);
+}
+
+TEST_CASE("settings: roaming and the side keys")
+{
+    using dmm::services::KeyFunction;
+    using dmm::services::RoamingSettings;
+    std::vector<std::uint8_t> b(0x100, 0);
+    b[0x12] = 0x24; // PF3 short: roaming
+    b[0x41] = 0x24; // PF1 long: roaming
+    b[0x10] = 0x02; // PF1 short: something else
+    b[0xBA] = 10;   // every 10 min
+    b[0xBF] = 45;   // after 45 s quiet
+    b[0xDC] = 1;    // roaming zone 1
+    b[0xE0] = 1;    // out of range
+    b[0xE7] = 1;    // automatic
+    const auto s = dmm::services::decodeSettings(b);
+    CHECK(s.sideShort[0] == KeyFunction::None);
+    CHECK(s.sideShort[1] == KeyFunction::None);
+    CHECK(s.sideShort[2] == KeyFunction::Roam);
+    CHECK(s.sideLong[0] == KeyFunction::Roam);
+    CHECK(s.sideLong[2] == KeyFunction::None);
+    CHECK(s.roaming.zone == 1);
+    CHECK(s.roaming.automatic);
+    CHECK(s.roaming.start == RoamingSettings::Start::OutOfRange);
+    CHECK(s.roaming.periodMinutes == 10);
+    CHECK(s.roaming.quietS == 45);
+    b[0xDC] = 64; // out of range
+    b[0xE0] = 0;
+    b[0xE7] = 0;
+    const auto t = dmm::services::decodeSettings(b);
+    CHECK(t.roaming.zone == RoamingSettings::NoZone);
+    CHECK(t.roaming.start == RoamingSettings::Start::Periodic);
+    CHECK_FALSE(t.roaming.automatic);
+    // A block too short for the roaming settings leaves them off.
+    const auto u = dmm::services::decodeSettings(std::span(b).first(0xC0));
+    CHECK(u.roaming.zone == RoamingSettings::NoZone);
+    CHECK(u.sideShort[2] == KeyFunction::Roam);
+}
+
+TEST_CASE("a roaming zone's repeaters, in the zone's order")
+{
+    using dmm::services::RoamingSite;
+    FakeSpiNand chip;
+    chip.put(0x01040000 + 0x1FFF8, {0xFF, 0xFF, 0xFF, 0xFF, 0x55, 0x55, 0xAA, 0xAA});
+    // Repeaters 0, 1 and 3 in use; 2 is not.
+    chip.put(0x01042000, {0x0B});
+    auto repeater = [&](unsigned index, std::vector<std::uint8_t> bcd, std::uint8_t colourCode, const char *name) {
+        std::vector<std::uint8_t> r(0x20, 0);
+        std::copy(bcd.begin(), bcd.end(), r.begin());
+        r[8] = colourCode;
+        std::memcpy(&r[0x0A], name, std::strlen(name));
+        chip.put(0x01040000 + index * 0x20, r);
+    };
+    // 438.2000 MHz out, 430.6000 MHz in, 10 Hz steps.
+    repeater(0, {0x43, 0x82, 0x00, 0x00, 0x43, 0x06, 0x00, 0x00}, 16, "SITE A");
+    repeater(1, {0x43, 0x82, 0x12, 0x50, 0x43, 0x06, 0x12, 0x50}, 3, "SITE B");
+    repeater(2, {0x43, 0x82, 0x25, 0x00, 0x43, 0x06, 0x25, 0x00}, 1, "UNUSED");
+    repeater(3, {0x00, 0x00, 0x00, 0x00, 0x43, 0x06, 0x37, 0x50}, 1, "NO RX");
+    // Zone 1 in use: repeaters 1, 2 (not in use), 3 (no frequency), 0.
+    chip.put(0x01042080, {0x02});
+    std::vector<std::uint8_t> zone(0x80, 0xFF);
+    zone[0] = 1;
+    zone[1] = 2;
+    zone[2] = 3;
+    zone[3] = 0;
+    std::memcpy(&zone[0x40], "NETWORK", 7);
+    chip.put(0x01043000 + 0x80, zone);
+
+    SpiNand nand(chip, noDelay);
+    D878Uv2Storage storage(nand);
+    storage.start();
+    D878Uv2Codeplug cp(storage);
+
+    std::array<RoamingSite, 8> sites{};
+    REQUIRE(cp.roamingSites(1, sites) == 2);
+    CHECK(sites[0].receiveHz == 438'212'500);
+    CHECK(sites[0].transmitHz == 430'612'500);
+    CHECK(sites[0].colourCode == 3);
+    CHECK(sites[1].receiveHz == 438'200'000);
+    CHECK(sites[1].transmitHz == 430'600'000);
+    CHECK(sites[1].colourCode == RoamingSite::ChannelColourCode);
+    std::array<char, D878Uv2Codeplug::SiteNameBytes + 1> name{};
+    REQUIRE(cp.roamingSiteName(1, 0, name));
+    CHECK(std::string(name.data()) == "SITE B");
+    REQUIRE(cp.roamingSiteName(1, 1, name));
+    CHECK(std::string(name.data()) == "SITE A");
+    CHECK_FALSE(cp.roamingSiteName(1, 2, name));
+    CHECK(cp.roamingSites(0, sites) == 0);  // zone not in use
+    CHECK(cp.roamingSites(64, sites) == 0); // no such zone
+    std::array<RoamingSite, 1> one{};
+    CHECK(cp.roamingSites(1, one) == 1);
 }

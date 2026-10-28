@@ -64,6 +64,22 @@ constexpr std::uint32_t RadioIds = 0x02580000;
 constexpr std::uint32_t RadioIdBytes = 0x20;
 constexpr std::uint32_t RadioIdBitmap = 0x024C1320;
 constexpr unsigned MaxRadioIds = 250;
+// Roaming repeaters, 0x20 bytes each: receive and transmit frequency as
+// eight BCD digits of 10 Hz, big-endian; the colour code (16 = the
+// channel's own); the time slot; the name. Roaming zones, 0x80 bytes each:
+// 64 repeater indices (0xFF unused), then the name. Each has a bitmap of
+// those in use.
+constexpr std::uint32_t RoamingRepeaters = 0x01040000;
+constexpr std::uint32_t RoamingRepeaterBytes = 0x20;
+constexpr std::uint32_t RoamingRepeaterName = 0x0A;
+constexpr std::uint32_t RoamingRepeaterBitmap = 0x01042000;
+constexpr unsigned MaxRoamingRepeaters = 250;
+constexpr std::uint32_t RoamingZones = 0x01043000;
+constexpr std::uint32_t RoamingZoneBytes = 0x80;
+constexpr std::uint32_t RoamingZoneBitmap = 0x01042080;
+constexpr unsigned MaxRoamingZones = 64;
+// Programmable key function codes.
+constexpr std::uint8_t KeyRoam = 0x24;
 
 constexpr std::uint32_t BlockBytes = 0x20000;
 constexpr std::uint32_t MarkerOffset = BlockBytes - 8;
@@ -183,6 +199,8 @@ std::optional<Channel> decodeChannel(std::span<const std::uint8_t, 64> r)
     c.dmr.colourCode = r[0x20] & 0x0F;
     c.dmr.slot = (r[0x21] & 1) != 0 ? 2 : 1;
     c.dmr.groupList = r[0x1C];
+    // Bit 2 of byte 0x34 excludes the channel from roaming.
+    c.roaming = c.digital() && (r[0x34] & 0x04) == 0;
     std::size_t n = 0;
     for (; n < Channel::NameBytes && r[0x23 + n] != 0; ++n) {
         c.name[n] = static_cast<char>(r[0x23 + n]);
@@ -221,6 +239,19 @@ CodeplugSettings decodeSettings(std::span<const std::uint8_t> b)
     s.gps = b[0x28] != 0;
     // The time zone in half hours from UTC-12:00 (0) through UTC (24).
     s.timeZoneMinutes = b[0x30] <= 52 ? static_cast<std::int16_t>((b[0x30] - 24) * 30) : 0;
+    // Side keys PF1..PF3: short presses, then long presses.
+    for (std::size_t k = 0; k < CodeplugSettings::SideKeys; ++k) {
+        s.sideShort[k] = b[0x10 + k] == KeyRoam ? KeyFunction::Roam : KeyFunction::None;
+        s.sideLong[k] = b[0x41 + k] == KeyRoam ? KeyFunction::Roam : KeyFunction::None;
+    }
+    if (b.size() >= 0xE8) {
+        RoamingSettings &r = s.roaming;
+        r.zone = b[0xDC] < MaxRoamingZones ? b[0xDC] : RoamingSettings::NoZone;
+        r.automatic = b[0xE7] == 1;
+        r.start = b[0xE0] == 0 ? RoamingSettings::Start::Periodic : RoamingSettings::Start::OutOfRange;
+        r.periodMinutes = b[0xBA];
+        r.quietS = b[0xBF];
+    }
     return s;
 }
 
@@ -563,6 +594,82 @@ std::uint16_t D878Uv2Codeplug::zoneSelection(std::uint8_t zone, bool sideB)
         return NoChannel;
     }
     return le16(raw);
+}
+
+std::size_t D878Uv2Codeplug::roamingMembers(std::uint8_t zone, std::span<std::uint8_t, MaxRoamingSites> out)
+{
+    std::uint8_t raw[MaxRoamingSites];
+    if (zone >= MaxRoamingZones || !bitSet(RoamingZoneBitmap, zone) ||
+        !readable(read(RoamingZones + zone * RoamingZoneBytes, raw))) {
+        return 0;
+    }
+    std::size_t n = 0;
+    for (const std::uint8_t index : raw) {
+        if (index < MaxRoamingRepeaters) {
+            out[n++] = index;
+        }
+    }
+    return n;
+}
+
+std::optional<RoamingSite> D878Uv2Codeplug::roamingRepeater(unsigned index)
+{
+    std::uint8_t r[9];
+    if (index >= MaxRoamingRepeaters || !bitSet(RoamingRepeaterBitmap, index) ||
+        !readable(read(RoamingRepeaters + index * RoamingRepeaterBytes, r))) {
+        return std::nullopt;
+    }
+    const auto rx = bcd8(&r[0]);
+    const auto tx = bcd8(&r[4]);
+    if (!rx || !tx || *rx == 0 || *tx == 0) {
+        return std::nullopt;
+    }
+    RoamingSite site;
+    site.receiveHz = *rx * 10;
+    site.transmitHz = *tx * 10;
+    site.colourCode = r[8] <= 15 ? r[8] : RoamingSite::ChannelColourCode;
+    return site;
+}
+
+std::size_t D878Uv2Codeplug::roamingSites(std::uint8_t zone, std::span<RoamingSite> out)
+{
+    std::uint8_t members[MaxRoamingSites];
+    const std::size_t count = roamingMembers(zone, members);
+    std::size_t n = 0;
+    for (std::size_t i = 0; i < count && n < out.size(); ++i) {
+        if (const auto site = roamingRepeater(members[i])) {
+            out[n++] = *site;
+        }
+    }
+    return n;
+}
+
+bool D878Uv2Codeplug::roamingSiteName(std::uint8_t zone, std::size_t position, std::span<char, SiteNameBytes + 1> name)
+{
+    name[0] = '\0';
+    std::uint8_t members[MaxRoamingSites];
+    const std::size_t count = roamingMembers(zone, members);
+    // The position counts the repeaters roamingSites() returns.
+    std::size_t seen = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        if (!roamingRepeater(members[i])) {
+            continue;
+        }
+        if (seen++ != position) {
+            continue;
+        }
+        std::uint8_t raw[SiteNameBytes];
+        if (!readable(read(RoamingRepeaters + members[i] * RoamingRepeaterBytes + RoamingRepeaterName, raw))) {
+            return false;
+        }
+        std::size_t n = 0;
+        for (; n < SiteNameBytes && raw[n] != 0 && raw[n] != 0xFF; ++n) {
+            name[n] = static_cast<char>(raw[n]);
+        }
+        name[n] = '\0';
+        return true;
+    }
+    return false;
 }
 
 namespace {

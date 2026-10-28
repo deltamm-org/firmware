@@ -47,6 +47,9 @@ struct Channel
     SquelchMode squelchMode = SquelchMode::Carrier;
     /// Used on digital channels.
     dmr::ChannelSettings dmr;
+    /// Digital: works through whichever repeater of the roaming zone is in
+    /// use, which gives the frequencies and colour code.
+    bool roaming = false;
     /// Up to NameBytes bytes, zero-terminated.
     char name[NameBytes + 1] = {};
 
@@ -56,9 +59,39 @@ struct Channel
     bool digital() const { return !analog(); }
 };
 
+/// What a programmable key does.
+enum class KeyFunction : std::uint8_t
+{
+    None,
+    Roam, // look for the best repeater of the roaming zone now
+};
+
+/// Roaming: the repeaters roaming channels use, and when the radio looks
+/// for a better one by itself.
+struct RoamingSettings
+{
+    static constexpr std::uint8_t NoZone = 0xFF;
+
+    enum class Start : std::uint8_t
+    {
+        Periodic,   // every periodMinutes
+        OutOfRange, // when the repeater in use has not been heard for quietS
+    };
+
+    /// The roaming zone, or NoZone.
+    std::uint8_t zone = NoZone;
+    /// Looks by itself; else only on a key, the menu or a failed PTT.
+    bool automatic = false;
+    Start start = Start::OutOfRange;
+    std::uint16_t periodMinutes = 0;
+    std::uint16_t quietS = 0;
+};
+
 /// The general settings DeltaMM uses so far.
 struct CodeplugSettings
 {
+    static constexpr std::size_t SideKeys = 3;
+
     std::uint8_t squelchA = 3; // 0 = open, 1..5
     std::uint8_t squelchB = 3;
     std::uint16_t transmitTimeoutS = 0; // 0 = none
@@ -74,6 +107,21 @@ struct CodeplugSettings
     bool gps = false;                 // GPS receiver on
     std::uint8_t gpsSystems = 3;      // satellite systems, gps_systems bits
     std::int16_t timeZoneMinutes = 0; // local time minus UTC
+    RoamingSettings roaming;
+    /// The side keys' functions on a short and a long press.
+    KeyFunction sideShort[SideKeys] = {};
+    KeyFunction sideLong[SideKeys] = {};
+};
+
+/// One repeater of a roaming zone.
+struct RoamingSite
+{
+    /// The colour code is the channel's own.
+    static constexpr std::uint8_t ChannelColourCode = 0xFF;
+
+    std::uint32_t receiveHz = 0;  // the repeater's output
+    std::uint32_t transmitHz = 0; // its input
+    std::uint8_t colourCode = ChannelColourCode;
 };
 
 /// What the radio reads from its codeplug, whatever its format. The
@@ -120,6 +168,13 @@ public:
     static constexpr std::size_t MaxReceiveGroups = 64;
     /// The talkgroup IDs in receive group list @p list; returns how many.
     virtual std::size_t receiveGroups(std::uint8_t list, std::span<std::uint32_t> out) = 0;
+    static constexpr std::size_t MaxRoamingSites = 64;
+    static constexpr std::size_t SiteNameBytes = 16;
+    /// The repeaters of roaming zone @p zone, in order; returns how many.
+    virtual std::size_t roamingSites(std::uint8_t zone, std::span<RoamingSite> out) = 0;
+    /// The name of the repeater at @p position in roaming zone @p zone,
+    /// zero-terminated; false when there is none.
+    virtual bool roamingSiteName(std::uint8_t zone, std::size_t position, std::span<char, SiteNameBytes + 1> name) = 0;
 
 protected:
     ~CodeplugSource() = default;
