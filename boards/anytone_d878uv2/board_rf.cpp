@@ -35,6 +35,8 @@ std::atomic<std::uint16_t> slotPower{0};
 std::atomic<bool> slotShaped{false};
 // Slots keyed since keying started, for the log.
 std::atomic<std::uint32_t> slotsKeyed{0};
+// Rises of the slot line since the last transmission ended, keyed or not.
+std::atomic<std::uint32_t> slotLineRises{0};
 
 // The shaped output at the higher power levels: after the slot line rises
 // the output stays at 0 for a moment, then rises along an S-curve; after
@@ -175,13 +177,15 @@ void BoardRf::setSlotKeying(std::uint16_t value, bool shaped)
 {
     if (value == 0) {
         const bool wasKeying = slotPower.exchange(0, std::memory_order_relaxed) != 0;
-        {
+        if (wasKeying) {
             const cm::InterruptLock lock;
             allOff();
         }
-        if (wasKeying) {
-            dmm::services::log::info("rf") << "slot keying off after " << slotsKeyed.load(std::memory_order_relaxed)
-                                           << " slots";
+        const std::uint32_t rises = slotLineRises.exchange(0, std::memory_order_relaxed);
+        if (wasKeying || rises != 0) {
+            dmm::services::log::info("rf") << "slot line rose " << rises << " times"
+                                           << (wasKeying ? ", slots keyed " : "")
+                                           << (wasKeying ? slotsKeyed.load(std::memory_order_relaxed) : 0u);
         }
         return;
     }
@@ -196,11 +200,19 @@ void BoardRf::onSlotEdge()
     if (!hal::takeExti(TransmitSlot.number)) {
         return;
     }
+    const bool rising = hal::read(TransmitSlot);
+    if (rising) {
+        slotLineRises.fetch_add(1, std::memory_order_relaxed);
+    }
+    // Without slot keying the outputs belong to whoever keyed them (a
+    // continuous transmission such as a repeater wake-up): the line is
+    // only counted, never acted on.
     const std::uint16_t power = slotPower.load(std::memory_order_relaxed);
-    const bool shaped = slotShaped.load(std::memory_order_relaxed);
     if (power == 0) {
-        allOff();
-    } else if (hal::read(TransmitSlot)) {
+        return;
+    }
+    const bool shaped = slotShaped.load(std::memory_order_relaxed);
+    if (rising) {
         slotOn(power, shaped);
     } else {
         slotOff(shaped);
