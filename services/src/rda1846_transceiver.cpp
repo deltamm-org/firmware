@@ -159,10 +159,13 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     // FM: the transmit path now, the microphone straight in. Digital: the
     // modulation comes from the baseband, and the path and amplifier
     // follow its transmit slots.
-    if (!channel.digital) {
+    const bool slotted = channel.digital && !channel.continuous;
+    if (!slotted) {
         m_rf.setTransmitPath(true);
     }
-    muteMicrophone(channel.digital);
+    // The microphone input stays open on digital channels too: the
+    // baseband's signal comes in there.
+    muteMicrophone(false);
     m_chip.setFrequency(hz);
     m_chip.setBandwidth(bandwidth(channel));
     const Tone &tone = channel.transmitTone;
@@ -175,7 +178,7 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     setPin(m_pins.transmitHighBand, hz > m_pins.splitHz);
     // Power last.
     m_sleepMs(TransmitSettleMs);
-    if (channel.digital) {
+    if (slotted) {
         m_rf.setSlotKeying(power);
         m_power = power;
         logNumber("power control by slot", m_power, "");

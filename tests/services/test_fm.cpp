@@ -567,8 +567,31 @@ TEST_CASE("digital transmit leaves the amplifier to the slot keying and stops it
     CHECK(rf.slotPower == 40 * 16);
     CHECK(std::find(events.begin(), events.end(), "pa on") == events.end());
     CHECK(std::find(events.begin(), events.end(), "path on") == events.end());
-    CHECK(gpioField(bus.registers[0x1F], 3) == 3); // own microphone muted
+    CHECK(gpioField(bus.registers[0x1F], 3) == 2); // microphone input open: the baseband's signal
     fm.endTransmit();
     CHECK(rf.slotPower == 0);
+    CHECK_FALSE(rf.amplifier);
+}
+
+TEST_CASE("a continuous digital transmission keys the amplifier at once")
+{
+    using dmm::services::PowerLevel;
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    Rda1846 chip(bus);
+    FakeRf rf;
+    Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+    REQUIRE(fm.start());
+    const D878Uv2Calibration cal = calibration();
+    testCalibration = &cal;
+    std::vector<std::string> events;
+    rf.events = &events;
+    FmChannel channel{433'450'000, 433'450'000, false, {}, {}, true};
+    channel.continuous = true;
+    REQUIRE(fm.transmit(channel, PowerLevel::Low) == nullptr);
+    CHECK(rf.slotPower == 0);
+    CHECK(rf.amplifier);
+    CHECK(std::find(events.begin(), events.end(), "path on") != events.end());
+    fm.endTransmit();
     CHECK_FALSE(rf.amplifier);
 }

@@ -613,7 +613,12 @@ void startDigitalTransmit(services::FmChannel channel)
         const bool found = awaitDmrEvent(services::dmr::Event::Kind::SlotFound, FindSyncMs);
         log::info("dmr") << "repeater on the air: timing " << (found ? "found" : "not found");
     }
-    const char *problem = fm->transmit(channel, powerLevel);
+    // A repeater wake-up goes out before there is any slot timing, so the
+    // carrier stays on through it rather than following slots.
+    services::FmChannel wake = channel;
+    wake.continuous = true;
+    const bool waking = dmrRepeater && !timingFound;
+    const char *problem = fm->transmit(waking ? wake : channel, powerLevel);
     if (problem != nullptr) {
         fm->endTransmit();
         logDmrRefused(problem, "TX refused");
@@ -625,10 +630,10 @@ void startDigitalTransmit(services::FmChannel channel)
     ui::post(ui::Transmitting{true});
     withBaseband([&](auto &b) {
         // An idle repeater is woken first, then its timing awaited.
-        if (dmrRepeater && !timingFound) {
+        if (waking) {
             ok = false;
             for (int t = 0; t < RepeaterWakeTries && !ok; ++t) {
-                const bool keyed = t == 0 || fm->transmit(channel, powerLevel) == nullptr;
+                const bool keyed = t == 0 || fm->transmit(wake, powerLevel) == nullptr;
                 const bool sent = keyed && b.wakeRepeater(dmrSettings, ownId) &&
                     awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs);
                 fm->endTransmit();

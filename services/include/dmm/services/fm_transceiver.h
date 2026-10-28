@@ -21,6 +21,10 @@ struct FmChannel
     Tone receiveTone;  // listened for; None = none
     Tone transmitTone;
     bool digital = false; // a DMR channel: the RF path for the baseband's signal
+    // Digital: the carrier stays on for the whole transmission instead of
+    // following the baseband's transmit slots (before any slot timing, as
+    // for a repeater wake-up).
+    bool continuous = false;
 };
 
 /// What the receiver hears right now, before any debouncing.
