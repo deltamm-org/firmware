@@ -174,28 +174,52 @@ BatteryState batteryState;
 int headerHeight = 8;
 int headerTop = 0;
 
+void fillArea(Display &d, int x, int y, int w, int h, Color c)
+{
+    if (w > 0 && h > 0) {
+        d.fillRect(x, y, w, h, c);
+    }
+}
+
+// The battery at the header's right end, in its own field from 48 pixels
+// before the edge: the voltage, then four bars. Everything is drawn in
+// place with only the gaps painted, so an update does not flicker.
 void drawBattery(Display &d)
 {
     const BatteryState &b = batteryState;
-    const int barsX = d.width() - 13;
+    const int w = d.width();
+    const int fieldX = w - 48;
+    const int barsX = w - 13;
     lib::StaticString<12> text;
     if (b.millivolts > 0) {
         const int cv = (b.millivolts + 5) / 10;
         text << cv / 100 << '.' << static_cast<char>('0' + cv / 10 % 10) << 'V';
     }
     const int textW = static_cast<int>(text.view().size()) * HeaderFont.width;
-    const int x0 = barsX - textW - 2;
-    d.fillRect(x0, 0, d.width() - x0, headerHeight, headerGround);
-    drawText(d, HeaderFont, x0, headerTop, text.view(), b.low ? colors::Red : colors::White, headerGround);
+    const int tx = barsX - textW - 2;
+    const int below = headerTop + HeaderFont.height;
+    drawText(d, HeaderFont, tx, headerTop, text.view(), b.low ? colors::Red : colors::White, headerGround);
+    fillArea(d, fieldX, 0, tx - fieldX, headerHeight, headerGround);
+    fillArea(d, tx, 0, textW, headerTop, headerGround);
+    fillArea(d, tx, below, textW, headerHeight - below, headerGround);
+    fillArea(d, tx + textW, 0, barsX - tx - textW, headerHeight, headerGround);
     if (b.millivolts <= 0) {
+        fillArea(d, barsX, 0, w - barsX, headerHeight, headerGround);
         return;
     }
     const Color on = b.low ? colors::Red : colors::Green;
     for (int i = 0; i < 4; ++i) {
         // The first bar always shows, so an empty battery still has one red bar.
         const bool lit = i == 0 || i <= b.level;
-        d.fillRect(barsX + i * 3, headerTop + 7 - (i + 1) * 2 + 1, 2, (i + 1) * 2 - 1, lit ? on : rgb(60, 60, 60));
+        const int bx = barsX + i * 3;
+        const int by = headerTop + 7 - (i + 1) * 2 + 1;
+        const int bh = (i + 1) * 2 - 1;
+        d.fillRect(bx, by, 2, bh, lit ? on : rgb(60, 60, 60));
+        fillArea(d, bx, 0, 2, by, headerGround);
+        fillArea(d, bx, by + bh, 2, headerHeight - by - bh, headerGround);
+        fillArea(d, bx + 2, 0, 1, headerHeight, headerGround);
     }
+    fillArea(d, barsX + 12, 0, w - barsX - 12, headerHeight, headerGround);
 }
 
 services::KeyLock keyLock;
@@ -230,36 +254,66 @@ void drawHeader(Display &d)
     drawBattery(d);
 }
 
-// A short notice in a band across the middle of the screen.
+// A short notice in a band across the middle of the screen, drawn over
+// what is there without blanking it first.
 void drawNotice(Display &d, std::string_view text)
 {
     const Font &font = fonts::Spleen8x16;
     const int h = font.height + 10;
     const int y = (d.height() - h) / 2;
-    d.fillRect(0, y, d.width(), h, palette::Ground);
-    d.fillRect(0, y, d.width(), 1, palette::Rule);
-    d.fillRect(0, y + h - 1, d.width(), 1, palette::Rule);
-    const int w = static_cast<int>(text.size()) * font.width;
-    drawText(d, font, (d.width() - w) / 2, y + 5, text, palette::Text, palette::Ground);
+    const int w = d.width();
+    const int textW = static_cast<int>(text.size()) * font.width;
+    const int tx = (w - textW) / 2;
+    const int ty = y + 5;
+    drawText(d, font, tx, ty, text, palette::Text, palette::Ground);
+    d.fillRect(0, y, w, 1, palette::Rule);
+    fillArea(d, 0, y + 1, w, ty - y - 1, palette::Ground);
+    fillArea(d, 0, ty, tx, font.height, palette::Ground);
+    fillArea(d, tx + textW, ty, w - tx - textW, font.height, palette::Ground);
+    fillArea(d, 0, ty + font.height, w, y + h - 1 - ty - font.height, palette::Ground);
+    d.fillRect(0, y + h - 1, w, 1, palette::Rule);
 }
 
-// The volume while the knob turns: "Volume" and a 15-segment bar.
-void drawVolumeNotice(Display &d, int step)
+// The volume while the knob turns: "Volume" and a 15-segment bar. With
+// @p frame the whole band is drawn over what is there; without, only the
+// number and the segments change, in place.
+void drawVolumeNotice(Display &d, int step, bool frame)
 {
     const Font &font = fonts::Spleen6x12;
     const int h = font.height + 16;
     const int y = (d.height() - h) / 2;
-    d.fillRect(0, y, d.width(), h, palette::Ground);
-    d.fillRect(0, y, d.width(), 1, palette::Rule);
-    d.fillRect(0, y + h - 1, d.width(), 1, palette::Rule);
+    const int w = d.width();
+    const int labelY = y + 3;
+    const int segY = y + font.height + 6;
+    constexpr int SegH = 5;
+    constexpr int LabelChars = 9; // "Volume 15"
     lib::StaticString<12> label;
     label << "Volume " << step;
-    drawText(d, font, 6, y + 3, label.view(), palette::Text, palette::Ground);
-    constexpr int Segments = 15;
-    const int segW = (d.width() - 12) / Segments;
-    for (int i = 0; i < Segments; ++i) {
-        d.fillRect(6 + i * segW, y + font.height + 6, segW - 2, 5, i < step ? palette::Text : palette::Rule);
+    while (label.view().size() < LabelChars) {
+        label << ' ';
     }
+    drawText(d, font, 6, labelY, label.view(), palette::Text, palette::Ground);
+    constexpr int Segments = 15;
+    const int segW = (w - 12) / Segments;
+    for (int i = 0; i < Segments; ++i) {
+        d.fillRect(6 + i * segW, segY, segW - 2, SegH, i < step ? palette::Text : palette::Rule);
+    }
+    if (!frame) {
+        return;
+    }
+    const int labelEnd = 6 + LabelChars * font.width;
+    d.fillRect(0, y, w, 1, palette::Rule);
+    fillArea(d, 0, y + 1, w, labelY - y - 1, palette::Ground);
+    fillArea(d, 0, labelY, 6, font.height, palette::Ground);
+    fillArea(d, labelEnd, labelY, w - labelEnd, font.height, palette::Ground);
+    fillArea(d, 0, labelY + font.height, w, segY - labelY - font.height, palette::Ground);
+    fillArea(d, 0, segY, 6, SegH, palette::Ground);
+    for (int i = 0; i < Segments; ++i) {
+        fillArea(d, 6 + i * segW + segW - 2, segY, 2, SegH, palette::Ground);
+    }
+    fillArea(d, 6 + Segments * segW, segY, w - 6 - Segments * segW, SegH, palette::Ground);
+    fillArea(d, 0, segY + SegH, w, y + h - 1 - segY - SegH, palette::Ground);
+    d.fillRect(0, y + h - 1, w, 1, palette::Rule);
 }
 
 void logLockSettings()
@@ -631,6 +685,7 @@ void uiMain(void *)
     os::Ticks lastSecond = 0;
     os::Ticks noticeUntil = 0;
     bool noticeShown = false;
+    bool volumeNoticeUp = false; // the notice up is the volume one
     constexpr os::Ticks NoticeMs = 1500;
 
     // The standby, log and key test screens take the lock; the zone list,
@@ -643,6 +698,7 @@ void uiMain(void *)
         return c;
     };
     auto notice = [&](std::string_view text) {
+        volumeNoticeUp = false;
         drawNotice(d, text);
         noticeShown = true;
         noticeUntil = os::nowMs() + NoticeMs;
@@ -697,6 +753,9 @@ void uiMain(void *)
         headerTop = bar ? 2 : 0;
     };
     auto redrawView = [&] {
+        // A full redraw covers any notice: the next one is drawn whole.
+        noticeShown = false;
+        volumeNoticeUp = false;
         const bool radioScreen =
             view == View::Standby || view == View::ZonePicker || view == View::Menu || view == View::MenuValue;
         barHeader(radioScreen);
@@ -1297,10 +1356,13 @@ void uiMain(void *)
                                }
                                volumeLevel = step;
                                if (changed && view == View::Standby) {
-                                   standby.drawStatus(d, standbyState());
-                                   drawBattery(d);
-                                   drawVolumeNotice(d, step);
+                                   // Only what changes: the status bar's volume
+                                   // field, and the notice's number and bar once
+                                   // it is up.
+                                   standby.drawVolume(d, standbyState());
+                                   drawVolumeNotice(d, step, !(noticeShown && volumeNoticeUp));
                                    noticeShown = true;
+                                   volumeNoticeUp = true;
                                    noticeUntil = os::nowMs() + NoticeMs;
                                }
                            },
@@ -1327,6 +1389,7 @@ void uiMain(void *)
         }
         if (noticeShown && static_cast<std::int32_t>(os::nowMs() - noticeUntil) >= 0) {
             noticeShown = false;
+            volumeNoticeUp = false;
             redrawView();
         }
         // The start screen stays until the radio is ready, and at least its

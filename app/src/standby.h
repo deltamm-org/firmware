@@ -78,6 +78,8 @@ public:
     void drawCall(services::Display &d, const StandbyState &s, const CallInfo &c);
     /// Only the call screen's bottom bar, for the running time.
     void drawCallTime(services::Display &d, const CallInfo &c);
+    /// Only the status bar's volume field, in place.
+    void drawVolume(services::Display &d, const StandbyState &s);
     /// Where the caller may draw the battery: x of its left edge.
     int batteryX(const services::Display &d) const { return d.width() - 48; }
 };

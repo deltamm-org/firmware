@@ -7,6 +7,9 @@
 #include "dmm/services/font.h"
 
 #include <algorithm>
+#include <initializer_list>
+#include <iterator>
+#include <utility>
 
 namespace dmm::app::ui {
 
@@ -31,13 +34,80 @@ std::string_view cut(std::string_view s, int chars)
     return {s.data(), chars <= 0 ? 0 : std::min(s.size(), static_cast<std::size_t>(chars))};
 }
 
-// A filled tag such as "TX" in the status bar; returns the x after it.
+// A filled rectangle; nothing when it is empty.
+void fillArea(Display &d, int x, int y, int w, int h, Color c)
+{
+    if (w > 0 && h > 0) {
+        d.fillRect(x, y, w, h, c);
+    }
+}
+
+// One text of a band: where it goes, in which font and colour.
+struct Piece
+{
+    int x;
+    int y;
+    std::string_view text;
+    const Font *font;
+    Color ink;
+};
+
+// A full-width band of the screen, [y, y + h): each piece of text is drawn
+// with its own background first, then every other pixel of the band is
+// painted ground. Nothing is cleared before it is drawn over, so a redraw
+// does not flicker, and text of any size fits as long as it lies inside
+// the band. The pieces must not overlap side by side.
+void band(Display &d, int y, int h, std::initializer_list<Piece> pieces)
+{
+    const int w = d.width();
+    Piece sorted[4];
+    std::size_t n = 0;
+    for (const Piece &pc : pieces) {
+        if (!pc.text.empty() && n < std::size(sorted)) {
+            sorted[n++] = pc;
+        }
+    }
+    // Left to right; at most a few pieces.
+    for (std::size_t i = 1; i < n; ++i) {
+        for (std::size_t k = i; k > 0 && sorted[k].x < sorted[k - 1].x; --k) {
+            std::swap(sorted[k], sorted[k - 1]);
+        }
+    }
+    int cursor = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const Piece &pc = sorted[i];
+        const int x = std::max(pc.x, cursor);
+        const int end = std::min(drawText(d, *pc.font, x, pc.y, pc.text, pc.ink, p::Ground), w);
+        fillArea(d, cursor, y, x - cursor, h, p::Ground);
+        fillArea(d, x, y, end - x, pc.y - y, p::Ground);
+        fillArea(d, x, pc.y + pc.font->height, end - x, y + h - pc.y - pc.font->height, p::Ground);
+        cursor = end;
+    }
+    fillArea(d, cursor, y, w - cursor, h, p::Ground);
+}
+
+// A filled tag such as "TX" in the status bar, from @p x; returns the x
+// after it. The text goes first, with the tag's colour behind it, then the
+// rest of the box: nothing is painted twice, so nothing flickers.
 int tag(Display &d, int x, std::string_view text, Color fill, Color ink)
 {
     const int w = textWidth(Small, text) + 4;
-    d.fillRect(x, 1, w, StandbyScreen::StatusH - 2, fill);
+    const int rowH = StandbyScreen::StatusH - 1;
     drawText(d, Small, x + 2, 2, text, ink, fill);
-    return x + w + 2;
+    fillArea(d, x, 0, w, 1, p::Ground);
+    fillArea(d, x, 1, w, 1, fill);
+    fillArea(d, x, 2, 2, Small.height, fill);
+    fillArea(d, x + w - 2, 2, 2, Small.height, fill);
+    fillArea(d, x, 2 + Small.height, w, rowH - 2 - Small.height, fill);
+    return x + w;
+}
+
+// The status bar's volume field: a fixed width, right-aligned against the
+// battery, so a new step overwrites the old in place.
+constexpr int VolumeChars = 6; // "VOL 15"
+int volumeX(const Display &d, const StandbyScreen &s)
+{
+    return s.batteryX(d) - VolumeChars * Small.width - 4;
 }
 
 // Frequency as MHz with four decimals and no trailing zero past three.
@@ -98,38 +168,55 @@ void copyText(char (&out)[N], std::string_view text)
     out[n] = '\0';
 }
 
-void line(Display &d, const Font &f, int x, int y, int w, std::string_view text, Color ink)
-{
-    const int end = drawText(d, f, x, y, text, ink, p::Ground);
-    if (end < x + w) {
-        d.fillRect(end, y, x + w - end, f.height, p::Ground);
-    }
-}
-
 } // namespace
 
 void StandbyScreen::drawStatus(Display &d, const StandbyState &s)
 {
     // The status row on black, a rule under it; the caller draws the
-    // battery at its right end.
-    d.fillRect(0, 0, d.width(), StatusH - 1, p::Ground);
-    d.fillRect(0, StatusH - 1, d.width(), 1, p::Rule);
-    int x = 2;
+    // battery at its right end. Each part is drawn in place, with only the
+    // gaps painted ground, so a redraw does not flicker.
+    const int rowH = StatusH - 1;
+    int cursor = 0;
+    auto gapTo = [&](int x) {
+        fillArea(d, cursor, 0, x - cursor, rowH, p::Ground);
+        cursor = std::max(cursor, x);
+    };
+    gapTo(2);
     if (s.transmitting) {
-        x = tag(d, x, "TX", p::Transmit, p::Text);
+        cursor = tag(d, cursor, "TX", p::Transmit, p::Text);
+        gapTo(cursor + 2);
     } else if (s.receiving) {
-        x = tag(d, x, "RX", p::Receive, p::Text);
+        cursor = tag(d, cursor, "RX", p::Receive, p::Text);
+        gapTo(cursor + 2);
     }
     if (s.locked) {
-        tag(d, x, "LOCK", p::Warn, p::Ground);
+        cursor = tag(d, cursor, "LOCK", p::Warn, p::Ground);
     }
-    // Volume, left of the battery: a speaker mark and the step.
+    gapTo(volumeX(d, *this));
+    drawVolume(d, s);
+    cursor = volumeX(d, *this) + VolumeChars * Small.width;
+    gapTo(batteryX(d));
+    d.fillRect(0, StatusH - 1, d.width(), 1, p::Rule);
+}
+
+void StandbyScreen::drawVolume(Display &d, const StandbyState &s)
+{
+    // Right-aligned in its fixed field, blank when the step is not known.
+    lib::StaticString<VolumeChars + 1> v;
     if (s.volume >= 0) {
-        lib::StaticString<8> v;
         v << "VOL " << s.volume;
-        const int vx = batteryX(d) - textWidth(Small, v.view()) - 4;
-        drawText(d, Small, vx, 2, v.view(), s.volume == 0 ? p::Warn : p::Dim, p::Ground);
     }
+    lib::StaticString<VolumeChars + 1> field;
+    for (std::size_t i = v.view().size(); i < VolumeChars; ++i) {
+        field << ' ';
+    }
+    field << v.view();
+    const int x = volumeX(d, *this);
+    const int w = VolumeChars * Small.width;
+    drawText(d, Small, x, 2, field.view(), s.volume == 0 ? p::Warn : p::Dim, p::Ground);
+    fillArea(d, x, 0, w, 2, p::Ground);
+    fillArea(d, x, 2 + Small.height, w, StatusH - 1 - 2 - Small.height, p::Ground);
+    fillArea(d, x + w, 0, batteryX(d) - x - w, StatusH - 1, p::Ground);
 }
 
 void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbyState &s)
@@ -137,41 +224,49 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
     const int w = d.width();
     const int h = d.height();
     drawStatus(d, s);
-    d.fillRect(0, StatusH, w, h - StatusH - HintH, p::Ground);
+
+    // The body in bands, top to bottom, each drawn in place.
+    const int zoneY = StatusH + 3;
+    const int nameY = zoneY + Body.height + 4;
+    const int freqY = nameY + Large.height + 2;
+    const int detY = freqY + Medium.height + 6;
+    const int det2Y = detY + Body.height + 1;
+    const int bodyEnd = h - HintH;
 
     // Zone line: zone name, or VFO, and the position.
-    const int zoneY = StatusH + 3;
     lib::StaticString<24> right;
     if (sel.vfoMode()) {
-        drawText(d, Body, 4, zoneY, "VFO", p::Dim, p::Ground);
+        band(d, StatusH, nameY - StatusH, {{4, zoneY, "VFO", &Body, p::Dim}});
     } else {
-        drawText(d, Body, 4, zoneY, sel.zoneName(), p::Dim, p::Ground);
         right << sel.position() << '/' << sel.zoneSize();
-        drawText(d, Body, w - 4 - textWidth(Body, right.view()), zoneY, right.view(), p::Dim, p::Ground);
+        band(d, StatusH, nameY - StatusH,
+            {{4, zoneY, sel.zoneName(), &Body, p::Dim},
+                {w - 4 - textWidth(Body, right.view()), zoneY, right.view(), &Body, p::Dim}});
     }
 
     const auto &c = sel.current();
-    const int nameY = zoneY + Body.height + 4;
-    const int freqY = nameY + Large.height + 2;
     if (!s.entry.empty()) {
         const auto e = entryText(s.entry);
-        drawText(d, Large, (w - textWidth(Large, e.view())) / 2, nameY, e.view(), p::Text, p::Ground);
-        drawText(d, Body, 4, freqY + 4, "MHz  Menu: tune  Exit: cancel", p::Dim, p::Ground);
+        band(d, nameY, freqY - nameY, {{(w - textWidth(Large, e.view())) / 2, nameY, e.view(), &Large, p::Text}});
+        band(d, freqY, detY - freqY, {{4, freqY + 4, "MHz  Menu: tune  Exit: cancel", &Body, p::Dim}});
+        band(d, detY, bodyEnd - detY, {});
     } else if (!c) {
-        drawText(d, Medium, 4, nameY, "No channel", p::Dim, p::Ground);
+        band(d, nameY, freqY - nameY, {{4, nameY, "No channel", &Medium, p::Dim}});
+        band(d, freqY, bodyEnd - freqY, {});
     } else {
         const auto f = mhz(c->receiveHz);
+        lib::StaticString<16> fl;
         if (sel.vfoMode() || c->name[0] == '\0') {
-            drawText(d, Large, (w - textWidth(Large, f.view())) / 2, nameY, f.view(), p::Text, p::Ground);
+            band(d, nameY, freqY - nameY, {{(w - textWidth(Large, f.view())) / 2, nameY, f.view(), &Large, p::Text}});
         } else {
+            // A long name takes the smaller font, centred in the same band.
             const std::string_view name(c->name);
             const Font &nf = textWidth(Large, name) <= w - 8 ? Large : Medium;
-            drawText(d, nf, (w - textWidth(nf, name)) / 2, nameY + (Large.height - nf.height) / 2, name, p::Text,
-                p::Ground);
-            lib::StaticString<16> fl;
+            band(d, nameY, freqY - nameY,
+                {{(w - textWidth(nf, name)) / 2, nameY + (Large.height - nf.height) / 2, name, &nf, p::Text}});
             fl << f.view() << " MHz";
-            drawText(d, Medium, (w - textWidth(Medium, fl.view())) / 2, freqY, fl.view(), p::Text, p::Ground);
         }
+        band(d, freqY, detY - freqY, {{(w - textWidth(Medium, fl.view())) / 2, freqY, fl.view(), &Medium, p::Text}});
 
         // Details: mode and width, tones, power, offset.
         lib::StaticString<40> det;
@@ -186,28 +281,24 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
                 det << "  R" << toneText(c->receiveTone).view();
             }
         }
-        const int detY = freqY + Medium.height + 6;
-        {
-            line(d, Body, 4, detY, w - 8, det.view(), p::Dim);
-            lib::StaticString<40> det2;
-            det2 << powerText(c->power);
-            if (c->transmitHz != c->receiveHz) {
-                const bool up = c->transmitHz > c->receiveHz;
-                const std::uint32_t off = up ? c->transmitHz - c->receiveHz : c->receiveHz - c->transmitHz;
-                det2 << "  " << (up ? '+' : '-') << mhz(off).view();
-            }
-            if (c->receiveOnly) {
-                det2 << "  RX ONLY";
-            }
-            line(d, Body, 4, detY + Body.height + 1, w - 8, det2.view(), p::Dim);
+        band(d, detY, det2Y - detY, {{4, detY, det.view(), &Body, p::Dim}});
+        lib::StaticString<40> det2;
+        det2 << powerText(c->power);
+        if (c->transmitHz != c->receiveHz) {
+            const bool up = c->transmitHz > c->receiveHz;
+            const std::uint32_t off = up ? c->transmitHz - c->receiveHz : c->receiveHz - c->transmitHz;
+            det2 << "  " << (up ? '+' : '-') << mhz(off).view();
         }
+        if (c->receiveOnly) {
+            det2 << "  RX ONLY";
+        }
+        band(d, det2Y, bodyEnd - det2Y, {{4, det2Y, det2.view(), &Body, p::Dim}});
     }
 
     // Bottom bar: the quick keys, or a short note.
     d.fillRect(0, h - HintH, w, 1, p::Rule);
-    d.fillRect(0, h - HintH + 1, w, HintH - 1, p::Ground);
     const std::string_view hints = s.note.empty() ? s.keys : s.note;
-    drawText(d, Small, 3, h - HintH + 2, hints, p::Dim, p::Ground);
+    band(d, h - HintH + 1, HintH - 1, {{3, h - HintH + 2, hints, &Small, p::Dim}});
 }
 
 void StandbyScreen::drawCall(Display &d, const StandbyState &s, const CallInfo &c)
@@ -215,55 +306,57 @@ void StandbyScreen::drawCall(Display &d, const StandbyState &s, const CallInfo &
     const int w = d.width();
     const int h = d.height();
     drawStatus(d, s);
-    d.fillRect(0, StatusH, w, h - StatusH - HintH, p::Ground);
     const Color ink = c.active ? p::Text : p::Dim;
 
     // The call type, green while it is heard, and the slot.
     const int typeY = StatusH + 3;
+    const int callerY = typeY + Body.height + 4;
     const char *type = c.allCall ? "ALL CALL" : c.group ? "GROUP CALL"
                                                         : "PRIVATE CALL";
     lib::StaticString<24> head;
     head << (c.active ? "" : "LAST ") << type;
-    drawText(d, Body, 4, typeY, head.view(), c.active ? p::Receive : p::Dim, p::Ground);
+    lib::StaticString<4> ts;
     if (c.slot != 0) {
-        lib::StaticString<4> ts;
         ts << "TS" << c.slot;
-        drawText(d, Body, w - 4 - textWidth(Body, ts.view()), typeY, ts.view(), p::Dim, p::Ground);
     }
+    band(d, StatusH, callerY - StatusH,
+        {{4, typeY, head.view(), &Body, c.active ? p::Receive : p::Dim},
+            {w - 4 - textWidth(Body, ts.view()), typeY, ts.view(), &Body, p::Dim}});
 
     // The caller: callsign or name large, or the ID when neither is
     // known; under it the user's name and the ID.
-    const int callerY = typeY + Body.height + 4;
+    const int callerIdY = callerY + Large.height + 1;
     lib::StaticString<12> callerId;
     callerId << c.callerId;
     const bool known = !c.callerHeadline.empty();
     const std::string_view caller = known ? c.callerHeadline : callerId.view();
     const Font &cf = textWidth(Large, caller) <= w - 8 ? Large : Medium;
-    drawText(d, cf, 4, callerY + (Large.height - cf.height) / 2, caller, ink, p::Ground);
-    const int callerIdY = callerY + Large.height + 1;
+    band(d, callerY, callerIdY - callerY, {{4, callerY + (Large.height - cf.height) / 2, caller, &cf, ink}});
+    const int ruleY = callerIdY + Body.height + 3;
     if (known) {
         const int idX = w - 4 - textWidth(Body, callerId.view());
-        drawText(d, Body, idX, callerIdY, callerId.view(), p::Dim, p::Ground);
         const std::string_view name = cut(c.callerName, (idX - 10) / Body.width);
-        drawText(d, Body, 4, callerIdY, name, ink, p::Ground);
+        band(d, callerIdY, ruleY - callerIdY,
+            {{4, callerIdY, name, &Body, ink}, {idX, callerIdY, callerId.view(), &Body, p::Dim}});
+    } else {
+        band(d, callerIdY, ruleY - callerIdY, {});
     }
 
     // Whom: the talkgroup's or contact's name, its number under it.
-    const int ruleY = callerIdY + Body.height + 3;
+    fillArea(d, 0, ruleY, 4, 1, p::Ground);
     d.fillRect(4, ruleY, w - 8, 1, p::Rule);
+    fillArea(d, w - 4, ruleY, 4, 1, p::Ground);
     const int targetY = ruleY + 4;
+    const int numberY = targetY + Medium.height + 1;
     lib::StaticString<16> number;
     if (c.allCall) {
         number << "All";
     } else {
         number << (c.group ? "TG " : "To ") << c.targetId;
     }
-    if (c.targetName.empty() || c.allCall) {
-        drawText(d, Medium, 4, targetY, number.view(), ink, p::Ground);
-    } else {
-        drawText(d, Medium, 4, targetY, c.targetName, ink, p::Ground);
-        drawText(d, Body, 4, targetY + Medium.height + 1, number.view(), p::Dim, p::Ground);
-    }
+    const bool named = !c.targetName.empty() && !c.allCall;
+    band(d, ruleY + 1, numberY - ruleY - 1, {{4, targetY, named ? c.targetName : number.view(), &Medium, ink}});
+    band(d, numberY, h - HintH - numberY, {{4, numberY, named ? number.view() : std::string_view{}, &Body, p::Dim}});
     drawCallTime(d, c);
 }
 
@@ -273,13 +366,13 @@ void StandbyScreen::drawCallTime(Display &d, const CallInfo &c)
     const int w = d.width();
     const int h = d.height();
     d.fillRect(0, h - HintH, w, 1, p::Rule);
-    d.fillRect(0, h - HintH + 1, w, HintH - 1, p::Ground);
     lib::StaticString<12> t;
     t << c.seconds / 60 << ':' << static_cast<char>('0' + c.seconds % 60 / 10) << static_cast<char>('0' + c.seconds % 10);
-    drawText(d, Small, 3, h - HintH + 2, t.view(), c.active ? p::Text : p::Dim, p::Ground);
     const int room = w - 6 - textWidth(Small, t.view()) - 8;
     const std::string_view channel = cut(c.channel, room / Small.width);
-    drawText(d, Small, w - 3 - textWidth(Small, channel), h - HintH + 2, channel, p::Dim, p::Ground);
+    band(d, h - HintH + 1, HintH - 1,
+        {{3, h - HintH + 2, t.view(), &Small, c.active ? p::Text : p::Dim},
+            {w - 3 - textWidth(Small, channel), h - HintH + 2, channel, &Small, p::Dim}});
 }
 
 void ListPicker::open(std::string_view title)
