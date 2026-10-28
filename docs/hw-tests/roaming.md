@@ -14,7 +14,7 @@ Codeplug (D878UVII format, as codeplug tools such as QDMR write it):
 - Roaming repeaters: receive and transmit frequency, colour code (or the
   channel's), name. Their time slot is not used.
 - Roaming zones: up to 64 repeaters each. The general settings' default
-  roaming zone is the one used.
+  roaming zone is the one used at start.
 - A digital channel's roaming setting.
 - Automatic roaming: on or off; start when the repeater has been quiet for
   the delay, or every period.
@@ -38,7 +38,9 @@ A search starts:
 PTT, a channel change or another search ends a search early.
 
 Menu > Channel > Roaming Off makes every channel work on its own
-frequencies until it is switched on again or the radio restarts.
+frequencies until it is switched on again or the radio restarts. Menu >
+Channel > Roam zone picks another of the codeplug's roaming zones until
+restart; the radio then looks for a repeater afresh.
 
 The standby screen shows the channel name large; under it, small, the
 repeater's output frequency, the slot, the colour code and the
@@ -68,8 +70,9 @@ repeater's name, or `Searching...`.
 | 9 | Automatic roaming on with a delay, the repeater in use quiet for longer | `searching ... (automatic)` |
 | 10 | PF3 on an FM channel | Notice `Not roaming` |
 | 11 | Menu > Channel > Roaming: Off, on a roaming channel | `roam: roaming off`; the channel's own frequency, the usual frequency line; PF3 says `Not roaming`. On again: the repeater in use comes back |
-| 12 | `roam` | The repeater in use, its frequency and colour code, automatic on or off |
-| 13 | Read the latest uptime line | Every task above 50 unused stack words |
+| 12 | Menu > Channel > Roam zone: another zone | Its name in the menu; `roaming zone N, M repeaters`; the line shows that zone's repeater after PF3 |
+| 13 | `roam` | The repeater in use, its frequency and colour code, automatic on or off |
+| 14 | Read the latest uptime line | Every task above 50 unused stack words |
 
 Undo: flash the previous release.
 
@@ -86,7 +89,7 @@ to roaming, and a duplex hotspot as the only repeater on the air.
 | 3 | Pass: with no repeater on the air, all 15 `no answer`, then `no repeater answered`; the radio stayed on the repeater in use. With the hotspot on, the search chose it (`in use: 2`) |
 | 10 | Pass: `Not roaming` with roaming off |
 | 11 | Pass: Roaming Off made the channels work on their own frequencies |
-| 4-9, 12, 13 | Open |
+| 4-9, 12-14 | Open |
 
 Findings:
 
