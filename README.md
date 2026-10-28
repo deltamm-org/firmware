@@ -20,6 +20,15 @@ transmit timeout and amateur-band limits. CTCSS and DCS tones both ways,
 with the codeplug's squelch mode (implemented, not yet tested on the
 radio).
 
+**DMR radio.** Voice calls so far: receive and transmit through a
+repeater, using the radio's own calibration. Calls on the channel's
+talkgroup, its receive group list or to the radio itself are heard,
+others stay muted; through a repeater only the channel's slot. A heard call fills the screen with the
+caller's callsign and name from the codeplug's contacts and user
+directory. PTT wakes an idle repeater and calls the channel's contact.
+Direct (simplex) calls, voice enhancement and the shaped amplifier
+keying at High and Turbo are implemented, not yet tested on the radio.
+
 **Channels.** Channels, zones and the VFO come from the codeplug already
 on the radio. Pick zones from a list, step channels with the knob, or type
 a frequency on the keypad.
@@ -41,15 +50,14 @@ A desktop simulator runs the same firmware with a drawn radio face.
 
 ## Roadmap
 
-1. DMR receive and transmit
-2. Refined user interface: screen layouts, menus, icons and fonts tuned
+1. Refined user interface: screen layouts, menus, icons and fonts tuned
    as features are added
-3. Programming over USB, compatible with existing codeplug tools
-4. Scan and dual watch
-5. GPS
-6. Calibration tool
-7. APRS, Bluetooth, recording, DTMF and selective calling
-8. DMR roaming and SMS
+2. Programming over USB, compatible with existing codeplug tools
+3. Scan and dual watch
+4. GPS
+5. Calibration tool
+6. APRS, Bluetooth, recording, DTMF and selective calling
+7. DMR roaming and SMS
 
 ## Getting started
 
