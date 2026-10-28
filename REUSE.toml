@@ -43,3 +43,9 @@ SPDX-License-Identifier = "BSD-2-Clause"
 path = ["docs/hw-tests/programming.md"]
 SPDX-FileCopyrightText = "2026 Henri Lavikainen"
 SPDX-License-Identifier = "MIT"
+
+# Docs added with DMR roaming.
+[[annotations]]
+path = ["docs/hw-tests/roaming.md"]
+SPDX-FileCopyrightText = "2026 Henri Lavikainen"
+SPDX-License-Identifier = "MIT"
