@@ -353,12 +353,13 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
     dmm::services::dmr::ChannelSettings settings;
     settings.slot = 2;
     REQUIRE(baseband.setDigital(settings, 438'075'000, true));
-    REQUIRE(chip.packets.size() == 13);
+    REQUIRE(chip.packets.size() == 14);
     CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0x00, 0x00, 0x00}); // DAC 0 dB
     CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
     CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x00, 0x1C, 0x08, 0x00});
     CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x00, 0x69, 0x05, 0x40});
-    CHECK(chip.packets[10] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02}); // the channel's slot alone
+    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x2C, 0x08, 0x00}); // modulator gain before any transmission
+    CHECK(chip.packets[11] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02});      // the channel's slot alone
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 145'000'000, false));
     REQUIRE(chip.packets.size() == 5);                                     // no values for this band; the vocoder stays

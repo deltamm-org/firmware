@@ -146,6 +146,9 @@ private:
     /// Hands over the first frame after the switch to transmit, again if
     /// the chip does not take it.
     bool sendFirstFrame(std::uint8_t colourCode, std::uint8_t property, std::span<const std::uint8_t> data);
+    /// MOD_GAIN, DIGI_MIC_GAIN and DMR_OFFSET for transmitting at
+    /// @p transmitHz and power @p level.
+    void sendTransmitTrims(std::uint32_t transmitHz, PowerLevel level);
     /// Tells the chip the carrier is gone, then puts it in transmit mode.
     bool leaveReceive();
     bool enterTransmit();

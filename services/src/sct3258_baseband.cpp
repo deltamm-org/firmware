@@ -310,6 +310,9 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
             }
         }
     }
+    // The transmitter's settings too: a repeater wake-up goes out before any
+    // call sets them.
+    sendTransmitTrims(receiveHz, PowerLevel::High);
     if (!sendSquelch(m_chip, m_audio.digitalSquelch)) {
         warn("digital squelch levels not taken");
     }
@@ -409,12 +412,8 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
     return true;
 }
 
-bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc,
-    std::uint32_t transmitHz, bool timed, PowerLevel level)
+void Sct3258Baseband::sendTransmitTrims(std::uint32_t transmitHz, PowerLevel level)
 {
-    if (!m_info.running) {
-        return false;
-    }
     if (const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(transmitHz) : std::nullopt) {
         const std::uint8_t gain[] = {Sct3258::ModGain, trims->modGain[0], trims->modGain[1]};
         if (m_chip.control(gain) != 0) {
@@ -442,6 +441,15 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
             }
         }
     }
+}
+
+bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc,
+    std::uint32_t transmitHz, bool timed, PowerLevel level)
+{
+    if (!m_info.running) {
+        return false;
+    }
+    sendTransmitTrims(transmitHz, level);
     // On fresh timing the call takes the channel's slot on it; without,
     // the chip sends only on its own timing, as the packet manual's
     // direct-call example does.
