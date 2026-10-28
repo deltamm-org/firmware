@@ -174,7 +174,7 @@ constexpr WidthSetting Receive[] = {
 // receive filter setting, with pre-emphasis and the audio filters off:
 // the baseband's 4FSK must pass unshaped.
 constexpr WidthSetting Transmit[] = {
-    {0x0A, 0x3BA0, 0x3BA0, 0x3BA0},
+    {0x0A, 0x3BA0, 0x3BA0, 0x3BA1}, // the low bits kept from the receive setting
     {0x41, 0x070F, 0x070F, 0x070F},
     {0x44, 0x09FF, 0x09FF, 0x0BFF},
     {0x58, 0x8405, 0x8405, 0x80E5},
