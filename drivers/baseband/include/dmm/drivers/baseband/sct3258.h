@@ -78,6 +78,13 @@ public:
     static constexpr std::uint8_t ModGain = 0x2C;
     static constexpr std::uint8_t DigitalMicGain = 0x68;
     static constexpr std::uint8_t DigitalSpeakerGain = 0x69;
+    /// EQUALIZER_FILTER: a selection byte (bit 5 transmit side, bit 4 on,
+    /// low bits the filter 1..3), then a1, a2, b0, b1, b2 in Q16.14.
+    static constexpr std::uint8_t EqualizerFilter = 0x70;
+    static constexpr std::uint8_t EqualizerTransmit = 0x20;
+    static constexpr std::uint8_t EqualizerOn = 0x10;
+    static constexpr int EqualizerFilters = 3;
+    static constexpr int EqualizerSampleHz = 24'000;
     static constexpr std::uint8_t DmrOffset = 0x7A;
     /// DMR_CALL_SLOT: transmit on the slot in the low bits.
     static constexpr std::uint8_t SlotTransmit = 0x80;

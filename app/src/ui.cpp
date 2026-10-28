@@ -605,6 +605,9 @@ void uiMain(void *)
             keyLock.setSettings(selector.settings().keyLock);
             backlightS = selector.settings().backlightS;
             batterySave = selector.settings().batterySave;
+            if (selector.settings().voiceEnhancement) {
+                radio::post(radio::VoiceEnhancement{true});
+            }
             log::info("ui") << "codeplug: zone " << selector.zone() << " \"" << selector.zoneName() << "\", "
                             << selector.zoneSize() << " channels" << (selector.vfoMode() ? ", VFO" : "");
             logLockSettings();

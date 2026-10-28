@@ -47,6 +47,8 @@ enum class BasebandWorkMode : std::uint8_t
 ///   both directions, with pre- and de-emphasis, for a wide or narrow
 ///   channel, at the radio's calibrated levels. False without a
 ///   calibration.
+/// - setVoiceEnhancement(on): shapes the transmitted voice with the
+///   radio's equalizer, or leaves it flat. Kept across restarts.
 /// - setWorkMode(mode).
 /// - setCarrier(present): in analog mode the chip passes receive audio
 ///   only while told a carrier is present.
@@ -80,6 +82,7 @@ concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, s
     { bb.playTone(hz, ms, percent) } -> std::same_as<bool>;
     { bb.setAnalog(on) } -> std::same_as<bool>;
     { bb.setWorkMode(mode) } -> std::same_as<bool>;
+    { bb.setVoiceEnhancement(on) } -> std::same_as<bool>;
     { bb.setCarrier(on) } -> std::same_as<bool>;
     { bb.setMicrophone(on) } -> std::same_as<bool>;
     { bb.setDigital(dmrSettings, receiveHz, on) } -> std::same_as<bool>;

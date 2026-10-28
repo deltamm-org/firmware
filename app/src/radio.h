@@ -70,6 +70,11 @@ struct BatterySave
 {
     std::uint8_t mode;
 };
+/// The transmitted voice shaped by the radio's equalizer (on) or flat.
+struct VoiceEnhancement
+{
+    bool on;
+};
 /// Logs battery save's state and what keeps the radio awake.
 struct BatterySaveStatus
 {
@@ -143,7 +148,7 @@ struct UseChannel
     std::uint8_t squelch;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, BatterySave, BatterySaveStatus>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, BatterySave, BatterySaveStatus, VoiceEnhancement>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.

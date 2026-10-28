@@ -91,6 +91,9 @@ constexpr dmm::services::Sct3258Baseband::Audio Audio{
     .digitalSquelch = DigitalSquelch,
     .analogSquelch = AnalogSquelch,
     .demodulatorInverted = true,
+    // Voice enhancement: a little less around 180 Hz, a lift around 2.4 kHz
+    // with the rest 1.7 dB down, and a narrow dip at 2 kHz.
+    .transmitEqualizer = {{{184.0F, -3.3F, 0.95F, 0.0F}, {2450.0F, 4.1F, 1.25F, -1.7F}, {1990.0F, -3.1F, 4.5F, 0.0F}}},
 };
 
 void outputLow(Pin pin)

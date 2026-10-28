@@ -64,6 +64,16 @@ public:
         /// The board's FM demodulator output reaches the chip with its
         /// polarity reversed; digital receive tells the chip so.
         bool demodulatorInverted;
+        /// Voice enhancement: up to three peaking bands on the transmitted
+        /// voice, each with a broadband level. A band at 0 Hz is unused.
+        struct EqualizerBand
+        {
+            float hz;
+            float gainDb;
+            float q;
+            float levelDb;
+        };
+        std::array<EqualizerBand, 3> transmitEqualizer{};
     };
 
     /// The radio's calibrated values for the chip and codec.
@@ -106,6 +116,7 @@ public:
     /// Also writes the codec trims if start() could not.
     bool setAnalog(bool wide);
     bool setWorkMode(BasebandWorkMode mode);
+    bool setVoiceEnhancement(bool on);
     bool setCarrier(bool present);
     bool setMicrophone(bool on);
     /// Also switches the vocoder over (a few seconds the first time) and
@@ -152,6 +163,7 @@ private:
     BasebandInfo m_info;
     bool m_trimsWritten = false;
     std::uint8_t m_vocoder = 0;
+    bool m_voiceEnhancement = false;
     bool m_callOptionsSet = false;
 };
 

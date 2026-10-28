@@ -8,6 +8,8 @@
 #include "dmm/os/os.h"
 #include "dmm/services/log.h"
 
+#include <cmath>
+
 namespace dmm::services {
 
 namespace {
@@ -186,6 +188,9 @@ bool Sct3258Baseband::start()
     }
     if (const std::optional<Trims> trims = m_trims != nullptr ? m_trims() : std::nullopt) {
         writeTrims(*trims);
+    }
+    if (m_voiceEnhancement) {
+        setVoiceEnhancement(true);
     }
     return true;
 }
@@ -539,6 +544,49 @@ bool Sct3258Baseband::nextEvent(dmr::Event &event)
         }
     }
     return false;
+}
+
+bool Sct3258Baseband::setVoiceEnhancement(bool on)
+{
+    m_voiceEnhancement = on;
+    if (!m_info.running) {
+        return true; // sent when the chip has started
+    }
+    // Each band as a peaking biquad (the audio EQ cookbook's form) scaled
+    // by its level, at the chip's equalizer sample rate; off sends the
+    // same bands disabled.
+    bool ok = true;
+    for (int i = 0; i < Sct3258::EqualizerFilters; ++i) {
+        const Audio::EqualizerBand &band = m_audio.transmitEqualizer[static_cast<std::size_t>(i)];
+        const bool used = band.hz > 0.0F;
+        float c[5] = {0.0F, 0.0F, 1.0F, 0.0F, 0.0F}; // a1, a2, b0, b1, b2
+        if (used) {
+            const float a = std::pow(10.0F, band.gainDb / 40.0F);
+            const float level = std::pow(10.0F, band.levelDb / 20.0F);
+            const float w = 2.0F * 3.14159265F * band.hz / static_cast<float>(Sct3258::EqualizerSampleHz);
+            const float alpha = std::sin(w) / (2.0F * band.q);
+            const float a0 = 1.0F + alpha / a;
+            c[0] = -2.0F * std::cos(w) / a0;
+            c[1] = (1.0F - alpha / a) / a0;
+            c[2] = level * (1.0F + alpha * a) / a0;
+            c[3] = level * -2.0F * std::cos(w) / a0;
+            c[4] = level * (1.0F - alpha * a) / a0;
+        }
+        std::uint8_t field[2 + 10] = {Sct3258::EqualizerFilter,
+            static_cast<std::uint8_t>(Sct3258::EqualizerTransmit | (on && used ? Sct3258::EqualizerOn : 0) | (i + 1))};
+        for (int k = 0; k < 5; ++k) {
+            const long q14 = std::lround(c[k] * 16384.0F);
+            const auto v = static_cast<std::int16_t>(q14 > 32767 ? 32767 : q14 < -32768 ? -32768
+                                                                                        : q14);
+            field[2 + 2 * k] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(v) >> 8);
+            field[3 + 2 * k] = static_cast<std::uint8_t>(v);
+        }
+        ok = m_chip.control(field) == 0 && ok;
+    }
+    if (!ok) {
+        warn("voice enhancement not taken");
+    }
+    return ok;
 }
 
 bool Sct3258Baseband::setWorkMode(BasebandWorkMode mode)

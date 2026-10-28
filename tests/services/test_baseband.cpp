@@ -6,6 +6,9 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
+#include <complex>
+
 #include <cstring>
 #include <optional>
 #include <string>
@@ -430,4 +433,36 @@ TEST_CASE("the repeater wake-up goes on the chip's own timing")
     REQUIRE(chip.packets.size() >= 3);
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x19, 0x00}); // carrier off
     CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0x80}); // no slot: there is no timing yet
+}
+
+TEST_CASE("voice enhancement sends the board's bands as transmit equalizer filters")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband::Audio audio = TestAudio;
+    audio.transmitEqualizer = {{{1000.0F, 6.0F, 1.0F, 0.0F}, {}, {}}};
+    Sct3258Baseband baseband(sct, board, Blob, audio, testTrims);
+    REQUIRE(baseband.start());
+    chip.packets.clear();
+    REQUIRE(baseband.setVoiceEnhancement(true));
+    REQUIRE(chip.packets.size() == 3);
+    CHECK(chip.packets[0][1] == 0x70);
+    CHECK(chip.packets[0][2] == 0x31); // transmit, on, filter 1
+    CHECK(chip.packets[1][2] == 0x22); // unused bands stay off
+    CHECK(chip.packets[2][2] == 0x23);
+    // The filter's gain from its Q16.14 coefficients: +6 dB at 1 kHz,
+    // about 0 dB far from it.
+    const auto &p = chip.packets[0];
+    auto coef = [&p](int k) { return static_cast<std::int16_t>(p[3 + 2 * k] << 8 | p[4 + 2 * k]) / 16384.0; };
+    auto gainDb = [&](double hz) {
+        const std::complex<double> z = std::polar(1.0, -2.0 * 3.141592653589793 * hz / 24000.0);
+        const auto h = (coef(2) + coef(3) * z + coef(4) * z * z) / (1.0 + coef(0) * z + coef(1) * z * z);
+        return 20.0 * std::log10(std::abs(h));
+    };
+    CHECK(gainDb(1000.0) == doctest::Approx(6.0).epsilon(0.02));
+    CHECK(std::abs(gainDb(100.0)) < 0.5);
+    chip.packets.clear();
+    REQUIRE(baseband.setVoiceEnhancement(false));
+    CHECK(chip.packets[0][2] == 0x21); // off again
 }

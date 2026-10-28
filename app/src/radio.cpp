@@ -951,6 +951,12 @@ void handle(Message &message)
                        log::info("power") << "battery save " << saveModeText(saver.mode());
                    },
                    [](const BatterySaveStatus &) { saveStatus(); },
+                   [](const VoiceEnhancement &v) {
+                       withBaseband([&v](auto &b) {
+                           const bool ok = b.setVoiceEnhancement(v.on);
+                           log::info("baseband") << "voice enhancement " << (v.on ? "on" : "off") << (ok ? "" : ": refused");
+                       });
+                   },
                    [](const Microphone &m) {
                        fm->setMicrophoneMuted(!m.on);
                        log::info("fm") << "microphone " << (m.on ? "on" : "muted");
