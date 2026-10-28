@@ -182,10 +182,11 @@ void BoardRf::setSlotKeying(std::uint16_t value, bool shaped)
             allOff();
         }
         const std::uint32_t rises = slotLineRises.exchange(0, std::memory_order_relaxed);
-        if (wasKeying || rises != 0) {
-            dmm::services::log::info("rf") << "slot line rose " << rises << " times"
-                                           << (wasKeying ? ", slots keyed " : "")
-                                           << (wasKeying ? slotsKeyed.load(std::memory_order_relaxed) : 0u);
+        if (wasKeying) {
+            dmm::services::log::info("rf") << "slot line rose " << rises << " times, slots keyed "
+                                           << slotsKeyed.load(std::memory_order_relaxed);
+        } else if (rises != 0) {
+            dmm::services::log::info("rf") << "slot line rose " << rises << " times";
         }
         return;
     }
