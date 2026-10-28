@@ -15,8 +15,10 @@ endorsed by AnyTone or the makers of the chips it drives.
 ## Features
 
 **FM radio.** Receive and transmit using the radio's own factory
-calibration. Squelch levels, CTCSS and DCS tones both ways, repeater
-offsets, four power levels, a transmit timeout and amateur-band limits.
+calibration. Squelch levels, repeater offsets, four power levels, a
+transmit timeout and amateur-band limits. CTCSS and DCS tones both ways,
+with the codeplug's squelch mode (implemented, not yet tested on the
+radio).
 
 **Channels.** Channels, zones and the VFO come from the codeplug already
 on the radio. Pick zones from a list, step channels with the knob, or type
