@@ -22,10 +22,12 @@ public:
     void setTransmitPath(bool on) override;
     void setPowerAmplifier(bool on) override;
     void setPowerControl(std::uint16_t value) override;
-    void setSlotKeying(std::uint16_t value) override;
+    void setSlotKeying(std::uint16_t value, bool shaped) override;
 
     /// From the transmit slot line's interrupt.
     static void onSlotEdge();
+    /// From the output ramp's step timer interrupt (TIMER6).
+    static void onRampStep();
 
 private:
     bool m_trimStarted = false;

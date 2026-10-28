@@ -56,9 +56,10 @@ public:
         power = v;
         note("power " + std::to_string(v));
     }
-    void setSlotKeying(std::uint16_t v) override
+    void setSlotKeying(std::uint16_t v, bool s) override
     {
         slotPower = v;
+        slotShaped = s;
         note("slots " + std::to_string(v));
     }
     void note(const std::string &s)
@@ -76,6 +77,7 @@ public:
     bool amplifier = true;
     int power = -1;
     int slotPower = -1;
+    bool slotShaped = false;
 };
 
 void noSleep(unsigned) {}
@@ -565,6 +567,7 @@ TEST_CASE("digital transmit leaves the amplifier to the slot keying and stops it
     REQUIRE(fm.transmit(channel, PowerLevel::Low) == nullptr);
     CHECK(fm.transmitting());
     CHECK(rf.slotPower == 40 * 16);
+    CHECK_FALSE(rf.slotShaped); // Low: switched
     CHECK(std::find(events.begin(), events.end(), "pa on") == events.end());
     CHECK(std::find(events.begin(), events.end(), "path on") == events.end());
     CHECK(gpioField(bus.registers[0x1F], 3) == 2); // microphone input open: the baseband's signal
@@ -594,4 +597,22 @@ TEST_CASE("a continuous digital transmission keys the amplifier at once")
     CHECK(std::find(events.begin(), events.end(), "path on") != events.end());
     fm.endTransmit();
     CHECK_FALSE(rf.amplifier);
+}
+
+TEST_CASE("digital transmit at High shapes the slot keying")
+{
+    using dmm::services::PowerLevel;
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    Rda1846 chip(bus);
+    FakeRf rf;
+    Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+    REQUIRE(fm.start());
+    const D878Uv2Calibration cal = calibration();
+    testCalibration = &cal;
+    FmChannel channel{433'450'000, 433'450'000, false, {}, {}, true};
+    REQUIRE(fm.transmit(channel, PowerLevel::High) == nullptr);
+    CHECK(rf.slotShaped);
+    fm.endTransmit();
+    CHECK(rf.slotPower == 0);
 }

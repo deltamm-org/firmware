@@ -257,6 +257,11 @@ extern "C" void irq6Handler()
     BoardRf::onSlotEdge();
 }
 
+extern "C" void irq55Handler()
+{
+    BoardRf::onRampStep();
+}
+
 extern "C" void irq23Handler()
 {
     BoardInput::onEncoderEdge();

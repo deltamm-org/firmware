@@ -179,7 +179,8 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     // Power last.
     m_sleepMs(TransmitSettleMs);
     if (slotted) {
-        m_rf.setSlotKeying(power);
+        // Shaped at the higher levels.
+        m_rf.setSlotKeying(power, level == PowerLevel::High || level == PowerLevel::Turbo);
         m_power = power;
         logNumber("power control by slot", m_power, "");
         return nullptr;
@@ -209,7 +210,7 @@ void Rda1846Transceiver::idle()
 {
     // The power amplifier goes off before the transceiver stops
     // transmitting.
-    m_rf.setSlotKeying(0);
+    m_rf.setSlotKeying(0, false);
     m_rf.setPowerAmplifier(false);
     m_rf.setTransmitPath(false);
     m_rf.setPowerControl(0);

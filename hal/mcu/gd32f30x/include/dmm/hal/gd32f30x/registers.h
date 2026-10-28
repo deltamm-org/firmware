@@ -68,6 +68,7 @@ constexpr std::uint32_t gpioClock(unsigned port)
 inline constexpr std::uint32_t Timer2Clock = 1u << 1;
 inline constexpr std::uint32_t Timer3Clock = 1u << 2;
 inline constexpr std::uint32_t Timer4Clock = 1u << 3;
+inline constexpr std::uint32_t Timer6Clock = 1u << 5;
 inline constexpr std::uint32_t UsbdClock = 1u << 23;
 inline constexpr std::uint32_t DacClock = 1u << 29;
 
@@ -201,6 +202,7 @@ namespace timer {
 inline constexpr std::uintptr_t Timer2 = 0x40000400;
 inline constexpr std::uintptr_t Timer3 = 0x40000800;
 inline constexpr std::uintptr_t Timer4 = 0x40000C00;
+inline constexpr std::uintptr_t Timer6 = 0x40001400;
 inline constexpr std::uintptr_t Timer7 = 0x40013400;
 inline constexpr std::uintptr_t Ctl0 = 0x00;
 inline constexpr std::uintptr_t Dmainten = 0x0C;
@@ -209,6 +211,7 @@ inline constexpr std::uintptr_t Swevg = 0x14;
 inline constexpr std::uintptr_t Chctl0 = 0x18; // channels 0 and 1
 inline constexpr std::uintptr_t Chctl1 = 0x1C; // channels 2 and 3
 inline constexpr std::uintptr_t Chctl2 = 0x20; // enables and polarities
+inline constexpr std::uintptr_t Cnt = 0x24;
 inline constexpr std::uintptr_t Psc = 0x28;
 inline constexpr std::uintptr_t Car = 0x2C;
 constexpr std::uintptr_t channelValue(unsigned ch)
