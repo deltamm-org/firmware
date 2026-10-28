@@ -294,12 +294,17 @@ std::optional<std::array<std::uint8_t, 2>> D878Uv2Calibration::basebandModGain(s
 
 std::optional<std::array<std::uint8_t, 8>> D878Uv2Calibration::basebandSlotTiming() const
 {
-    if (!present() || m_data[SlotTimingAt + 8] != SlotTimingValid) {
+    if (!present()) {
         return std::nullopt;
     }
     std::array<std::uint8_t, 8> t{};
     for (std::size_t i = 0; i < t.size(); ++i) {
         t[i] = m_data[SlotTimingAt + i];
+    }
+    // Not calibrated: a default offset, the rest as stored.
+    if (m_data[SlotTimingAt + 8] != SlotTimingValid) {
+        t[0] = 0x00;
+        t[1] = 0x6E;
     }
     return t;
 }

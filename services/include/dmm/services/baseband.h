@@ -4,6 +4,7 @@
 #pragma once
 
 #include "dmm/services/dmr.h"
+#include "dmm/services/power_level.h"
 
 #include <concepts>
 #include <cstdint>
@@ -60,11 +61,13 @@ enum class BasebandWorkMode : std::uint8_t
 ///   direct. False if the chip did not take it.
 /// - nextEvent(event): the next thing heard on a digital channel; false
 ///   when there is none.
-/// - startDigitalCall(settings, lc, transmitHz, timed): transmits the
-///   call's header, then voice from the microphone; with @p timed (a
+/// - startDigitalCall(settings, lc, transmitHz, timed, level): transmits
+///   the call's header, then voice from the microphone; with @p timed (a
 ///   repeater's timing just received) in the channel's slot on that
-///   timing, else on the chip's own. The caller keys the RF path. False if
-///   the chip did not take it.
+///   timing, else on the chip's own. @p level: the transmit power level,
+///   which decides how early the slot line leads each slot, to match how
+///   the amplifier is keyed at that level. The caller keys the RF path.
+///   False if the chip did not take it.
 /// - endDigitalCall(settings, lc): sends the call's terminator; the
 ///   AllSent event follows once it has gone out.
 /// - wakeRepeater(settings, source): sends the control blocks that wake
@@ -75,7 +78,7 @@ enum class BasebandWorkMode : std::uint8_t
 template <class T>
 concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, std::uint16_t ms, int percent, bool on,
     BasebandWorkMode mode, std::string_view text, const dmr::ChannelSettings &dmrSettings, std::uint32_t receiveHz,
-    dmr::Event &event, const dmr::FullLc &lc) {
+    dmr::Event &event, const dmr::FullLc &lc, PowerLevel level) {
     { bb.start() } -> std::same_as<bool>;
     { bb.info() } -> std::same_as<BasebandInfo>;
     { bb.setSpeakerVolume(step) } -> std::same_as<bool>;
@@ -87,7 +90,7 @@ concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, s
     { bb.setMicrophone(on) } -> std::same_as<bool>;
     { bb.setDigital(dmrSettings, receiveHz, on) } -> std::same_as<bool>;
     { bb.nextEvent(event) } -> std::same_as<bool>;
-    { bb.startDigitalCall(dmrSettings, lc, receiveHz, on) } -> std::same_as<bool>;
+    { bb.startDigitalCall(dmrSettings, lc, receiveHz, on, level) } -> std::same_as<bool>;
     { bb.endDigitalCall(dmrSettings, lc) } -> std::same_as<bool>;
     { bb.wakeRepeater(dmrSettings, receiveHz) } -> std::same_as<bool>;
     { bb.debugCommand(text) } -> std::same_as<bool>;

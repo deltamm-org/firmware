@@ -378,7 +378,7 @@ TEST_CASE("a DMR call: slot, microphone, transmit, header, voice; then the termi
     settings.slot = 1;
     using dmm::services::dmr::CallType;
     const auto lc = dmm::services::dmr::FullLc::voiceCall({CallType::Group, 244}, 1234567);
-    REQUIRE(baseband.startDigitalCall(settings, lc, 145'637'500, false));
+    REQUIRE(baseband.startDigitalCall(settings, lc, 145'637'500, false, dmm::services::PowerLevel::High));
     const std::vector<std::uint8_t> lcBytes = {0x00, 0x00, 0x00, 0x00, 0x00, 0xF4, 0x12, 0xD6, 0x87};
     auto frame = [&](std::uint8_t property) {
         std::vector<std::uint8_t> f = {0x08, 0x77, 0x01, 0x43, property, 0x09};
@@ -415,7 +415,7 @@ TEST_CASE("on a repeater's fresh timing a DMR call takes the channel's slot on i
     REQUIRE(baseband.setDigital(settings, 438'075'000, true));
     chip.packets.clear();
     using dmm::services::dmr::CallType;
-    REQUIRE(baseband.startDigitalCall(settings, dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567), 430'475'000, true));
+    REQUIRE(baseband.startDigitalCall(settings, dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567), 430'475'000, true, dmm::services::PowerLevel::High));
     CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x08, 0x6F, 0xC2});
 }
 
@@ -465,4 +465,35 @@ TEST_CASE("voice enhancement sends the board's bands as transmit equalizer filte
     chip.packets.clear();
     REQUIRE(baseband.setVoiceEnhancement(false));
     CHECK(chip.packets[0][2] == 0x21); // off again
+}
+
+TEST_CASE("the slot line leads by the calibrated time at High, 20 steps less at Low")
+{
+    using dmm::services::PowerLevel;
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims,
+        [](std::uint32_t) -> std::optional<Sct3258Baseband::DigitalTrims> {
+            return Sct3258Baseband::DigitalTrims{{}, {0x08, 0x00}, {0x08, 0x00}, std::nullopt, std::nullopt,
+                std::array<std::uint8_t, 8>{0x00, 0x6E, 1, 2, 3, 4, 5, 6}};
+        });
+    REQUIRE(baseband.start());
+    dmm::services::dmr::ChannelSettings settings;
+    using dmm::services::dmr::CallType;
+    const auto lc = dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567);
+    auto offset = [&chip] {
+        for (const auto &p : chip.packets) {
+            if (p.size() > 2 && p[0] == 0x08 && p[1] == 0x7A) {
+                return p;
+            }
+        }
+        return std::vector<std::uint8_t>{};
+    };
+    chip.packets.clear();
+    REQUIRE(baseband.startDigitalCall(settings, lc, 430'475'000, false, PowerLevel::High));
+    CHECK(offset() == std::vector<std::uint8_t>{0x08, 0x7A, 0x00, 0x6E, 1, 2, 3, 4, 5, 6});
+    chip.packets.clear();
+    REQUIRE(baseband.startDigitalCall(settings, lc, 430'475'000, false, PowerLevel::Low));
+    CHECK(offset() == std::vector<std::uint8_t>{0x08, 0x7A, 0x00, 0x82, 1, 2, 3, 4, 5, 6});
 }

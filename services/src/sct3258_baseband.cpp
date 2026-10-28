@@ -32,6 +32,8 @@ constexpr unsigned SwitchMs = 500;
 // over and how long each wait for the chip to take it.
 constexpr int FirstFrameTries = 4;
 constexpr unsigned FirstFrameMs = 250;
+// DMR_OFFSET at the lower power levels: added to the offset's low byte.
+constexpr std::uint8_t LowPowerSlotShift = 0x14;
 // Repeater wake-up bursts per try: one, as ETSI TS 102 361-1 has it.
 constexpr int WakeBursts = 1;
 // DMR_CALL_SLOT: receive on both slots (direct channels); 1 or 2 is that
@@ -408,7 +410,7 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
 }
 
 bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc,
-    std::uint32_t transmitHz, bool timed)
+    std::uint32_t transmitHz, bool timed, PowerLevel level)
 {
     if (!m_info.running) {
         return false;
@@ -428,6 +430,12 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
             std::uint8_t timing[1 + 8] = {Sct3258::DmrOffset};
             for (std::size_t i = 0; i < 8; ++i) {
                 timing[1 + i] = (*trims->slotTiming)[i];
+            }
+            // The calibrated lead is for an output that ramps (High and
+            // Turbo); at the lower levels the output switches, and the slot
+            // line moves by 20 steps.
+            if (level != PowerLevel::High && level != PowerLevel::Turbo) {
+                timing[2] = static_cast<std::uint8_t>(timing[2] + LowPowerSlotShift);
             }
             if (m_chip.control(Sct3258::TypeDmr, timing) != 0) {
                 warn("slot timing not taken");

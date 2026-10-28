@@ -200,3 +200,15 @@ TEST_CASE("the digital voice gains come from the UHF block, nothing when erased"
     d[0x9C] = 0xFF;
     CHECK_FALSE(loaded(d).basebandMicGain().has_value());
 }
+
+TEST_CASE("the slot timing as calibrated, or a default offset")
+{
+    auto d = sample();
+    for (std::uint8_t i = 0; i < 8; ++i) {
+        d[0x100 + i] = static_cast<std::uint8_t>(0x10 + i);
+    }
+    d[0x108] = 'f';
+    CHECK(*loaded(d).basebandSlotTiming() == std::array<std::uint8_t, 8>{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17});
+    d[0x108] = 0xFF; // not calibrated
+    CHECK(*loaded(d).basebandSlotTiming() == std::array<std::uint8_t, 8>{0x00, 0x6E, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17});
+}
