@@ -298,11 +298,31 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
                 {{(w - textWidth(nf, name)) / 2, nameY + (Large.height - nf.height) / 2, name, &nf, p::Text}});
             fl << f.view() << " MHz";
         }
-        band(d, freqY, detY - freqY, {{(w - textWidth(Medium, fl.view())) / 2, freqY, fl.view(), &Medium, p::Text}});
+        if (s.roaming) {
+            // The repeater in use changes as the radio roams: small, under
+            // the name.
+            lib::StaticString<40> rl;
+            if (s.roamSearching) {
+                rl << "Searching...";
+            } else {
+                rl << mhz(s.roamHz != 0 ? s.roamHz : c->receiveHz).view() << "  TS" << c->dmr.slot << "  CC"
+                   << s.roamColourCode;
+                if (!s.roamSite.empty()) {
+                    rl << "  " << s.roamSite;
+                }
+            }
+            band(d, freqY, detY - freqY,
+                {{(w - textWidth(Body, rl.view())) / 2, freqY + (Medium.height - Body.height) / 2, rl.view(), &Body,
+                    p::Dim}});
+        } else {
+            band(d, freqY, detY - freqY, {{(w - textWidth(Medium, fl.view())) / 2, freqY, fl.view(), &Medium, p::Text}});
+        }
 
         // Details: mode and width, tones, power, offset.
         lib::StaticString<40> det;
-        if (!c->analog()) {
+        if (s.roaming) {
+            det << "DMR ROAMING";
+        } else if (!c->analog()) {
             det << "DMR CC" << c->dmr.colourCode << " TS" << c->dmr.slot;
         } else {
             det << "FM " << (c->wide ? "25k" : "12.5k");
@@ -316,7 +336,7 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
         band(d, detY, det2Y - detY, {{4, detY, det.view(), &Body, p::Dim}});
         lib::StaticString<40> det2;
         det2 << powerText(c->power);
-        if (c->transmitHz != c->receiveHz) {
+        if (c->transmitHz != c->receiveHz && !s.roaming) {
             const bool up = c->transmitHz > c->receiveHz;
             const std::uint32_t off = up ? c->transmitHz - c->receiveHz : c->receiveHz - c->transmitHz;
             det2 << "  " << (up ? '+' : '-') << mhz(off).view();

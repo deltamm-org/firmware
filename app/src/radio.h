@@ -4,6 +4,7 @@
 #pragma once
 
 #include "dmm/app/app.h"
+#include "dmm/lib/fn_ref.h"
 #include "dmm/lib/format.h"
 #include "dmm/services/codeplug.h"
 #include "dmm/services/fm_transceiver.h"
@@ -147,6 +148,25 @@ struct UseChannel
     services::Channel channel;
     std::uint8_t squelch;
 };
+/// Looks for the best repeater of the roaming zone now.
+struct RoamNow
+{
+};
+/// Roaming on, or off: every channel works on its own frequencies. Takes
+/// effect with the next UseChannel.
+struct RoamingOn
+{
+    bool on;
+};
+/// When roaming looks for a better repeater by itself.
+struct RoamingSetup
+{
+    services::RoamingSettings settings;
+};
+/// Logs the roaming state.
+struct RoamStatus
+{
+};
 
 /// Switches the GPS receiver's supply, which runs through the FM
 /// transceiver's pins.
@@ -155,7 +175,7 @@ struct GpsPower
     bool on;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, BatterySave, BatterySaveStatus, VoiceEnhancement, GpsPower>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingOn, RoamingSetup, RoamStatus, BatterySave, BatterySaveStatus, VoiceEnhancement, GpsPower>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.
@@ -183,5 +203,9 @@ bool ready();
 /// The talkgroups heard besides the channel's own contact (the channel's
 /// receive group list); set before posting the channel.
 void setReceiveGroups(std::span<const std::uint32_t> ids);
+
+/// The roaming zone's repeaters, which @p fill writes and counts; set before
+/// posting a roaming channel.
+void setRoamingSites(lib::FnRef<std::size_t(std::span<services::RoamingSite>)> fill);
 
 } // namespace dmm::app::radio
