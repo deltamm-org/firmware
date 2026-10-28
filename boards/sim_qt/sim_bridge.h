@@ -29,6 +29,7 @@ class SimBridge : public QObject, public dmm::services::Leds, public dmm::servic
     QML_SINGLETON
     Q_PROPERTY(bool redOn READ redOn NOTIFY ledsChanged)
     Q_PROPERTY(bool greenOn READ greenOn NOTIFY ledsChanged)
+    Q_PROPERTY(bool blueOn READ blueOn NOTIFY ledsChanged)
     Q_PROPERTY(QStringList keyNames READ keyNames CONSTANT)
 
 public:
@@ -42,6 +43,10 @@ public:
     bool greenOn() const
     {
         return m_green;
+    }
+    bool blueOn() const
+    {
+        return m_blue;
     }
 
     SimDisplay &display()
@@ -100,6 +105,7 @@ private:
 
     bool m_red = false;
     bool m_green = false;
+    bool m_blue = false;
     SimDisplay m_display;
     SimInput m_input;
     SimBattery m_battery;

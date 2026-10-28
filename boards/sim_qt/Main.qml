@@ -29,7 +29,8 @@ ApplicationWindow {
                 Repeater {
                     model: [
                         { name: qsTr("Red"), lit: SimBridge.redOn, color: "#ff3b30" },
-                        { name: qsTr("Green"), lit: SimBridge.greenOn, color: "#34c759" }
+                        { name: qsTr("Green"), lit: SimBridge.greenOn, color: "#34c759" },
+                        { name: qsTr("Blue"), lit: SimBridge.blueOn, color: "#0a84ff" }
                     ]
                     delegate: Row {
                         required property var modelData

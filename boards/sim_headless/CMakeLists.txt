@@ -7,4 +7,4 @@ dmm_warnings(sim)
 
 add_test(NAME sim-boots COMMAND sim --seconds 2 --leds)
 set_tests_properties(sim-boots PROPERTIES
-    PASS_REGULAR_EXPRESSION "DeltaMM [0-9.]+ on sim_headless.*LED green on")
+    PASS_REGULAR_EXPRESSION "DeltaMM [0-9.]+ on sim_headless.*LED red on.*LED red off")

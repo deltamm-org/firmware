@@ -158,6 +158,17 @@ void start(board::Fm &fm, board::Baseband *baseband);
 /// the task has not started.
 bool post(const Message &message);
 
+/// What the radio is doing on the air, for the status LEDs.
+enum class Activity : std::uint8_t
+{
+    Idle,
+    FmReceive,  // the speaker is open on an FM signal
+    DmrReceive, // a DMR call is heard
+    Transmit,   // on the air, FM or DMR, a repeater wake-up included
+};
+/// Any task may ask.
+Activity activity();
+
 /// True once the radio's chips are up and it takes commands that reach the
 /// air; false while they start or restart. Any task may ask.
 bool ready();

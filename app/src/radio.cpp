@@ -33,6 +33,9 @@ board::Baseband *baseband = nullptr;
 // with an interrupt on top and a margin.
 os::Task<768> radioTask;
 os::Queue<Message, 8> inbox;
+// What the radio does on the air, kept for other tasks.
+std::atomic<Activity> airActivity{Activity::Idle};
+bool onAir = false;
 // The chips are up: set after the start or a restart of the baseband.
 std::atomic<bool> chipsReady{false};
 // The last speaker volume asked for, applied again after every start.
@@ -144,12 +147,29 @@ void withBaseband(F &&f)
 
 // The squelch gate's result: the baseband passes receive audio only while
 // told a carrier is present, and the speaker opens for it.
+void updateActivity()
+{
+    airActivity.store(onAir     ? Activity::Transmit
+            : !speakerOpen      ? Activity::Idle
+            : fmChannel.digital ? Activity::DmrReceive
+                                : Activity::FmReceive);
+}
+
+// The screen's and LEDs' transmit indication.
+void showTransmitting(bool on)
+{
+    onAir = on;
+    updateActivity();
+    ui::post(ui::Transmitting{on});
+}
+
 void setSpeaker(bool open)
 {
     if (open == speakerOpen) {
         return;
     }
     speakerOpen = open;
+    updateActivity();
     if (open) {
         power::hold(power::AwakeReason::Carrier);
     } else {
@@ -630,7 +650,7 @@ void startDigitalTransmit(services::FmChannel channel)
     }
     bool ok = true;
     // On the air from here, the wake-up included.
-    ui::post(ui::Transmitting{true});
+    showTransmitting(true);
     withBaseband([&](auto &b) {
         // An idle repeater is woken first, then its timing awaited.
         if (waking) {
@@ -655,7 +675,7 @@ void startDigitalTransmit(services::FmChannel channel)
         const bool silent = dmrRepeater && !timingFound;
         logDmrRefused(silent ? "the repeater did not answer" : "the baseband refused",
             silent ? "No repeater" : "TX refused");
-        ui::post(ui::Transmitting{false});
+        showTransmitting(false);
         receive();
         return;
     }
@@ -715,7 +735,7 @@ void startTransmit()
     }
     transmitting = true;
     power::hold(power::AwakeReason::Transmit);
-    ui::post(ui::Transmitting{true});
+    showTransmitting(true);
     transmitStarted = os::nowMs();
     log::info("fm") << "transmitting " << mhz(channel.transmitHz).view() << " MHz, power " << powerName(powerLevel)
                     << ", " << toneText(transmitTone).view() << ", timeout " << timeoutS << " s, audio "
@@ -739,7 +759,7 @@ void stopTransmit(const char *why)
     withBaseband([](auto &b) { b.setMicrophone(false); });
     transmitting = false;
     power::release(power::AwakeReason::Transmit);
-    ui::post(ui::Transmitting{false});
+    showTransmitting(false);
     log::info("fm") << "transmit off (" << why << ") after " << (os::nowMs() - transmitStarted) / 100 / 10 << "."
                     << (os::nowMs() - transmitStarted) / 100 % 10 << " s";
     receive();
@@ -1032,6 +1052,11 @@ void setReceiveGroups(std::span<const std::uint32_t> ids)
     receiveGroupCount = std::min(ids.size(), std::size(receiveGroupIds));
     std::copy_n(ids.begin(), receiveGroupCount, receiveGroupIds);
     groupsLock.unlock();
+}
+
+Activity activity()
+{
+    return airActivity.load();
 }
 
 bool ready()

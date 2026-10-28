@@ -86,7 +86,7 @@ SimBridge *SimBridge::create(QQmlEngine *, QJSEngine *)
 void SimBridge::set(Led led, bool on)
 {
     QMetaObject::invokeMethod(this, [this, led, on] {
-        bool &state = led == Led::Red ? m_red : m_green;
+        bool &state = led == Led::Red ? m_red : led == Led::Green ? m_green : m_blue;
         if (state != on) {
             state = on;
             emit ledsChanged();

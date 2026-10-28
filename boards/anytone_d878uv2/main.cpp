@@ -88,7 +88,9 @@ class BoardLeds final : public dmm::services::Leds
 public:
     void set(Led led, bool on) override
     {
-        hal::write(led == Led::Red ? RedLed : GreenLed, on);
+        hal::write(led == Led::Red ? RedLed : led == Led::Green ? GreenLed
+                                                                : BlueLed,
+            on);
     }
 };
 
@@ -283,7 +285,7 @@ void hal::boardMain()
     for (Port port : {Port::A, Port::B, Port::C, Port::D, Port::E}) {
         enablePortClock(port);
     }
-    for (Pin pin : {TransmitEnable, PowerAmplifierEnable, SpeakerAmplifier, ReceiveAudioRoute, BluetoothPower, PowerHold, RedLed, GreenLed, ThirdLed, UsbPullUp}) {
+    for (Pin pin : {TransmitEnable, PowerAmplifierEnable, SpeakerAmplifier, ReceiveAudioRoute, BluetoothPower, PowerHold, RedLed, GreenLed, BlueLed, UsbPullUp}) {
         outputLow(pin);
     }
     static BoardBaseband basebandBoard;

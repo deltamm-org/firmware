@@ -49,19 +49,21 @@ public:
 
     void set(Led led, bool on) override
     {
-        const int index = led == Led::Red ? 0 : 1;
+        const int index = static_cast<int>(led);
         if (m_state[index] == on) {
             return;
         }
         m_state[index] = on;
         if (m_print) {
-            printLine(QStringLiteral("LED %1 %2").arg(led == Led::Red ? QStringLiteral("red") : QStringLiteral("green"), on ? QStringLiteral("on") : QStringLiteral("off")));
+            const QString name = led == Led::Red ? QStringLiteral("red") : led == Led::Green ? QStringLiteral("green")
+                                                                                             : QStringLiteral("blue");
+            printLine(QStringLiteral("LED %1 %2").arg(name, on ? QStringLiteral("on") : QStringLiteral("off")));
         }
     }
 
 private:
     bool m_print;
-    bool m_state[2] = {false, false};
+    bool m_state[3] = {false, false, false};
 };
 
 // The simulated radio has no power switch or watchdog; quitting the

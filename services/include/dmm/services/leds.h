@@ -15,6 +15,7 @@ public:
     {
         Red,
         Green,
+        Blue,
     };
 
     virtual void set(Led led, bool on) = 0;
