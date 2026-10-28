@@ -86,6 +86,11 @@ cmake --preset fw-d878uv2-release -DDMM_STOCK_FIRMWARE=/path/to/firmware.CDD
 cmake --build --preset fw-d878uv2-release
 ```
 
+If a configure failed, for example before the toolchain was found,
+configure again from scratch with `--fresh` (or delete the build folder):
+a failed first configure can leave the build without optimisation, and
+such firmware does not start.
+
 The D878UVII's DMR baseband chip, the SCT3258, needs a 2 KB boot program
 made for that chip, loaded into it at every power-on. The build takes it
 from your own copy of the radio's factory firmware update file

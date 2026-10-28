@@ -14,6 +14,15 @@ else()
     set(_dmm_tc_bin "")
 endif()
 
+# Stop here when the compiler is not there: a configure that fails later,
+# in project(), leaves empty build-type flags in the cache.
+find_program(_dmm_gxx "${_dmm_tc_bin}arm-none-eabi-g++" NO_CACHE)
+if(NOT _dmm_gxx)
+    message(FATAL_ERROR
+        "Arm GNU Toolchain not found: put its bin folder on PATH or set ARM_GNU_TOOLCHAIN to its root folder, "
+        "then configure again.")
+endif()
+
 set(CMAKE_C_COMPILER "${_dmm_tc_bin}arm-none-eabi-gcc")
 set(CMAKE_CXX_COMPILER "${_dmm_tc_bin}arm-none-eabi-g++")
 set(CMAKE_ASM_COMPILER "${_dmm_tc_bin}arm-none-eabi-gcc")
