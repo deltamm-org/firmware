@@ -163,8 +163,9 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     if (!slotted) {
         m_rf.setTransmitPath(true);
     }
-    // The microphone input stays open on digital channels too: the
-    // baseband's signal comes in there.
+    // The microphone input stays open on every transmission; on digital
+    // channels the deviation below is zero, so nothing from it reaches the
+    // air.
     muteMicrophone(false);
     m_chip.setFrequency(hz);
     m_chip.setBandwidth(bandwidth(channel));
@@ -172,7 +173,14 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
     const std::uint8_t toneDeviation = tone.kind == Tone::Kind::Ctcss ? trims->ctcssDeviation
         : tone.kind == Tone::Kind::Dcs                                ? trims->dcsDeviation
                                                                       : 0;
-    m_chip.setDeviation(trims->voiceDeviation, toneDeviation);
+    // Digital: no deviation of the transceiver's own at all. The baseband
+    // modulates the RF itself; any voice or tone deviation here would put
+    // analog FM on top of the DMR signal.
+    if (channel.digital) {
+        m_chip.setDeviation(0, 0);
+    } else {
+        m_chip.setDeviation(trims->voiceDeviation, toneDeviation);
+    }
     m_chip.setTransmitTone(channel.digital ? Chip::SubTone{} : chipTone(tone));
     m_chip.setMode(Chip::Mode::Transmit);
     setPin(m_pins.transmitHighBand, hz > m_pins.splitHz);

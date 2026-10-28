@@ -570,7 +570,8 @@ TEST_CASE("digital transmit leaves the amplifier to the slot keying and stops it
     CHECK_FALSE(rf.slotShaped); // Low: switched
     CHECK(std::find(events.begin(), events.end(), "pa on") == events.end());
     CHECK(std::find(events.begin(), events.end(), "path on") == events.end());
-    CHECK(gpioField(bus.registers[0x1F], 3) == 2); // microphone input open: the baseband's signal
+    CHECK(gpioField(bus.registers[0x1F], 3) == 2); // microphone input open
+    CHECK(bus.registers[0x59] == 0);               // but no deviation of its own: no analog FM on DMR
     fm.endTransmit();
     CHECK(rf.slotPower == 0);
     CHECK_FALSE(rf.amplifier);
