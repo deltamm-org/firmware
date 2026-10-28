@@ -65,6 +65,15 @@ struct DmrCall
     std::uint32_t source;
     std::uint32_t destination;
 };
+/// Roaming on the current channel: a search under way, or the repeater in
+/// use (@c site -1: none yet) with its output frequency and colour code.
+struct Roaming
+{
+    bool searching;
+    std::int8_t site;
+    std::uint32_t receiveHz;
+    std::uint8_t colourCode;
+};
 /// The squelch opened (true) or closed.
 struct Receiving
 {
@@ -133,7 +142,7 @@ struct Gps
 };
 
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, Notice, Gps>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, Notice, Gps>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels.

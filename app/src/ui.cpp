@@ -404,6 +404,7 @@ enum class MenuItem : std::uint8_t
     Squelch,
     SquelchMode,
     Power,
+    Roaming,
     Backlight,
     BacklightTime,
     BatterySave,
@@ -435,7 +436,7 @@ struct GroupInfo
     std::uint8_t count;
 };
 constexpr GroupInfo Groups[] = {
-    {"Channel", {MenuItem::Squelch, MenuItem::SquelchMode, MenuItem::Power}, 3},
+    {"Channel", {MenuItem::Squelch, MenuItem::SquelchMode, MenuItem::Power, MenuItem::Roaming}, 4},
     {"Display", {MenuItem::Backlight, MenuItem::BacklightTime}, 2},
     {"Keys", {MenuItem::KeyLock, MenuItem::AutoLock}, 2},
     {"Battery", {MenuItem::BatterySave}, 1},
@@ -506,6 +507,25 @@ struct HeardCall
 };
 HeardCall heard;
 char callChannel[Channel::NameBytes + 1] = {};
+// Roaming: the roaming zone, how many repeaters it has, and the repeater
+// the radio task last reported.
+std::uint8_t roamingZone = services::RoamingSettings::NoZone;
+std::size_t roamingSites = 0;
+// Roaming switched on in the menu, for this session.
+bool roamingOn = true;
+struct RoamState
+{
+    bool searching = false;
+    int site = -1;
+    std::uint32_t receiveHz = 0;
+    std::uint8_t colourCode = 0;
+    char name[CodeplugSource::SiteNameBytes + 1] = {};
+};
+RoamState roam;
+// The side keys' functions, and whether a long press has already acted.
+services::KeyFunction sideShort[CodeplugSettings::SideKeys] = {};
+services::KeyFunction sideLong[CodeplugSettings::SideKeys] = {};
+bool sideLongDone[CodeplugSettings::SideKeys] = {};
 constexpr os::Ticks CallHoldMs = 5000;
 constexpr std::uint32_t AllCallId = 0xFFFFFF;
 
@@ -714,6 +734,15 @@ void uiMain(void *)
             gpsAtStart = selector.settings().gps;
             gpsSystems = selector.settings().gpsSystems;
             timeZoneMinutes = selector.settings().timeZoneMinutes;
+            const services::RoamingSettings &roaming = selector.settings().roaming;
+            roamingZone = roaming.zone;
+            radio::setRoamingSites([](std::span<services::RoamingSite> out) {
+                roamingSites = roamingZone != services::RoamingSettings::NoZone ? codeplug->roamingSites(roamingZone, out) : 0;
+                return roamingSites;
+            });
+            radio::post(radio::RoamingSetup{roaming});
+            std::copy(std::begin(selector.settings().sideShort), std::end(selector.settings().sideShort), sideShort);
+            std::copy(std::begin(selector.settings().sideLong), std::end(selector.settings().sideLong), sideLong);
             log::info("ui") << "codeplug: zone " << selector.zone() << " \"" << selector.zoneName() << "\", "
                             << selector.zoneSize() << " channels" << (selector.vfoMode() ? ", VFO" : "");
             logLockSettings();
@@ -777,6 +806,12 @@ void uiMain(void *)
         s.gps = gpsState;
         clockText = localClockText();
         s.clock = clockText.view();
+        const std::optional<Channel> ch = channels != nullptr ? channels->current() : std::nullopt;
+        s.roaming = roamingOn && ch && ch->digital() && ch->roaming && roamingSites > 0;
+        s.roamSearching = roam.searching;
+        s.roamHz = roam.receiveHz;
+        s.roamColourCode = roam.colourCode;
+        s.roamSite = roam.name;
         return s;
     };
     auto callInfo = [&] {
@@ -880,6 +915,10 @@ void uiMain(void *)
         case MenuItem::Power:
             label = "Power";
             value << (channels->current() ? Powers[static_cast<int>(channels->current()->power)] : "-");
+            break;
+        case MenuItem::Roaming:
+            label = "Roaming";
+            value << (roamingOn ? "On" : "Off");
             break;
         case MenuItem::Backlight:
             label = "Backlight";
@@ -989,6 +1028,12 @@ void uiMain(void *)
             if (channels->current()) {
                 menuValue.select(static_cast<std::uint8_t>(channels->current()->power));
             }
+            break;
+        case MenuItem::Roaming:
+            menuValue.open("Roaming");
+            menuValue.add(0, "Off");
+            menuValue.add(1, "On");
+            menuValue.select(roamingOn ? 1 : 0);
             break;
         case MenuItem::Backlight:
             menuValue.open("Backlight");
@@ -1121,6 +1166,10 @@ void uiMain(void *)
             channels->setPower(static_cast<PowerLevel>(v));
             log::info("ui") << "power " << v;
             break;
+        case MenuItem::Roaming:
+            roamingOn = v == 1;
+            radio::post(radio::RoamingOn{roamingOn});
+            break;
         case MenuItem::Backlight:
             backlightLevel = v;
             d.setBacklight(v);
@@ -1165,7 +1214,8 @@ void uiMain(void *)
         case MenuItem::Count:
             break;
         }
-        if (menuItem == MenuItem::Squelch || menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power) {
+        if (menuItem == MenuItem::Squelch || menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power ||
+            menuItem == MenuItem::Roaming) {
             useChannel();
         }
         // Back to the list it came from, showing the new value; straight to
@@ -1270,6 +1320,25 @@ void uiMain(void *)
             openGroup(MenuGroup::Channel, true);
         }
     };
+    // A side key's function: on the press when it has no long-press
+    // function, else on the release before a long press.
+    auto sideKey = [&](Key key, KeyDebouncer::EventType type) {
+        using Type = KeyDebouncer::EventType;
+        const std::size_t k = static_cast<std::size_t>(key) - static_cast<std::size_t>(Key::Side1);
+        services::KeyFunction f = services::KeyFunction::None;
+        if (type == Type::Press) {
+            sideLongDone[k] = false;
+            f = sideLong[k] == services::KeyFunction::None ? sideShort[k] : services::KeyFunction::None;
+        } else if (type == Type::LongPress) {
+            sideLongDone[k] = true;
+            f = sideLong[k];
+        } else if (type == Type::Release && sideLong[k] != services::KeyFunction::None && !sideLongDone[k]) {
+            f = sideShort[k];
+        }
+        if (f == services::KeyFunction::Roam) {
+            radio::post(radio::RoamNow{});
+        }
+    };
     auto onLockVerdict = [&](Verdict v) {
         if (v == Verdict::Locked || v == Verdict::Unlocked) {
             refreshLockMark();
@@ -1370,6 +1439,12 @@ void uiMain(void *)
                                    show(nextView());
                                    return;
                                }
+                               if (e.key >= Key::Side1 && e.key <= Key::Side3) {
+                                   if (channels != nullptr) {
+                                       sideKey(e.key, e.type);
+                                   }
+                                   return;
+                               }
                                if (view == View::Gps) {
                                    if (e.type == Type::Press && (e.key == Key::Exit || e.key == Key::Menu)) {
                                        openGroup(MenuGroup::Gps, false);
@@ -1408,6 +1483,21 @@ void uiMain(void *)
                                    heard.ended = os::nowMs();
                                }
                                if (view == View::Standby && !noticeShown) {
+                                   redrawView();
+                               }
+                           },
+                           [&](const Roaming &r) {
+                               roam.searching = r.searching;
+                               roam.site = r.site;
+                               roam.receiveHz = r.receiveHz;
+                               roam.colourCode = r.colourCode;
+                               roam.name[0] = '\0';
+                               std::array<char, CodeplugSource::SiteNameBytes + 1> name{};
+                               if (r.site >= 0 && codeplug != nullptr &&
+                                   codeplug->roamingSiteName(roamingZone, static_cast<std::size_t>(r.site), name)) {
+                                   copyName(roam.name, name.data());
+                               }
+                               if (view == View::Standby && !heard.shown && !noticeShown) {
                                    redrawView();
                                }
                            },
