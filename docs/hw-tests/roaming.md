@@ -89,7 +89,8 @@ to roaming, and a duplex hotspot as the only repeater on the air.
 | 3 | Pass: with no repeater on the air, all 15 `no answer`, then `no repeater answered`; the radio stayed on the repeater in use. With the hotspot on, the search chose it (`in use: 2`) |
 | 10 | Pass: `Not roaming` with roaming off |
 | 11 | Pass: Roaming Off made the channels work on their own frequencies |
-| 4-9, 12-14 | Open |
+| 12 | Pass: of three roaming zones, the two with the hotspot's pair found it after PF3; the third, without it, found nothing |
+| 4-9, 13, 14 | Open |
 
 Findings:
 
