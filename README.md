@@ -50,14 +50,18 @@ A desktop simulator runs the same firmware with a drawn radio face.
 
 ## Roadmap
 
-1. Refined user interface: screen layouts, menus, icons and fonts tuned
+1. Audio level adjustment: volume range and steps, FM and DMR levels in
+   both directions, beeps and tones
+2. Refined user interface: screen layouts, menus, icons and fonts tuned
    as features are added
-2. Programming over USB, compatible with existing codeplug tools
-3. Scan and dual watch
-4. GPS
-5. Calibration tool
-6. APRS, Bluetooth, recording, DTMF and selective calling
-7. DMR roaming and SMS
+3. Programming over USB, compatible with existing codeplug tools
+4. Scan and dual watch
+5. GPS
+6. Calibration tool
+7. APRS, Bluetooth, recording, DTMF and selective calling
+8. Complete DMR: talkgroups and contacts picked on the radio, private
+   call set-up and replies, call log, talker alias, radio check and the
+   other DMR functions, roaming, SMS and data
 
 ## Getting started
 
