@@ -158,6 +158,10 @@ void start(board::Fm &fm, board::Baseband *baseband);
 /// the task has not started.
 bool post(const Message &message);
 
+/// True once the radio's chips are up and it takes commands that reach the
+/// air; false while they start or restart. Any task may ask.
+bool ready();
+
 /// The talkgroups heard besides the channel's own contact (the channel's
 /// receive group list); set before posting the channel.
 void setReceiveGroups(std::span<const std::uint32_t> ids);

@@ -271,6 +271,15 @@ void logLockSettings()
 }
 
 // The start screen: the name and version on black.
+// Under the version while the start screen waits for the radio.
+void drawStarting(Display &d)
+{
+    const Font &small = fonts::Spleen6x12;
+    constexpr std::string_view Text = "Please wait...";
+    const int w = static_cast<int>(Text.size()) * small.width;
+    drawText(d, small, (d.width() - w) / 2, d.height() - small.height - 8, Text, colors::Grey, colors::Black);
+}
+
 void drawStartScreen(Display &d)
 {
     d.fillRect(0, 0, d.width(), d.height(), colors::Black);
@@ -618,6 +627,7 @@ void uiMain(void *)
 
     View view = View::Start;
     const os::Ticks startUntil = os::nowMs() + StartScreenMs;
+    bool startingShown = false;
     os::Ticks lastSecond = 0;
     os::Ticks noticeUntil = 0;
     bool noticeShown = false;
@@ -636,6 +646,17 @@ void uiMain(void *)
         drawNotice(d, text);
         noticeShown = true;
         noticeUntil = os::nowMs() + NoticeMs;
+    };
+    // The radio's chips are up and the start screen is gone.
+    auto hardwareUp = [&] { return view != View::Start && radio::ready(); };
+    // A key or knob turn refused because the chips are not up yet: on the
+    // start screen silently, else with a notice once per press.
+    auto refuseNotReady = [&](bool press) {
+        if (view == View::Start || !press) {
+            return;
+        }
+        log::info("ui") << "key refused: the radio is not ready";
+        notice("Please wait...");
     };
     auto standbyState = [&] {
         StandbyState s;
@@ -1131,6 +1152,13 @@ void uiMain(void *)
                            [&](const KeyEvent &e) {
                                using Type = KeyDebouncer::EventType;
                                useLight(d);
+                               // Until the radio's chips are up, at start-up or while one
+                               // restarts, every key is refused: nothing may reach them
+                               // half set up. A PTT release still goes through.
+                               if (!hardwareUp() && !(e.key == Key::Ptt && e.type == Type::Release)) {
+                                   refuseNotReady(e.type == Type::Press);
+                                   return;
+                               }
                                if (e.key == Key::Ptt) {
                                    // Press and release only; a refused press never keys
                                    // the radio, a release always reaches it.
@@ -1221,6 +1249,10 @@ void uiMain(void *)
                            [&](const KeyLockReport &) { logLockSettings(); },
                            [&](const EncoderClicks &c) {
                                useLight(d);
+                               if (!hardwareUp()) {
+                                   refuseNotReady(true);
+                                   return;
+                               }
                                const Verdict v = keyLock.knob(lockContext());
                                if (v != Verdict::Pass) {
                                    onLockVerdict(v);
@@ -1297,7 +1329,14 @@ void uiMain(void *)
             noticeShown = false;
             redrawView();
         }
-        if (view == View::Start && static_cast<std::int32_t>(os::nowMs() - startUntil) >= 0) {
+        // The start screen stays until the radio is ready, and at least its
+        // own time.
+        const bool startShown = static_cast<std::int32_t>(os::nowMs() - startUntil) >= 0;
+        if (view == View::Start && startShown && !radio::ready() && !startingShown) {
+            startingShown = true;
+            drawStarting(d);
+        }
+        if (view == View::Start && startShown && radio::ready()) {
             show(channels != nullptr ? View::Standby : View::KeyTest);
             radio::post(radio::BatterySave{batterySave});
             useChannel();

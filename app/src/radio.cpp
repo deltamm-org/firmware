@@ -16,6 +16,7 @@
 #include "dmm/services/squelch_gate.h"
 
 #include <algorithm>
+#include <atomic>
 #include <span>
 #include <string_view>
 
@@ -32,6 +33,8 @@ board::Baseband *baseband = nullptr;
 // with an interrupt on top and a margin.
 os::Task<768> radioTask;
 os::Queue<Message, 8> inbox;
+// The chips are up: set after the start or a restart of the baseband.
+std::atomic<bool> chipsReady{false};
 // The last speaker volume asked for, applied again after every start.
 int speakerVolume = -1;
 
@@ -744,6 +747,7 @@ void stopTransmit(const char *why)
 
 void bringUp()
 {
+    chipsReady.store(false);
     withBaseband([](auto &b) {
         log::info("baseband") << "starting";
         const os::Ticks started = os::nowMs();
@@ -762,6 +766,8 @@ void bringUp()
             }
         }
     });
+    chipsReady.store(true);
+    log::info("radio") << "ready";
 }
 
 const char *saveModeText(std::uint8_t mode)
@@ -869,6 +875,10 @@ void handle(Message &message)
                    },
                    [](const FmStatus &) { fmStatus(); },
                    [](const Ptt &p) {
+                       if (p.down && !chipsReady.load()) {
+                           log::info("radio") << "PTT: not ready yet";
+                           return;
+                       }
                        if (p.down) {
                            startTransmit();
                        } else {
@@ -1022,6 +1032,11 @@ void setReceiveGroups(std::span<const std::uint32_t> ids)
     receiveGroupCount = std::min(ids.size(), std::size(receiveGroupIds));
     std::copy_n(ids.begin(), receiveGroupCount, receiveGroupIds);
     groupsLock.unlock();
+}
+
+bool ready()
+{
+    return chipsReady.load();
 }
 
 bool post(const Message &message)
