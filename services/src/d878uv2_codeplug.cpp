@@ -77,7 +77,7 @@ constexpr unsigned MaxRoamingRepeaters = 250;
 constexpr std::uint32_t RoamingZones = 0x01043000;
 constexpr std::uint32_t RoamingZoneBytes = 0x80;
 constexpr std::uint32_t RoamingZoneBitmap = 0x01042080;
-constexpr unsigned MaxRoamingZones = 64;
+constexpr std::uint32_t RoamingZoneName = 0x40;
 // Programmable key function codes.
 constexpr std::uint8_t KeyRoam = 0x24;
 
@@ -246,7 +246,7 @@ CodeplugSettings decodeSettings(std::span<const std::uint8_t> b)
     }
     if (b.size() >= 0xE8) {
         RoamingSettings &r = s.roaming;
-        r.zone = b[0xDC] < MaxRoamingZones ? b[0xDC] : RoamingSettings::NoZone;
+        r.zone = b[0xDC] < CodeplugSource::MaxRoamingZones ? b[0xDC] : RoamingSettings::NoZone;
         r.automatic = b[0xE7] == 1;
         r.start = b[0xE0] == 0 ? RoamingSettings::Start::Periodic : RoamingSettings::Start::OutOfRange;
         r.periodMinutes = b[0xBA];
@@ -670,6 +670,37 @@ bool D878Uv2Codeplug::roamingSiteName(std::uint8_t zone, std::size_t position, s
         return true;
     }
     return false;
+}
+
+std::size_t D878Uv2Codeplug::roamingZones(std::span<std::uint8_t> out)
+{
+    std::uint8_t bitmap[MaxRoamingZones / 8];
+    if (!readable(read(RoamingZoneBitmap, bitmap))) {
+        return 0;
+    }
+    std::size_t n = 0;
+    for (unsigned z = 0; z < MaxRoamingZones && n < out.size(); ++z) {
+        if ((bitmap[z / 8] >> (z % 8) & 1) != 0) {
+            out[n++] = static_cast<std::uint8_t>(z);
+        }
+    }
+    return n;
+}
+
+bool D878Uv2Codeplug::roamingZoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name)
+{
+    name[0] = '\0';
+    std::uint8_t raw[ZoneNameBytes];
+    if (zone >= MaxRoamingZones || !bitSet(RoamingZoneBitmap, zone) ||
+        !readable(read(RoamingZones + zone * RoamingZoneBytes + RoamingZoneName, raw))) {
+        return false;
+    }
+    std::size_t n = 0;
+    for (; n < ZoneNameBytes && raw[n] != 0 && raw[n] != 0xFF; ++n) {
+        name[n] = static_cast<char>(raw[n]);
+    }
+    name[n] = '\0';
+    return true;
 }
 
 namespace {

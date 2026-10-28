@@ -481,7 +481,7 @@ TEST_CASE("a roaming zone's repeaters, in the zone's order")
     repeater(2, {0x43, 0x82, 0x25, 0x00, 0x43, 0x06, 0x25, 0x00}, 1, "UNUSED");
     repeater(3, {0x00, 0x00, 0x00, 0x00, 0x43, 0x06, 0x37, 0x50}, 1, "NO RX");
     // Zone 1 in use: repeaters 1, 2 (not in use), 3 (no frequency), 0.
-    chip.put(0x01042080, {0x02});
+    chip.put(0x01042080, {0x02, 0, 0, 0, 0, 0, 0, 0}); // the whole bitmap, as written
     std::vector<std::uint8_t> zone(0x80, 0xFF);
     zone[0] = 1;
     zone[1] = 2;
@@ -513,4 +513,11 @@ TEST_CASE("a roaming zone's repeaters, in the zone's order")
     CHECK(cp.roamingSites(64, sites) == 0); // no such zone
     std::array<RoamingSite, 1> one{};
     CHECK(cp.roamingSites(1, one) == 1);
+    std::array<std::uint8_t, 4> zones{};
+    REQUIRE(cp.roamingZones(zones) == 1);
+    CHECK(zones[0] == 1);
+    std::array<char, D878Uv2Codeplug::ZoneNameBytes + 1> zoneName{};
+    REQUIRE(cp.roamingZoneName(1, zoneName));
+    CHECK(std::string(zoneName.data()) == "NETWORK");
+    CHECK_FALSE(cp.roamingZoneName(0, zoneName));
 }

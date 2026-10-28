@@ -170,6 +170,11 @@ public:
     virtual std::size_t receiveGroups(std::uint8_t list, std::span<std::uint32_t> out) = 0;
     static constexpr std::size_t MaxRoamingSites = 64;
     static constexpr std::size_t SiteNameBytes = 16;
+    static constexpr std::size_t MaxRoamingZones = 64;
+    /// Every roaming zone in use, in order; returns how many.
+    virtual std::size_t roamingZones(std::span<std::uint8_t> out) = 0;
+    /// The roaming zone's name, zero-terminated; false when there is none.
+    virtual bool roamingZoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name) = 0;
     /// The repeaters of roaming zone @p zone, in order; returns how many.
     virtual std::size_t roamingSites(std::uint8_t zone, std::span<RoamingSite> out) = 0;
     /// The name of the repeater at @p position in roaming zone @p zone,

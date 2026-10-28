@@ -63,6 +63,8 @@ public:
     bool dmrUser(std::uint32_t id, DmrUser &user) override;
     std::size_t roamingSites(std::uint8_t zone, std::span<RoamingSite> out) override;
     bool roamingSiteName(std::uint8_t zone, std::size_t position, std::span<char, SiteNameBytes + 1> name) override;
+    std::size_t roamingZones(std::span<std::uint8_t> out) override;
+    bool roamingZoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name) override;
 
     /// Contact @p index, if it is in use.
     std::optional<dmr::Target> contact(std::uint32_t index);

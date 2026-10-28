@@ -58,6 +58,8 @@ public:
     bool dmrUser(std::uint32_t, DmrUser &) override { return false; }
     std::size_t roamingSites(std::uint8_t, std::span<dmm::services::RoamingSite>) override { return 0; }
     bool roamingSiteName(std::uint8_t, std::size_t, std::span<char, SiteNameBytes + 1>) override { return false; }
+    std::size_t roamingZones(std::span<std::uint8_t>) override { return 0; }
+    bool roamingZoneName(std::uint8_t, std::span<char, ZoneNameBytes + 1>) override { return false; }
     std::uint16_t zoneSelection(std::uint8_t zone, bool sideB) override
     {
         const auto it = (sideB ? selectionB : selectionA).find(zone);
