@@ -1159,8 +1159,15 @@ void roamStep()
         checkRange();
         return;
     }
+    // Searches by itself: every 30 s while the repeater in use is lost;
+    // and as the codeplug's period or quiet time say only while the radio
+    // cannot judge that repeater by its beacons.
     if (state == services::roaming::Health::Lost && roamWatch.automatic() && now - lostSearchMs >= LostSearchMs) {
         lostSearchMs = now;
+        search(SearchCause::Automatic);
+        return;
+    }
+    if (state == services::roaming::Health::Unknown && roamWatch.due(now)) {
         search(SearchCause::Automatic);
         return;
     }
@@ -1743,9 +1750,6 @@ void radioMain(void *)
             handle(m);
         } else if (inbox.receive(m, wait)) {
             handle(m);
-        }
-        if (roamingChannel && !transmitting && !inCall && fm->receiving() && roamWatch.due(os::nowMs())) {
-            search(SearchCause::Automatic);
         }
         roamStep();
         saveStep();
