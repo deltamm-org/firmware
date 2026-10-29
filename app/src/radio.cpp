@@ -118,6 +118,9 @@ services::roaming::HeardList heardList;
 std::uint8_t searchList[services::CodeplugSource::MaxRoamingSites];
 std::size_t restFrom = 0;
 bool searchRunning = false;
+// A console PTT that releases itself.
+bool pttTimed = false;
+os::Ticks pttReleaseAt = 0;
 // Tuned off the repeater in use: searching, or visiting another repeater.
 bool away = false;
 services::roaming::Visits visits;
@@ -767,7 +770,7 @@ bool searchInterrupted()
     Message m;
     while (deferredCount < std::size(deferred) && inbox.receive(m, 0)) {
         deferred[deferredCount++] = m;
-        if (std::holds_alternative<Ptt>(m) || std::holds_alternative<UseChannel>(m) ||
+        if (std::holds_alternative<Ptt>(m) || std::holds_alternative<PttFor>(m) || std::holds_alternative<UseChannel>(m) ||
             std::holds_alternative<RoamNow>(m) || std::holds_alternative<FmReceive>(m) ||
             std::holds_alternative<DmrReceive>(m) || std::holds_alternative<FmIdle>(m) ||
             std::holds_alternative<Restart>(m)) {
@@ -1573,6 +1576,16 @@ void handle(Message &message)
                        }
                    },
                    [](const FmStatus &) { fmStatus(); },
+                   [](const PttFor &p) {
+                       if (!chipsReady.load()) {
+                           log::info("radio") << "PTT: not ready yet";
+                           return;
+                       }
+                       log::info("radio") << "console PTT for " << p.ms << " ms";
+                       pttReleaseAt = os::nowMs() + p.ms;
+                       pttTimed = true;
+                       startTransmit();
+                   },
                    [](const Ptt &p) {
                        if (p.down && !chipsReady.load()) {
                            log::info("radio") << "PTT: not ready yet";
@@ -1767,6 +1780,10 @@ void radioMain(void *)
             handle(m);
         } else if (inbox.receive(m, wait)) {
             handle(m);
+        }
+        if (pttTimed && static_cast<std::int32_t>(os::nowMs() - pttReleaseAt) >= 0) {
+            pttTimed = false;
+            stopTransmit("console PTT time");
         }
         roamStep();
         saveStep();
