@@ -20,11 +20,19 @@ Codeplug (D878UVII format, as codeplug tools such as QDMR write it):
   the delay, or every period.
 - A side key (PF1-PF3, short or long press) set to roaming.
 
-A search tries every repeater of the zone in turn: it listens 150 ms for
+A search tries the zone's repeaters, most likely first: the one in use,
+then the repeaters heard lately (strongest first), then the rest of the
+zone from where the last search left off. At each it listens 150 ms for
 one already on the air, else sends one wake-up block at the channel's
-power and waits for the repeater's timing. The strongest repeater that
-answered is used from then on, by every roaming channel. An automatic
-search moves only to a repeater at least 6 dB stronger.
+power and waits for the repeater's timing. It stops at the first
+repeater at -90 dBm or better; otherwise the strongest that answered is
+used from then on, by every roaming channel. An automatic search moves
+only to a repeater at least 6 dB stronger.
+
+The radio keeps the last 8 repeaters heard, with their level. Menu >
+Channel > Roam status lists them, updated each second: position (a star
+on the one in use), output frequency, beacon period when known, level
+and its age. Menu there searches now. `roam` logs the same list.
 
 A search starts:
 
@@ -73,6 +81,9 @@ repeater's name, or `Searching...`.
 | 12 | Menu > Channel > Roam zone: another zone | Its name in the menu; `roaming zone N, M repeaters`; the line shows that zone's repeater after PF3 |
 | 13 | `roam` | The repeater in use, its frequency and colour code, automatic on or off |
 | 14 | Read the latest uptime line | Every task above 50 unused stack words |
+| 15 | After a restart, PF3 with one repeater on the air | The search stops at that repeater (`now through repeater N`) without trying the rest of the zone |
+| 16 | PF3 again | Only the repeater in use is tried: `staying on repeater N` |
+| 17 | Menu > Channel > Roam status | The repeater in use with a star, its level and an age counting up; Menu searches, Exit goes back |
 
 Undo: flash the previous release.
 
@@ -106,6 +117,15 @@ hotspot, and the codeplug's automatic roaming on with a quiet time of 0:
 | 9 | Pass: 35 s after start a search by itself; repeater 1 did not answer two wake-ups, the hotspot answered and the radio moved to it |
 | 13 | Pass: `roam` shows the hotspot in use, -35 dBm, automatic on |
 | 14 | Pass: lowest unused stack 95 words (ui) |
+
+Steps 15 to 17, run 2026-10-29 on 0.20.3-6HL-2 with the same zone and
+hotspot:
+
+| # | Result |
+| --- | --- |
+| 15 | Pass: repeater 1 did not answer two wake-ups, the hotspot (repeater 2) was on the air at -47 dBm and the search stopped there, 1.5 s after PF3 |
+| 16 | Pass: the hotspot alone, 0.15 s to 0.5 s; `staying on repeater 2` |
+| 17 | Pass: the screen listed the hotspot; Menu searched, six times in a row |
 
 Findings:
 
