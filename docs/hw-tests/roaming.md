@@ -91,7 +91,7 @@ repeater's name, or `Searching...`.
 | 17 | Menu > Channel > Roam status | The repeater in use with a star, its level and an age counting up; Menu on Search now searches, Exit goes back |
 | 18 | Leave the radio on a roaming channel with a repeater sending timed beacons, 3 minutes | `roam` shows that repeater's beacon period (within 0.1 s of the repeater's setting) and the next beacon's time; Roam status shows the period |
 | 19 | Keep watching the log | About once a minute, once the repeater in use has been quiet for 10 s and no key pressed for 5 s: `visit to repeater N (sweep): nothing` for the zone's other repeaters; never one during a call |
-| 20 | Press PTT during a visit (watch the log for `visit to`) | The visit ends at once (`cut short`) and the call goes out as usual |
+| 20 | Press PTT during a visit (watch the log for `visit to`), or `ptt 2000` on the console | The visit ends at once (`cut short`) and the call goes out as usual |
 | 21 | Switch the repeater's beacons off (or the repeater) | `beacon of repeater N missed` twice; about 3 minutes after the last beacon, Roam status shows `N Lost` |
 | 22 | Switch it back on | Its next beacon brings Roam status back to `N Good` |
 | 23 | With two repeaters on the air at different distances, `roam auto on`, move away from the one in use | Visits learn the other's beacon; when the one in use falls below -95 dBm and the other is 6 dB better, `moving from repeater N (weak) to repeater M` |
@@ -146,13 +146,24 @@ automatic roaming on) and the same hotspot, beacons every 60 s for 3 s:
 | --- | --- |
 | 18 | Pass: beacons 60.0 s apart, each heard as one of 3.37 s to 3.44 s; no search while they came. Found: a sweep visit could start just as the hotspot's own beacon began, and that beacon then counted as missed (fixed after the run) |
 | 19 | Pass: one sweep visit about every 63.5 s, 1 s each, around the zone in order |
-| 20 | Open |
+| 20 | Open (passed on 0.20.3-6HL-7, below) |
 | 21 | Pass: hotspot off, two beacons missed, then searches 30 s, 60 s and 120 s apart (the cap is now 2 min) |
 | 22 | Pass: hotspot on, its first beacon was heard on its own frequency between searches, with no wake-up |
 | 23, 24 | Open: need two repeaters, and the range check on |
 
 Also seen: with automatic roaming on, the radio searched by itself 35 s
 after start and took the hotspot.
+
+Step 20 and a repeat of step 18, run 2026-10-29 on 0.20.3-6HL-7 with the
+same hotspot and a Parrot talkgroup:
+
+| # | Result |
+| --- | --- |
+| 18 | Pass: beacons 60.0 s apart for 5 minutes, none counted as missed while sweep visits ran |
+| 20 | Pass: `ptt 2000` 35 ms into a sweep visit; the visit was cut short 10 ms later, the call went out 0.5 s after, lasted 1.9 s and released itself; the Parrot reply was received in full |
+
+Also seen: PTT on a repeater that did not answer started a search for
+the call, which found the hotspot in 1.5 s and sent the call through it.
 
 Findings:
 
