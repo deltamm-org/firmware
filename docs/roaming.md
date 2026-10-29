@@ -104,54 +104,18 @@ for leaving a cell for a better one:
   and the phone must have stayed at least 1 s on the serving cell, before
   it moves.
 
-### Conventional roaming in a commercial DMR system
+### Repeater beacons
 
-Motorola's MOTOTRBO System Planner (sections 2.6.1 to 2.6.3) describes
-roaming between conventional repeater sites (IP Site Connect), the
-nearest published design to ours:
-
-- **Passive site search** is the main method. It runs only when the home
-  site's level falls below a roaming threshold (default -108 dBm,
-  settable from -80 to -120 dBm), or when its signal or beacons are
-  gone. It does not run while transmitting, receiving a call, in a menu,
-  in an emergency or in good coverage: the radio is away from its home
-  channel while searching and can miss the start of a call.
-- While searching, the radio **inspects the home site between every
-  other site**, to keep the time away short. It qualifies each site by
-  its colour code, keeps the roam list sorted by signal strength, and
-  searches sites it heard before first.
-- **Beacons** are set in the repeater; the radios are programmed with
-  the same interval. The default is 4.32 s every 60 s; the planner aims
-  at 5 % to 10 % of air time. A radio that misses a beacon when it is due
-  takes the repeater as out of range or failed, and roams.
-- **Active site search** sends wake-ups. It runs only when PTT or a data
-  transmission cannot wake the home repeater, or on a manual site roam:
-  one wake-up per site, never over a busy channel, down the sorted list,
-  taking the first site that answers. A manual roam takes the next site
-  that answers, not necessarily the best. With frequent position reports
-  out of range, it runs at most once every 30 s.
-
-### Repeater beacons in practice
-
-MMDVMHost, common on amateur repeaters and hotspots, sends DMR beacons
-like this (read from its source):
-
-- With `Beacons` set, an idle duplex repeater keys its output for
-  `BeaconDuration` seconds (default 3) every `BeaconInterval` seconds
-  (default 60). In network mode it does so when the DMR network asks.
-- While keyed with nothing to send it transmits idle bursts on both
-  slots. They carry the repeater's colour code and slot timing, the same
-  as when it hangs after a call.
-- A beacon does not go out while the repeater is busy; the timer starts
-  again after each beacon.
-
-A beacon is therefore a short, periodic transmission that lets a radio
-measure a repeater without transmitting. It names nothing but the colour
-code.
+A repeater set to send beacons keys its output for a few seconds at a
+fixed interval while it is idle. It sends idle bursts on both slots,
+with its colour code and slot timing, the same as when it hangs after a
+call, and does not send a beacon while it is busy. A beacon is therefore
+a short, periodic transmission that lets a radio measure a repeater
+without transmitting. It names nothing but the colour code.
 
 ### Measured on the radio
 
-A D878UVII listening to an MMDVM hotspot with timed beacons (60 s, 3 s),
+A D878UVII listening to a hotspot sending beacons (every 60 s, for 3 s),
 console `dmr rx` and `fm status` every 250 ms, October 2026:
 
 - Beacons came every 60.0 s, within 30 ms over five intervals. Each
@@ -332,8 +296,8 @@ follows the codeplug's automatic roaming setting (3.6). With automatic
 roaming off, the list is still kept, so a search from the PF key or PTT
 starts from the best known repeater.
 
-That timed beacons keep a steady period has to be checked on the air
-before the radio relies on it.
+Beacons keep a steady period: measured, within tens of milliseconds over
+15 minutes (section 1).
 
 ### 3.4 Waking (active)
 
@@ -489,11 +453,5 @@ were found counts as usable at any level.
   reselection criteria), 18.5.4 (reselection parameters).
 - 3GPP TS 36.304, LTE idle mode: clauses 5.2.3 (cell selection),
   5.2.4.2 (measurement rules), 5.2.4.6 (ranking).
-- MOTOTRBO System Planner (Motorola Solutions, 68007024085, November
-  2012): sections 2.6.1 (passive site searching), 2.6.2 (active site
-  searching), 2.6.3.3 (roaming RSSI threshold), 2.6.3.4 (beacon duration
-  and interval).
-- MMDVMHost, DMR beacon handling: the `Beacons`, `BeaconInterval` and
-  `BeaconDuration` settings.
 - The Finnish amateur radio station list (automatic.sral.fi), October
   2026: locations of the DMR repeaters on the air.
