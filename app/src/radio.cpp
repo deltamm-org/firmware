@@ -118,6 +118,37 @@ services::roaming::HeardList heardList;
 std::uint8_t searchList[services::CodeplugSource::MaxRoamingSites];
 std::size_t restFrom = 0;
 bool searchRunning = false;
+// Tuned off the repeater in use: searching, or visiting another repeater.
+bool away = false;
+services::roaming::Visits visits;
+constexpr services::roaming::Levels RoamLevels{};
+// No move by itself within this time of the last one.
+constexpr std::uint32_t MoveGuardMs = 15'000;
+std::uint32_t lastMoveMs = 0;
+// Visits wait until the repeater in use has been quiet, and the user idle,
+// this long.
+constexpr std::uint32_t BaseQuietMs = 10'000;
+constexpr os::Ticks UserQuietMs = 5000;
+// A missed beacon of the repeater in use counts this long after it was due.
+constexpr std::uint32_t MissGraceMs = 1500;
+// The repeater in use's current transmission: a short one of idle bursts
+// only, not started by our own wake-up, is a beacon.
+constexpr std::uint32_t MaxBeaconMs = 5000;
+struct BaseTransmission
+{
+    bool on = false;
+    bool idleOnly = true;
+    bool measured = false;
+    std::uint32_t startMs = 0;
+    int dbm = 0;
+};
+BaseTransmission baseTx;
+std::uint32_t baseHeardMs = 0;
+std::uint32_t backOnBaseMs = 0;
+std::uint32_t lastWakeMs = 0;
+// For a visit: when the last carrier came, and the last burst's colour code.
+std::uint32_t carrierSinceMs = 0;
+std::uint8_t lastBurstColourCode = 0;
 // A search stops at a repeater this strong.
 constexpr int GoodDbm = -90;
 // An automatic search moves only to a clearly stronger repeater.
@@ -456,14 +487,30 @@ void noteHeard(int i, int dbm)
     sitesLock.unlock();
 }
 
+[[gnu::noinline]] void baseTransmissionEnded()
+{
+    baseTx.on = false;
+    const std::uint32_t length = os::nowMs() - baseTx.startMs;
+    if (site < 0 || !baseTx.idleOnly || !baseTx.measured || length > MaxBeaconMs ||
+        baseTx.startMs - lastWakeMs < 3000) {
+        return;
+    }
+    sitesLock.lock();
+    heardList.beacon(static_cast<std::uint8_t>(site), baseTx.dbm, baseTx.startMs);
+    sitesLock.unlock();
+    log::debug("roam") << "beacon of repeater " << site + 1 << ", " << baseTx.dbm << " dBm, " << length << " ms";
+}
+
 void onDmrEvent(const services::dmr::Event &e)
 {
     using Kind = services::dmr::Event::Kind;
     using services::dmr::DataType;
     // DMR timing or a burst on the repeater's output counts as hearing it;
     // a carrier alone may be another signal.
-    if (roamingChannel && (e.kind == Kind::SlotFound || e.kind == Kind::Burst)) {
+    const bool onBase = roamingChannel && !away;
+    if (onBase && (e.kind == Kind::SlotFound || e.kind == Kind::Burst)) {
         roamWatch.heard(os::nowMs());
+        baseHeardMs = os::nowMs();
     }
     switch (e.kind) {
     case Kind::SlotFound:
@@ -472,8 +519,10 @@ void onDmrEvent(const services::dmr::Event &e)
                           << e.nextSlot;
         if (!timingFound && e.verified) {
             timingFound = true;
-            if (roamingChannel && site >= 0 && !searchRunning) {
-                noteHeard(site, fm->status().rssiDbm);
+            if (onBase && site >= 0) {
+                baseTx.dbm = fm->status().rssiDbm;
+                baseTx.measured = true;
+                noteHeard(site, baseTx.dbm);
             }
             log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing found"
                              << (e.inboundBusy ? ", inbound busy" : "");
@@ -483,6 +532,10 @@ void onDmrEvent(const services::dmr::Event &e)
         }
         break;
     case Kind::Burst: {
+        lastBurstColourCode = e.colourCode;
+        if (onBase && (e.voice || e.type != DataType::Idle)) {
+            baseTx.idleOnly = false;
+        }
         const bool lcBurst = e.voice || e.type == DataType::VoiceLcHeader || e.type == DataType::TerminatorWithLc;
         const auto lc = lcBurst ? services::dmr::FullLc::decode(e.payload()) : std::nullopt;
         // Idle bursts repeat the same fill; the first of each transmission
@@ -531,10 +584,19 @@ void onDmrEvent(const services::dmr::Event &e)
     case Kind::CarrierFound:
         idleLogged = false;
         carrierHeard = true;
+        carrierSinceMs = os::nowMs();
+        if (onBase) {
+            // One already on when the radio came back is not timed from
+            // its start.
+            baseTx = BaseTransmission{true, os::nowMs() - backOnBaseMs > 60, false, os::nowMs(), 0};
+        }
         [[fallthrough]];
     case Kind::CarrierLost:
         log::debug("dmr") << (e.kind == Kind::CarrierFound ? "carrier found" : "carrier lost");
         if (e.kind == Kind::CarrierLost) {
+            if (onBase && baseTx.on) {
+                baseTransmissionEnded();
+            }
             carrierHeard = false;
             // A repeater that went quiet must be woken again before a call.
             timingFound = false;
@@ -756,6 +818,7 @@ struct Probe
     p.answered = carrierHeard && awaitDmrEvent(services::dmr::Event::Kind::SlotFound, FindSyncMs);
     const bool woken = !p.answered && ownId != 0 && transmitAllowed(transmitHz);
     if (woken) {
+        lastWakeMs = os::nowMs();
         services::FmChannel wake = fmChannel;
         wake.continuous = true;
         withBaseband([&](auto &b) {
@@ -858,7 +921,7 @@ enum class SearchCause : std::uint8_t
 [[gnu::noinline]] void logSearch(std::size_t count, SearchCause cause)
 {
     constexpr const char *Causes[] = {"asked", "for a call", "automatic"};
-    log::info("roam") << "searching " << count << " repeaters (" << Causes[static_cast<int>(cause)] << ")";
+    log::info("roam") << "searching the roaming zone of " << count << " (" << Causes[static_cast<int>(cause)] << ")";
 }
 
 [[gnu::noinline]] void logSearchEnd(int best, bool moved, bool complete)
@@ -891,6 +954,7 @@ enum class SearchCause : std::uint8_t
     endCall("left");
     setSpeaker(false);
     searchRunning = true;
+    away = true;
     showRoaming(true);
     const int current = skipCurrent ? -1 : site;
     sitesLock.lock();
@@ -924,8 +988,158 @@ enum class SearchCause : std::uint8_t
     }
     receive();
     searchRunning = false;
+    away = false;
+    baseTx.on = false;
+    backOnBaseMs = os::nowMs();
     showRoaming(false);
     return best >= 0;
+}
+
+// Back to the repeater in use, or to the channel's own frequencies.
+void backToBase()
+{
+    if (site >= 0) {
+        useSite(site);
+    } else {
+        useChannelFrequencies();
+    }
+    receive();
+    away = false;
+    baseTx.on = false;
+    backOnBaseMs = os::nowMs();
+}
+
+[[gnu::noinline]] void logVisit(const services::roaming::Visit &v, services::roaming::Visits::Found found, int dbm,
+    bool interrupted)
+{
+    using Found = services::roaming::Visits::Found;
+    lib::StaticString<32> what;
+    if (interrupted) {
+        what << "cut short";
+    } else if (found == Found::Nothing) {
+        what << (v.beaconMs != 0 ? "beacon missed" : "nothing");
+    } else {
+        what << (found == Found::Start ? "beacon at " : "on the air at ") << dbm << " dBm";
+    }
+    log::info("roam") << "visit to repeater " << v.position + 1 << (v.sweep ? " (sweep): " : ": ") << what.view();
+}
+
+// Listens on another repeater of the zone for a beacon, then comes back.
+// Messages that matter (PTT first) end the visit at once.
+[[gnu::noinline]] void visit(const services::roaming::Visit &v, services::roaming::Health state)
+{
+    using Found = services::roaming::Visits::Found;
+    away = true;
+    useSite(v.position);
+    const std::uint8_t colourCode = dmrSettings.colourCode;
+    carrierHeard = false;
+    timingFound = false;
+    timingSeen = false;
+    dmrReceive();
+    const std::uint32_t arrived = os::nowMs();
+    carrierSinceMs = arrived - 1;
+    bool interrupted = false;
+    auto came = [&] { return static_cast<std::int32_t>(carrierSinceMs - arrived) >= 0; };
+    while (!came() && os::nowMs() - arrived < v.dwellMs) {
+        if (searchInterrupted()) {
+            interrupted = true;
+            break;
+        }
+        awaitDmrEvent(services::dmr::Event::Kind::CarrierFound, 20);
+    }
+    Found found = Found::Nothing;
+    int dbm = 0;
+    const std::uint32_t start = carrierSinceMs;
+    if (came() && !interrupted && awaitDmrEvent(services::dmr::Event::Kind::SlotFound, 300)) {
+        lastBurstColourCode = 0xFF;
+        awaitDmrEvent(services::dmr::Event::Kind::Burst, 150);
+        if (lastBurstColourCode == colourCode) {
+            constexpr int Reads = 3;
+            int sum = 0;
+            for (int r = 0; r < Reads; ++r) {
+                sum += fm->status().rssiDbm;
+                os::sleepMs(10);
+            }
+            dbm = sum / Reads;
+            found = start - arrived < 40 ? Found::UnderWay : Found::Start;
+        }
+    }
+    backToBase();
+    sitesLock.lock();
+    const auto position = static_cast<std::uint8_t>(v.position);
+    if (found == Found::Start) {
+        heardList.beacon(position, dbm, start);
+    } else if (found == Found::UnderWay) {
+        heardList.heard(position, dbm, os::nowMs());
+    } else if (!interrupted && v.beaconMs != 0) {
+        heardList.missed(position);
+    }
+    sitesLock.unlock();
+    if (v.sweep && !interrupted) {
+        visits.swept(v.position, found, arrived, state);
+    }
+    logVisit(v, found, dbm, interrupted);
+}
+
+[[gnu::noinline]] void moveSite(int to, services::roaming::Health state)
+{
+    constexpr const char *States[] = {"unknown", "good", "weak", "failing", "lost"};
+    log::info("roam") << "moving from repeater " << site + 1 << " (" << States[static_cast<int>(state)]
+                      << ") to repeater " << to + 1;
+    site = to;
+    lastMoveMs = os::nowMs();
+    baseHeardMs = lastMoveMs;
+    roamWatch.heard(lastMoveMs);
+    useSite(site);
+    receive();
+    backOnBaseMs = os::nowMs();
+    showRoaming(false);
+}
+
+// Roaming between calls: counts the missed beacons of the repeater in use,
+// moves to a better repeater as the codeplug's automatic roaming allows,
+// and visits the others while the repeater in use is quiet.
+void roamStep()
+{
+    if (!roamingChannel || transmitting || inCall || baseTx.on || deferredCount > 0 || !fm->receiving()) {
+        return;
+    }
+    const std::uint32_t now = os::nowMs();
+    const std::size_t zoneSize = sitesKnown();
+    sitesLock.lock();
+    const services::roaming::HeardList::Entry *own = site >= 0 ? heardList.find(static_cast<std::uint8_t>(site)) : nullptr;
+    std::uint32_t ownBeacon = 0;
+    bool missed = false;
+    if (own != nullptr && own->periodCs != 0 && own->beaconMs != 0) {
+        missed = static_cast<std::int32_t>(now - (own->beaconMs + own->periodMs() + MissGraceMs)) > 0;
+        if (missed) {
+            heardList.missed(static_cast<std::uint8_t>(site));
+        }
+        ownBeacon = services::roaming::HeardList::nextBeacon(*own, now);
+    }
+    const services::roaming::Health state = services::roaming::health(heardList, site, RoamLevels, now);
+    const int to = roamWatch.automatic() && now - lastMoveMs >= MoveGuardMs
+        ? services::roaming::moveTo(heardList, site, state, RoamLevels, now)
+        : -1;
+    sitesLock.unlock();
+    if (missed) {
+        log::info("roam") << "beacon of repeater " << site + 1 << " missed";
+    }
+    if (to >= 0) {
+        moveSite(to, state);
+        return;
+    }
+    if (now - baseHeardMs < BaseQuietMs || power::idleForMs() < UserQuietMs) {
+        return;
+    }
+    sitesLock.lock();
+    const services::roaming::Visit v = visits.due(heardList, site, zoneSize, state, now);
+    sitesLock.unlock();
+    // The repeater in use's own beacon comes first.
+    if (v.position < 0 || (ownBeacon != 0 && ownBeacon - now < v.dwellMs + 1000)) {
+        return;
+    }
+    visit(v, state);
 }
 
 [[gnu::noinline]] void logWakeTry(int attempt, bool sent, bool answered)
@@ -1001,6 +1215,9 @@ CallStart startDigitalTransmit(services::FmChannel channel)
     services::FmChannel wake = channel;
     wake.continuous = true;
     const bool waking = dmrRepeater && !timingFound;
+    if (waking) {
+        lastWakeMs = os::nowMs();
+    }
     const char *problem = fm->transmit(waking ? wake : channel, powerLevel);
     if (problem != nullptr) {
         fm->endTransmit();
@@ -1399,6 +1616,8 @@ void handle(Message &message)
                        }
                        // The quiet time counts from the change.
                        roamWatch.heard(os::nowMs());
+                       baseHeardMs = os::nowMs();
+                       baseTx.on = false;
                        receive();
                        showRoaming(false);
                    },
@@ -1413,6 +1632,10 @@ void handle(Message &message)
                    [](const RoamingOn &r) {
                        roamingOn = r.on;
                        log::info("roam") << "roaming " << (r.on ? "on" : "off");
+                   },
+                   [](const RoamAutomatic &r) {
+                       roamWatch.setAutomatic(r.on);
+                       log::info("roam") << "automatic " << (r.on ? "on" : "off") << " for this session";
                    },
                    [](const RoamingSetup &r) {
                        roamWatch.configure(r.settings, os::nowMs());
@@ -1485,6 +1708,7 @@ void radioMain(void *)
         if (roamingChannel && !transmitting && !inCall && fm->receiving() && roamWatch.due(os::nowMs())) {
             search(SearchCause::Automatic);
         }
+        roamStep();
         saveStep();
         if (transmitting && timeoutS != 0 && os::nowMs() - transmitStarted >= static_cast<os::Ticks>(timeoutS) * 1000) {
             stopTransmit("timeout");
@@ -1515,6 +1739,7 @@ void roamingView(RoamingView &out)
     out.roaming = roamingChannel;
     out.searching = searchRunning;
     out.site = site;
+    out.health = services::roaming::health(heardList, site, RoamLevels, os::nowMs());
     out.count = static_cast<std::uint8_t>(heardList.entries().size());
     for (std::size_t k = 0; k < out.count; ++k) {
         out.entries[k] = heardList.entries()[k];

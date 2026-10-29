@@ -554,6 +554,23 @@ void loadRoamingSites()
         return roamingSites;
     });
 }
+// The repeater in use and how it is doing, as "2 Good", or what roaming
+// is doing instead.
+lib::StaticString<9> roamStateText(const radio::RoamingView &v)
+{
+    constexpr const char *States[] = {"?", "Good", "Weak", "Fail", "Lost"};
+    lib::StaticString<9> t;
+    if (!v.roaming) {
+        t << "Off";
+    } else if (v.searching) {
+        t << "Search";
+    } else if (v.site < 0) {
+        t << "None";
+    } else {
+        t << v.site + 1 << ' ' << States[static_cast<int>(v.health)];
+    }
+    return t;
+}
 // Fills @p list with what roaming knows: the repeater in use, then each
 // repeater heard with its level, the age of that level and its beacon
 // period. The cursor stays on the same row.
@@ -563,17 +580,7 @@ void fillRoamStatus(ListPicker &list)
     radio::roamingView(v);
     const std::uint8_t at = list.empty() ? 0 : list.chosen();
     list.open("Roaming");
-    lib::StaticString<9> state;
-    if (!v.roaming) {
-        state << "Off";
-    } else if (v.searching) {
-        state << "Search";
-    } else if (v.site < 0) {
-        state << "None";
-    } else {
-        state << "Rep " << v.site + 1;
-    }
-    list.add(0, "In use", state.view());
+    list.add(0, "In use", roamStateText(v).view());
     const std::uint32_t now = os::nowMs();
     for (std::uint8_t k = 0; k < v.count; ++k) {
         const services::roaming::HeardList::Entry &e = v.entries[k];
@@ -999,17 +1006,8 @@ void uiMain(void *)
             break;
         case MenuItem::RoamStatus: {
             label = "Roam status";
-            radio::RoamingView &v = roamView;
-            radio::roamingView(v);
-            if (!v.roaming) {
-                value << "Off";
-            } else if (v.searching) {
-                value << "Search";
-            } else if (v.site < 0) {
-                value << "None";
-            } else {
-                value << "Rep " << v.site + 1;
-            }
+            radio::roamingView(roamView);
+            value << roamStateText(roamView).view();
             break;
         }
         case MenuItem::RoamZone: {
