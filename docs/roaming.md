@@ -280,7 +280,7 @@ base ... visit A ... base ......... visit B ... base ......... visit A
 - Back on the base, any carrier holds the radio there until the call and
   its hang time are over.
 - A visit gives up and returns as soon as the expected beacon is not
-  there: no carrier within 300 ms of its expected start.
+  there: no carrier within 0.5 s of its expected start.
 
 When a repeater keys up for a call, there is usually about a second of
 signal (the wake-up, the call's header) before anyone speaks. A visit of
@@ -356,22 +356,29 @@ TETRA:
 
 | State | Condition | Action |
 |---|---|---|
-| Good | above *Weak* | no visits to neighbours |
-| Weak | below *Weak* for 5 s | visit neighbours (3.3); move when one has been better by *Hyst slow* for 5 s |
-| Failing | below *Failing* for 5 s | move to any neighbour above *Usable* that has been better by *Hyst fast* |
-| Lost | *N* expected beacons missed, or a wake-up unanswered | search (3.2, listening then waking) |
+| Good | level at or above *Weak* | visits only to keep the list fresh (3.3) |
+| Weak | below *Weak* | visits at every beacon; move to one *Hyst slow* better |
+| Failing | below *Failing* | move to one *Hyst fast* better |
+| Lost | two beacons missed and nothing heard for two periods, or out of range by the range check | move to any repeater heard; else search, at most every 30 s |
+| Unknown | not heard for 60 s and no beacon timing | visits as when good; the codeplug's quiet time still starts a search |
 
-- No move within 15 s of the last one, unless the repeater is lost.
-- A neighbour must have been measured at least twice within 60 s before
-  the radio moves to it.
-- The codeplug's repeater range check gives *N* and the check interval
-  (3.6). With beacons off on a repeater, *Lost* comes from its range
-  check or a failed wake-up only.
+- The level is the latest smoothed one: each measurement of the repeater
+  in use comes from a transmission, so a level below a threshold has
+  already lasted from one transmission to the next.
+- No move within 15 s of the last one.
+- A repeater must have been measured at least twice within 60 s before
+  the radio moves to it (once, when the one in use is lost).
+- The radio moves by itself only when the codeplug's automatic roaming
+  is on; `roam auto on|off` overrides it for a session.
+- A beacon of the repeater in use is a transmission of idle bursts only,
+  at most 5 s long, not starting within 3 s of the radio's own wake-up
+  and not already on when the radio came back from a visit.
 
 ### 3.6 Codeplug settings used
 
-From the D878UVII general settings, as QDMR reads them (offsets to be
-confirmed on the radio before use):
+From the D878UVII general settings. Offsets and values follow QDMR's
+notes on the format; the range check's values are to be confirmed with
+the vendor's software:
 
 | Setting | Offset | Use |
 |---|---|---|
@@ -380,23 +387,23 @@ confirmed on the radio before use):
 | Start: periodic or out of range | 0xE0 | periodic: a full search every period; out of range: only on *Lost* |
 | Period (min) | 0xBA | for the periodic start |
 | Delay (s) | 0xBF | quiet time before *Lost* is assumed without a range check |
-| Repeater range check on | 0xDD | check the serving repeater |
-| Range check interval | 0xDE (QDMR: 5 s steps) | how often |
-| Range check count | 0xDF | *N* for *Lost* |
-| Range check notice, count | 0xE5, 0xEA | tell the user when the repeater is lost |
+| Repeater range check on | 0xDD | wake the repeater in use while it is not heard |
+| Range check interval | 0xDE: 0 = 5 s to 9 = 50 s | how often |
+| Range check tries | 0xDF: 0 = 3 to 2 = 5 (larger: the count itself) | unanswered in a row before out of range |
+| Range check notice, count | 0xE5 off or on; 0xEA: 0 = 1 to 9 = 10 | `Out of range` notices, one an interval |
 | Side keys | 0x10-0x12, 0x41-0x43 | the roaming key |
 
 The codeplug has no signal thresholds, hysteresis or beacon settings.
-These are constants in the firmware for now, chosen on the air, with a
-console command to change them for testing. A later DeltaMM settings area
-could hold them.
+These are constants in the firmware for now (section 4). A later DeltaMM
+settings area could hold them.
 
 ### 3.7 Kept across power-off
 
 The repeater last used per zone, so a power-on starts at *Resume*, as in
-Tier III. The site table itself starts empty; it fills in a minute or two
-of listening. Where to keep it (the board's backup registers, or a
-settings area of our own) is open.
+Tier III. The heard list itself starts empty; it fills in a minute or two
+of listening. Not done yet: DeltaMM has no settings of its own that
+survive a power-off. Until it has, a power-on starts with the repeater
+whose frequencies the channel itself has, if it is one of the zone's.
 
 ### 3.8 What the user sees
 
@@ -405,44 +412,52 @@ on by itself, and the user only talks.
 
 - Under the channel name: the repeater in use, as today, or
   `Searching...`.
-- A short notice when the radio moves to another repeater, and when the
-  repeater is lost (as the codeplug's range check notice asks).
-- **A roaming screen for field debugging** (Menu > Channel > Roaming
-  status): the serving repeater and its state, then the repeaters heard,
-  best first, each with level, age of the last measurement, beacon
-  timing (period and when next due, or `sweeping`) and failures. It
-  updates live, so a walk or drive shows what the radio sees.
-- The console: `roam` prints the same table to the log.
+- A move to another repeater changes that line; there is no notice.
+- `Out of range` when the range check gives up on the repeater, as often
+  as the codeplug asks.
+- **A roaming screen for field debugging** (Menu > Channel > Roam
+  status): the repeater in use and its state (`2 Good`), then each
+  repeater heard: position, a star on the one in use, output frequency,
+  beacon period once learned, level and its age. It updates every second,
+  so a walk or drive shows what the radio sees. Menu there searches now.
+- The console: `roam` logs the same list with the next beacon's time;
+  each visit, missed beacon and move is logged too.
 
-## 4. Starting values
+## 4. Values
 
-To be tuned on the air. Levels are as the radio reads them.
+As built; to be tuned on the air. Levels are as the radio reads them;
+with nothing on the air it reads -98 to -105 dBm (section 1), so the
+thresholds sit above that. A repeater whose slot timing and colour code
+were found counts as usable at any level.
 
-| Name | Start value | Meaning |
+| Name | Value | Meaning |
 |---|---|---|
-| *Good* | -100 dBm | a search stops here (first pass) |
-| *Usable* | -112 dBm | the least a repeater must have to be used |
-| *Weak* | -105 dBm | start visiting neighbours |
-| *Failing* | -112 dBm | move to any usable neighbour |
+| *Good* | -90 dBm | a search stops here |
+| *Weak* | -95 dBm | below: visit at every beacon, move to a clearly better one |
+| *Failing* | -105 dBm | below: move to any better one |
 | *Hyst slow* | 6 dB | better by this to move while weak |
 | *Hyst fast* | 3 dB | better by this to move while failing |
-| Persistence | 5 s | a condition must last this long |
 | Guard | 15 s | no move within this time of the last one |
 | Validity | 60 s | older measurements count as unknown |
 | Beacon miss | 2 | misses before a beacon's timing is forgotten |
+| Base quiet | 10 s | the repeater in use quiet this long before a visit |
+| User quiet | 5 s | no key this long before a visit |
+| Timed visit | 0.3 s before the beacon to 0.5 s after | |
+| Sweep visit | 1 s; every 63.5 s (good), 16 s (weak), 2 s (lost) | |
+| Follow-up | 4.5 s, 56 s after a sweep found a beacon under way | |
+| Refresh | 5 min | a timed repeater's level, while the one in use is good |
 
 ## 5. Order of work
 
-1. The site table and search order (3.1, 3.2) as a host-tested service,
-   with the current wake-up search using the new order, and the roaming
-   screen (3.8) to watch it.
-2. Visits (3.3): first contact by phase sweep, then known beacon timing.
-   On-air test with a hotspot set to timed beacons: does the period hold,
-   and how long does a visit take?
-3. Surveillance and states of the serving repeater (3.5), and moving by
-   itself. On-air test with two repeaters at different distances.
-4. The codeplug's range check settings (3.6) and the notices (3.8).
-5. Keeping the last repeater across power-off (3.7).
+1. Done (0.20.3-6HL-2): the heard list and search order (3.1, 3.2), with
+   the wake-up search using the new order, and the roaming screen (3.8).
+2. Done: visits (3.3), first contact by phase sweep, then known beacon
+   timing.
+3. Done: the state of the repeater in use (3.5), and moving by itself.
+   Still to test with two repeaters at different distances.
+4. Done: the codeplug's range check settings (3.6) and its notices.
+5. Open: keeping the last repeater across power-off (3.7) needs settings
+   that survive a power-off.
 
 ## 6. Open questions
 

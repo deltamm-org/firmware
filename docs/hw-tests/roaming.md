@@ -20,6 +20,10 @@ Codeplug (D878UVII format, as codeplug tools such as QDMR write it):
   the delay, or every period.
 - A side key (PF1-PF3, short or long press) set to roaming.
 
+Between calls the radio learns the beacon of the repeater in use and
+visits the zone's other repeaters, one at a time, to keep their levels:
+see `docs/roaming.md`.
+
 A search tries the zone's repeaters, most likely first: the one in use,
 then the repeaters heard lately (strongest first), then the rest of the
 zone from where the last search left off. At each it listens 150 ms for
@@ -84,6 +88,13 @@ repeater's name, or `Searching...`.
 | 15 | After a restart, PF3 with one repeater on the air | The search stops at that repeater (`now through repeater N`) without trying the rest of the zone |
 | 16 | PF3 again | Only the repeater in use is tried: `staying on repeater N` |
 | 17 | Menu > Channel > Roam status | The repeater in use with a star, its level and an age counting up; Menu searches, Exit goes back |
+| 18 | Leave the radio on a roaming channel with a repeater sending timed beacons, 3 minutes | `roam` shows that repeater's beacon period (within 0.1 s of the repeater's setting) and the next beacon's time; Roam status shows the period |
+| 19 | Keep watching the log | About once a minute, once the repeater in use has been quiet for 10 s and no key pressed for 5 s: `visit to repeater N (sweep): nothing` for the zone's other repeaters; never one during a call |
+| 20 | Press PTT during a visit (watch the log for `visit to`) | The visit ends at once (`cut short`) and the call goes out as usual |
+| 21 | Switch the repeater's beacons off (or the repeater) | `beacon of repeater N missed` twice; about 3 minutes after the last beacon, Roam status shows `N Lost` |
+| 22 | Switch it back on | Its next beacon brings Roam status back to `N Good` |
+| 23 | With two repeaters on the air at different distances, `roam auto on`, move away from the one in use | Visits learn the other's beacon; when the one in use falls below -95 dBm and the other is 6 dB better, `moving from repeater N (weak) to repeater M` |
+| 24 | Codeplug: repeater range check on, 10 s, 3 tries, notice on; the repeater off | A wake-up of the repeater every 10 s while it is not heard; after the third unanswered, `repeater N out of range` and an `Out of range` notice |
 
 Undo: flash the previous release.
 
