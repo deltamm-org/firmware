@@ -126,7 +126,7 @@ services::roaming::RangeCheck rangeCheck;
 // the first after LostSearchMs, then each that finds nothing doubles the
 // wait, up to MaxLostSearchMs.
 constexpr std::uint32_t LostSearchMs = 30'000;
-constexpr std::uint32_t MaxLostSearchMs = 600'000;
+constexpr std::uint32_t MaxLostSearchMs = 120'000;
 std::uint32_t lostSearchMs = 0;
 std::uint32_t lostSearchGapMs = LostSearchMs;
 constexpr services::roaming::Levels RoamLevels{};
