@@ -192,6 +192,33 @@ private:
     std::uint32_t m_followUpMs = 0;
 };
 
+/// The codeplug's repeater range check: while the repeater in use is not
+/// heard, a wake-up every interval; enough unanswered ones in a row put it
+/// out of range, and the user is told as many times as the settings ask,
+/// once an interval.
+class RangeCheck
+{
+public:
+    void configure(const RoamingSettings &settings, std::uint32_t nowMs);
+    /// The repeater in use was heard: it is in range.
+    void heard(std::uint32_t nowMs);
+    /// A check is due now.
+    bool due(std::uint32_t nowMs) const;
+    /// A check ended. True when this one put the repeater out of range.
+    bool checked(bool answered, std::uint32_t nowMs);
+    bool outOfRange() const { return m_failures >= m_settings.checkTries && m_settings.rangeCheck; }
+    /// The user is to be told now that the repeater is out of range.
+    bool noticeDue(std::uint32_t nowMs);
+
+private:
+    RoamingSettings m_settings;
+    std::uint32_t m_heardMs = 0;
+    std::uint32_t m_checkedMs = 0;
+    std::uint32_t m_noticeMs = 0;
+    std::uint8_t m_failures = 0;
+    std::uint8_t m_notices = 0;
+};
+
 /// When the radio searches by itself, as RoamingSettings ask.
 class Watch
 {

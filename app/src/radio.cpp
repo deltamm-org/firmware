@@ -121,6 +121,11 @@ bool searchRunning = false;
 // Tuned off the repeater in use: searching, or visiting another repeater.
 bool away = false;
 services::roaming::Visits visits;
+services::roaming::RangeCheck rangeCheck;
+// While the repeater in use is lost, a search wakes the zone at most this
+// often.
+constexpr std::uint32_t LostSearchMs = 30'000;
+std::uint32_t lostSearchMs = 0;
 constexpr services::roaming::Levels RoamLevels{};
 // No move by itself within this time of the last one.
 constexpr std::uint32_t MoveGuardMs = 15'000;
@@ -510,6 +515,7 @@ void onDmrEvent(const services::dmr::Event &e)
     const bool onBase = roamingChannel && !away;
     if (onBase && (e.kind == Kind::SlotFound || e.kind == Kind::Burst)) {
         roamWatch.heard(os::nowMs());
+        rangeCheck.heard(os::nowMs());
         baseHeardMs = os::nowMs();
     }
     switch (e.kind) {
@@ -909,6 +915,10 @@ lib::StaticString<12> seconds(std::uint32_t ms)
         automatic << "after " << s.quietS << " s without the repeater";
     }
     log::info("roam") << sitesKnown() << " repeaters in the roaming zone; automatic " << automatic.view();
+    if (s.rangeCheck) {
+        log::info("roam") << "range check every " << s.checkIntervalS << " s, out of range after " << s.checkTries
+                          << " tries, " << s.outOfRangeNotices << " notices";
+    }
 }
 
 enum class SearchCause : std::uint8_t
@@ -1096,6 +1106,17 @@ void backToBase()
     showRoaming(false);
 }
 
+// The codeplug's range check: one probe of the repeater in use.
+[[gnu::noinline]] void checkRange()
+{
+    away = true;
+    const Probe p = probe(site, ownIdOverride != 0 ? ownIdOverride : dmrSettings.ownId);
+    backToBase();
+    if (rangeCheck.checked(p.answered, os::nowMs())) {
+        log::info("roam") << "repeater " << site + 1 << " out of range";
+    }
+}
+
 // Roaming between calls: counts the missed beacons of the repeater in use,
 // moves to a better repeater as the codeplug's automatic roaming allows,
 // and visits the others while the repeater in use is quiet.
@@ -1117,7 +1138,9 @@ void roamStep()
         }
         ownBeacon = services::roaming::HeardList::nextBeacon(*own, now);
     }
-    const services::roaming::Health state = services::roaming::health(heardList, site, RoamLevels, now);
+    const services::roaming::Health state = rangeCheck.outOfRange()
+        ? services::roaming::Health::Lost
+        : services::roaming::health(heardList, site, RoamLevels, now);
     const int to = roamWatch.automatic() && now - lastMoveMs >= MoveGuardMs
         ? services::roaming::moveTo(heardList, site, state, RoamLevels, now)
         : -1;
@@ -1127,6 +1150,18 @@ void roamStep()
     }
     if (to >= 0) {
         moveSite(to, state);
+        return;
+    }
+    if (rangeCheck.noticeDue(now)) {
+        ui::post(ui::Notice{"Out of range"});
+    }
+    if (site >= 0 && rangeCheck.due(now)) {
+        checkRange();
+        return;
+    }
+    if (state == services::roaming::Health::Lost && roamWatch.automatic() && now - lostSearchMs >= LostSearchMs) {
+        lostSearchMs = now;
+        search(SearchCause::Automatic);
         return;
     }
     if (now - baseHeardMs < BaseQuietMs || power::idleForMs() < UserQuietMs) {
@@ -1617,6 +1652,7 @@ void handle(Message &message)
                        // The quiet time counts from the change.
                        roamWatch.heard(os::nowMs());
                        baseHeardMs = os::nowMs();
+                       rangeCheck.heard(os::nowMs());
                        baseTx.on = false;
                        receive();
                        showRoaming(false);
@@ -1639,6 +1675,7 @@ void handle(Message &message)
                    },
                    [](const RoamingSetup &r) {
                        roamWatch.configure(r.settings, os::nowMs());
+                       rangeCheck.configure(r.settings, os::nowMs());
                        logRoamingSetup(r.settings);
                    },
                    [](const RoamStatus &) {
