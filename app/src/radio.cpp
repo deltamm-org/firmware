@@ -122,10 +122,13 @@ bool searchRunning = false;
 bool away = false;
 services::roaming::Visits visits;
 services::roaming::RangeCheck rangeCheck;
-// While the repeater in use is lost, a search wakes the zone at most this
-// often.
+// Searches by itself while the repeater in use is lost or cannot be judged:
+// the first after LostSearchMs, then each that finds nothing doubles the
+// wait, up to MaxLostSearchMs.
 constexpr std::uint32_t LostSearchMs = 30'000;
+constexpr std::uint32_t MaxLostSearchMs = 600'000;
 std::uint32_t lostSearchMs = 0;
+std::uint32_t lostSearchGapMs = LostSearchMs;
 constexpr services::roaming::Levels RoamLevels{};
 // No move by itself within this time of the last one.
 constexpr std::uint32_t MoveGuardMs = 15'000;
@@ -1159,15 +1162,17 @@ void roamStep()
         checkRange();
         return;
     }
-    // Searches by itself: every 30 s while the repeater in use is lost;
-    // and as the codeplug's period or quiet time say only while the radio
-    // cannot judge that repeater by its beacons.
-    if (state == services::roaming::Health::Lost && roamWatch.automatic() && now - lostSearchMs >= LostSearchMs) {
-        lostSearchMs = now;
-        search(SearchCause::Automatic);
-        return;
+    // Searches by itself while the repeater in use is lost, and as the
+    // codeplug's period or quiet time say while it cannot be judged by its
+    // beacons; backing off while they find nothing.
+    using services::roaming::Health;
+    if (state != Health::Lost && state != Health::Unknown) {
+        lostSearchGapMs = LostSearchMs;
     }
-    if (state == services::roaming::Health::Unknown && roamWatch.due(now)) {
+    const bool searchDue = state == Health::Lost ? roamWatch.automatic() : state == Health::Unknown && roamWatch.due(now);
+    if (searchDue && now - lostSearchMs >= lostSearchGapMs) {
+        lostSearchMs = now;
+        lostSearchGapMs = std::min(lostSearchGapMs * 2, MaxLostSearchMs);
         search(SearchCause::Automatic);
         return;
     }
