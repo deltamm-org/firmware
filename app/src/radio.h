@@ -8,6 +8,7 @@
 #include "dmm/lib/format.h"
 #include "dmm/services/codeplug.h"
 #include "dmm/services/fm_transceiver.h"
+#include "dmm/services/roaming.h"
 
 #include <cstdint>
 #include <span>
@@ -207,5 +208,17 @@ void setReceiveGroups(std::span<const std::uint32_t> ids);
 /// The roaming zone's repeaters, which @p fill writes and counts; set before
 /// posting a roaming channel.
 void setRoamingSites(lib::FnRef<std::size_t(std::span<services::RoamingSite>)> fill);
+
+/// What roaming knows, for the roaming status screen.
+struct RoamingView
+{
+    bool roaming = false; // a roaming channel is in use
+    bool searching = false;
+    int site = -1; // the repeater in use, -1 for none
+    std::uint8_t count = 0;
+    services::roaming::HeardList::Entry entries[services::roaming::HeardList::Capacity];
+    std::uint32_t receiveHz[services::roaming::HeardList::Capacity] = {};
+};
+void roamingView(RoamingView &out);
 
 } // namespace dmm::app::radio
