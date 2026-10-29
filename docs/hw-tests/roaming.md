@@ -139,6 +139,21 @@ hotspot:
 | 16 | Pass: the hotspot alone, 0.15 s to 0.5 s; `staying on repeater 2` |
 | 17 | Pass: the screen listed the hotspot; Menu searched, six times in a row |
 
+Steps 18 to 22, run 2026-10-29 on 0.20.3-6HL-6 (with the codeplug's
+automatic roaming on) and the same hotspot, beacons every 60 s for 3 s:
+
+| # | Result |
+| --- | --- |
+| 18 | Pass: beacons 60.0 s apart, each heard as one of 3.37 s to 3.44 s; no search while they came. Found: a sweep visit could start just as the hotspot's own beacon began, and that beacon then counted as missed (fixed after the run) |
+| 19 | Pass: one sweep visit about every 63.5 s, 1 s each, around the zone in order |
+| 20 | Open |
+| 21 | Pass: hotspot off, two beacons missed, then searches 30 s, 60 s and 120 s apart (the cap is now 2 min) |
+| 22 | Pass: hotspot on, its first beacon was heard on its own frequency between searches, with no wake-up |
+| 23, 24 | Open: need two repeaters, and the range check on |
+
+Also seen: with automatic roaming on, the radio searched by itself 35 s
+after start and took the hotspot.
+
 Findings:
 
 - The USB link drops while the radio transmits next to the PC; the log
