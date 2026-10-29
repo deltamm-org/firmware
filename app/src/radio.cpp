@@ -1164,7 +1164,9 @@ void roamStep()
         search(SearchCause::Automatic);
         return;
     }
-    if (now - baseHeardMs < BaseQuietMs || power::idleForMs() < UserQuietMs) {
+    // Keys only: the power idle time stays 0 while anything holds the radio
+    // awake, such as a lit backlight.
+    if (now - baseHeardMs < BaseQuietMs || system::idleForMs() < UserQuietMs) {
         return;
     }
     sitesLock.lock();

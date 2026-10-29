@@ -379,6 +379,11 @@ void start(Platform &p)
     systemTask.start("system", 1, systemMain, nullptr);
 }
 
+os::Ticks idleForMs()
+{
+    return os::nowMs() - lastActivity.load(std::memory_order_relaxed);
+}
+
 void noteActivity()
 {
     services::power::activity();
