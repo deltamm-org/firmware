@@ -112,7 +112,14 @@ std::uint32_t channelReceiveHz = 0;
 std::uint32_t channelTransmitHz = 0;
 std::uint8_t channelColourCode = 1;
 services::roaming::Watch roamWatch;
-services::roaming::Probe probes[services::CodeplugSource::MaxRoamingSites];
+// The repeaters heard, under sitesLock: the UI task reads them.
+services::roaming::HeardList heardList;
+// The search order, and where the rest of the zone starts next time.
+std::uint8_t searchList[services::CodeplugSource::MaxRoamingSites];
+std::size_t restFrom = 0;
+bool searchRunning = false;
+// A search stops at a repeater this strong.
+constexpr int GoodDbm = -90;
 // An automatic search moves only to a clearly stronger repeater.
 constexpr int AutomaticMarginDb = 6;
 // How long a probe listens for a repeater already on the air before it
@@ -441,6 +448,14 @@ void receive()
     }
 }
 
+// Repeater @p i was heard at @p dbm.
+void noteHeard(int i, int dbm)
+{
+    sitesLock.lock();
+    heardList.heard(static_cast<std::uint8_t>(i), dbm, os::nowMs());
+    sitesLock.unlock();
+}
+
 void onDmrEvent(const services::dmr::Event &e)
 {
     using Kind = services::dmr::Event::Kind;
@@ -457,6 +472,9 @@ void onDmrEvent(const services::dmr::Event &e)
                           << e.nextSlot;
         if (!timingFound && e.verified) {
             timingFound = true;
+            if (roamingChannel && site >= 0 && !searchRunning) {
+                noteHeard(site, fm->status().rssiDbm);
+            }
             log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing found"
                              << (e.inboundBusy ? ", inbound busy" : "");
         } else if (!timingFound && !timingSeen) {
@@ -699,7 +717,14 @@ bool pttReleasedMeanwhile()
     return false;
 }
 
-[[gnu::noinline]] void logProbe(int i, const services::roaming::Probe &p, bool woken)
+// What a probe found at one repeater.
+struct Probe
+{
+    bool answered = false;
+    int rssiDbm = 0;
+};
+
+[[gnu::noinline]] void logProbe(int i, const Probe &p, bool woken)
 {
     log::info("roam") << "repeater " << i + 1 << ", " << mhz(fmChannel.receiveHz).view() << " MHz: "
                       << (!p.answered ? "no answer" : woken ? "answered the wake-up"
@@ -719,12 +744,12 @@ bool pttReleasedMeanwhile()
 
 // Listens on repeater @p i and, when it is quiet, wakes it as a call
 // would.
-[[gnu::noinline]] services::roaming::Probe probe(int i, std::uint32_t ownId)
+[[gnu::noinline]] Probe probe(int i, std::uint32_t ownId)
 {
     useSite(i);
     carrierHeard = false;
     dmrReceive();
-    services::roaming::Probe p;
+    Probe p;
     // A repeater on the air (a beacon, a call) shows its timing without a
     // wake-up.
     awaitDmrEvent(services::dmr::Event::Kind::CarrierFound, ProbeListenMs);
@@ -765,9 +790,49 @@ bool pttReleasedMeanwhile()
             os::sleepMs(10);
         }
         p.rssiDbm = sum / Reads;
+        noteHeard(i, p.rssiDbm);
     }
     logProbe(i, p, woken);
     return p;
+}
+
+// Seconds with one decimal, from milliseconds.
+lib::StaticString<12> seconds(std::uint32_t ms)
+{
+    lib::StaticString<12> t;
+    t << ms / 1000 << '.' << static_cast<char>('0' + ms / 100 % 10);
+    return t;
+}
+
+// The heard list, one repeater a line: level, its age and the beacon
+// timing.
+[[gnu::noinline, gnu::cold]] void logHeardList()
+{
+    sitesLock.lock();
+    services::roaming::HeardList::Entry entries[services::roaming::HeardList::Capacity];
+    const std::size_t n = std::min(heardList.entries().size(), std::size(entries));
+    std::copy_n(heardList.entries().begin(), n, entries);
+    sitesLock.unlock();
+    const std::uint32_t now = os::nowMs();
+    for (std::size_t k = 0; k < n; ++k) {
+        const services::roaming::HeardList::Entry &e = entries[k];
+        const std::uint32_t next = services::roaming::HeardList::nextBeacon(e, now);
+        lib::StaticString<48> beacon;
+        if (e.periodCs == 0) {
+            beacon << "not known";
+        } else {
+            beacon << "every " << e.periodCs / 100 << '.' << static_cast<char>('0' + e.periodCs % 100 / 10)
+                   << static_cast<char>('0' + e.periodCs % 10) << " s, next ";
+            if (next == 0) {
+                beacon << "not known";
+            } else {
+                beacon << "in " << seconds(next - now).view() << " s";
+            }
+        }
+        log::info("roam") << "heard: repeater " << e.position + 1 << ", " << mhz(siteAt(e.position).receiveHz).view()
+                          << " MHz, " << e.levelDbm << " dBm " << seconds(now - e.measuredMs).view()
+                          << " s ago; beacon " << beacon.view();
+    }
 }
 
 [[gnu::noinline, gnu::cold]] void logRoamingSetup(const services::RoamingSettings &s)
@@ -807,9 +872,10 @@ enum class SearchCause : std::uint8_t
     }
 }
 
-// Tries every repeater of the roaming zone and works through the strongest
-// that answered. True when one did.
-[[gnu::noinline]] bool search(SearchCause cause)
+// Tries the roaming zone's repeaters, most likely first, until one is good,
+// and works through the best that answered. @p skipCurrent leaves out the
+// repeater in use, which has just failed to answer. True when one did.
+[[gnu::noinline]] bool search(SearchCause cause, bool skipCurrent = false)
 {
     const std::size_t count = sitesKnown();
     if (!roamingChannel || count == 0) {
@@ -824,20 +890,31 @@ enum class SearchCause : std::uint8_t
     logSearch(count, cause);
     endCall("left");
     setSpeaker(false);
+    searchRunning = true;
     showRoaming(true);
-    std::size_t probed = 0;
-    while (probed < count && !searchInterrupted()) {
-        probes[probed] = probe(static_cast<int>(probed), ownId);
-        ++probed;
+    const int current = skipCurrent ? -1 : site;
+    sitesLock.lock();
+    const services::roaming::Order order =
+        services::roaming::searchOrder(heardList, current, count, restFrom, os::nowMs(), searchList);
+    sitesLock.unlock();
+    services::roaming::Pick pick(current, GoodDbm, cause == SearchCause::Automatic ? AutomaticMarginDb : 0);
+    std::size_t tried = 0;
+    bool done = false;
+    while (tried < order.count && !done && !searchInterrupted()) {
+        const int i = searchList[tried++];
+        const Probe p = probe(i, ownId);
+        done = pick.tried(i, p.answered, p.rssiDbm);
     }
-    const int margin = cause == SearchCause::Automatic ? AutomaticMarginDb : 0;
-    const int best = services::roaming::choose(std::span(probes, probed), site, margin);
+    if (tried > order.restBegins) {
+        restFrom = searchList[tried - 1] + 1u;
+    }
+    const int best = pick.chosen();
     roamWatch.searched(os::nowMs());
-    logSearchEnd(best, best != site, probed == count);
+    logSearchEnd(best, best != site, done || tried == order.count);
     if (best >= 0) {
         site = best;
         roamWatch.heard(os::nowMs());
-    } else if (probed == count && cause != SearchCause::Automatic) {
+    } else if (tried == order.count && cause != SearchCause::Automatic) {
         ui::post(ui::Notice{"No repeater"});
     }
     if (site >= 0) {
@@ -846,6 +923,7 @@ enum class SearchCause : std::uint8_t
         useChannelFrequencies();
     }
     receive();
+    searchRunning = false;
     showRoaming(false);
     return best >= 0;
 }
@@ -1001,7 +1079,7 @@ void startRoamingCall()
             return;
         }
         searched = true;
-        if (!search(SearchCause::Ptt) || pttReleasedMeanwhile()) {
+        if (!search(SearchCause::Ptt, true) || pttReleasedMeanwhile()) {
             return;
         }
     }
@@ -1305,6 +1383,8 @@ void handle(Message &message)
                        if (sitesChanged) {
                            sitesChanged = false;
                            site = -1;
+                           heardList.clear();
+                           restFrom = 0;
                        }
                        sitesLock.unlock();
                        // A roaming channel keeps the repeater in use; else it
@@ -1345,6 +1425,7 @@ void handle(Message &message)
                                          << mhz(fmChannel.receiveHz).view() << " MHz, colour code "
                                          << dmrSettings.colourCode << "), automatic "
                                          << (roamWatch.automatic() ? "on" : "off");
+                       logHeardList();
                    },
                    [](const BatterySave &s) {
                        saver.setMode(s.mode);
@@ -1426,6 +1507,21 @@ void start(board::Fm &f, board::Baseband *b)
     fm = &f;
     baseband = b;
     radioTask.start("radio", 7, radioMain, nullptr);
+}
+
+void roamingView(RoamingView &out)
+{
+    sitesLock.lock();
+    out.roaming = roamingChannel;
+    out.searching = searchRunning;
+    out.site = site;
+    out.count = static_cast<std::uint8_t>(heardList.entries().size());
+    for (std::size_t k = 0; k < out.count; ++k) {
+        out.entries[k] = heardList.entries()[k];
+        const std::uint8_t i = out.entries[k].position;
+        out.receiveHz[k] = i < siteCount ? sites[i].receiveHz : 0;
+    }
+    sitesLock.unlock();
 }
 
 void setRoamingSites(lib::FnRef<std::size_t(std::span<services::RoamingSite>)> fill)
