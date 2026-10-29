@@ -36,7 +36,8 @@ only to a repeater at least 6 dB stronger.
 The radio keeps the last 8 repeaters heard, with their level. Menu >
 Channel > Roam status lists them, updated each second: position (a star
 on the one in use), output frequency, beacon period when known, level
-and its age. Menu there searches now. `roam` logs the same list.
+and its age; its last row, Search now, searches. `roam` logs the same
+list.
 
 A search starts:
 
@@ -87,7 +88,7 @@ repeater's name, or `Searching...`.
 | 14 | Read the latest uptime line | Every task above 50 unused stack words |
 | 15 | After a restart, PF3 with one repeater on the air | The search stops at that repeater (`now through repeater N`) without trying the rest of the zone |
 | 16 | PF3 again | Only the repeater in use is tried: `staying on repeater N` |
-| 17 | Menu > Channel > Roam status | The repeater in use with a star, its level and an age counting up; Menu searches, Exit goes back |
+| 17 | Menu > Channel > Roam status | The repeater in use with a star, its level and an age counting up; Menu on Search now searches, Exit goes back |
 | 18 | Leave the radio on a roaming channel with a repeater sending timed beacons, 3 minutes | `roam` shows that repeater's beacon period (within 0.1 s of the repeater's setting) and the next beacon's time; Roam status shows the period |
 | 19 | Keep watching the log | About once a minute, once the repeater in use has been quiet for 10 s and no key pressed for 5 s: `visit to repeater N (sweep): nothing` for the zone's other repeaters; never one during a call |
 | 20 | Press PTT during a visit (watch the log for `visit to`) | The visit ends at once (`cut short`) and the call goes out as usual |
