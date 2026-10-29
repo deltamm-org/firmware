@@ -16,6 +16,9 @@ void start(Platform &platform);
 /// A key or knob was used: restarts the auto power-off countdown.
 void noteActivity();
 
+/// How long since a key or knob was last used.
+os::Ticks idleForMs();
+
 /// Minutes without activity before the radio switches itself off; 0 = never.
 void setAutoPowerOffMinutes(int minutes);
 
