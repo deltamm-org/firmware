@@ -36,7 +36,7 @@ public:
         std::uint8_t position = 0;
         std::int8_t levelDbm = 0;
         std::uint8_t misses = 0;
-        std::uint8_t sweep = 0;     // the part of the beacon period to look at next
+        std::uint8_t samples = 0;   // levels measured while fresh, up to 255
         std::uint16_t periodCs = 0; // beacon period in 10 ms steps; 0 = not known
         std::uint32_t beaconMs = 0; // when the last beacon started; 0 = none heard
         std::uint32_t measuredMs = 0;
@@ -50,9 +50,13 @@ public:
     void heard(std::uint8_t position, int levelDbm, std::uint32_t nowMs);
     /// A beacon of repeater @p position started at @p nowMs, heard at
     /// @p levelDbm. Two beacons give the period; later ones refine it, also
-    /// across missed ones, and one off the period's beat moves the beat.
+    /// across missed ones. One that comes late moves the beat; one that
+    /// comes early is taken only when it divides the period, which then
+    /// spanned missed beacons.
     void beacon(std::uint8_t position, int levelDbm, std::uint32_t nowMs);
-    /// A beacon of repeater @p position did not come when it was due.
+    /// A beacon of repeater @p position did not come when it was due: the
+    /// next one is expected a period later, until MaxMisses in a row make
+    /// the beat unknown.
     void missed(std::uint8_t position);
     /// When the next beacon of @p e is due after @p nowMs; 0 while its
     /// timing is not known.
@@ -107,6 +111,87 @@ private:
     int m_currentDbm = 0;
 };
 
+/// Signal levels that steer roaming. Levels below about -100 dBm cannot be
+/// told from no signal on the D878UVII's receiver, so the thresholds sit
+/// above that.
+struct Levels
+{
+    int goodDbm = -90;     // a search stops here
+    int weakDbm = -95;     // below: look for a better repeater
+    int failingDbm = -105; // below: take any better repeater
+    int slowMarginDb = 6;  // better by this to move while weak
+    int fastMarginDb = 3;  // better by this to move while failing
+};
+
+/// How the repeater in use is doing.
+enum class Health : std::uint8_t
+{
+    Unknown, // not heard lately, and no beacon timing to miss
+    Good,
+    Weak,
+    Failing,
+    Lost, // its beacons stopped and nothing else was heard
+};
+
+/// The health of repeater @p site (-1: none in use, which counts as lost).
+Health health(const HeardList &heard, int site, const Levels &levels, std::uint32_t nowMs);
+
+/// The repeater to move to from @p site in state @p state, or -1 to stay:
+/// the strongest fresh one, measured at least twice (once when lost),
+/// better by the margin the state asks.
+int moveTo(const HeardList &heard, int site, Health state, const Levels &levels, std::uint32_t nowMs);
+
+/// A visit to another repeater: tune to it, listen, come back.
+struct Visit
+{
+    int position = -1;          // -1: no visit now
+    std::uint32_t dwellMs = 0;  // the longest to stay
+    std::uint32_t beaconMs = 0; // the beacon expected, for a timed visit
+    bool sweep = false;         // looking for a beacon whose timing is not known
+};
+
+/// Plans visits while the repeater in use is quiet. A repeater whose beacon
+/// timing is known is visited just before its next beacon: every
+/// RefreshMs while the one in use is good, at every beacon otherwise. The
+/// rest are swept, one visit at a time in zone order, each visit landing
+/// at a different point of the beacon period, until a beacon is caught.
+class Visits
+{
+public:
+    static constexpr std::uint32_t LeadMs = 300;
+    static constexpr std::uint32_t AfterMs = 500;
+    static constexpr std::uint32_t RefreshMs = 300'000;
+    static constexpr std::uint32_t SweepDwellMs = 1000;
+    /// A beacon under way when a sweep arrived: the next visit comes this
+    /// much later, about one 60 s period less a beacon, and stays long
+    /// enough to see the next one start.
+    static constexpr std::uint32_t FollowUpAfterMs = 56'000;
+    static constexpr std::uint32_t FollowUpDwellMs = 4500;
+
+    /// Time between sweep visits in state @p state: more than a 60 s
+    /// period, so that each lands later in the period, when all is well.
+    static std::uint32_t sweepGapMs(Health state);
+
+    /// The visit due now, if any.
+    Visit due(const HeardList &heard, int site, std::size_t zoneSize, Health state, std::uint32_t nowMs);
+
+    enum class Found : std::uint8_t
+    {
+        Nothing,
+        Start,    // a beacon started during the visit
+        UnderWay, // a transmission was on when the visit began
+    };
+    /// A sweep visit to @p position, which began at @p arrivedMs, ended.
+    void swept(int position, Found found, std::uint32_t arrivedMs, Health state);
+
+private:
+    std::size_t m_cursor = 0;
+    std::uint32_t m_nextSweepMs = 0;
+    bool m_sweepWaits = false;
+    int m_followUp = -1;
+    std::uint32_t m_followUpMs = 0;
+};
+
 /// When the radio searches by itself, as RoamingSettings ask.
 class Watch
 {
@@ -118,6 +203,7 @@ public:
 
     void configure(const RoamingSettings &settings, std::uint32_t nowMs);
     bool automatic() const { return m_settings.automatic; }
+    void setAutomatic(bool on) { m_settings.automatic = on; }
     /// The repeater in use was heard.
     void heard(std::uint32_t nowMs) { m_heard = nowMs; }
     /// A search ended.

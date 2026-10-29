@@ -46,7 +46,9 @@ void HeardList::heard(std::uint8_t position, int levelDbm, std::uint32_t nowMs)
     const bool known = find(position) != nullptr;
     Entry &e = place(position, nowMs);
     // A fresh level is smoothed; a stale or new one is replaced.
-    e.levelDbm = clampDbm(known && e.fresh(nowMs) ? (e.levelDbm + levelDbm) / 2 : levelDbm);
+    const bool fresh = known && e.fresh(nowMs);
+    e.levelDbm = clampDbm(fresh ? (e.levelDbm + levelDbm) / 2 : levelDbm);
+    e.samples = fresh ? static_cast<std::uint8_t>(std::min(e.samples + 1, 255)) : 1;
     e.measuredMs = nowMs;
 }
 
@@ -54,9 +56,16 @@ void HeardList::beacon(std::uint8_t position, int levelDbm, std::uint32_t nowMs)
 {
     heard(position, levelDbm, nowMs);
     Entry &e = place(position, nowMs);
-    e.misses = 0;
     if (e.beaconMs == 0) {
         e.beaconMs = nowMs;
+        e.misses = 0;
+        return;
+    }
+    if (static_cast<std::int32_t>(nowMs - e.beaconMs) < 0) {
+        // Moved ahead by a missed beacon, and came late after all: the beat
+        // follows it.
+        e.beaconMs = nowMs;
+        e.misses = 0;
         return;
     }
     const std::uint32_t since = nowMs - e.beaconMs;
@@ -77,24 +86,35 @@ void HeardList::beacon(std::uint8_t position, int levelDbm, std::uint32_t nowMs)
             const std::uint32_t measured = since / beats;
             e.periodCs = static_cast<std::uint16_t>((period * 3 + measured) / 4 / 10);
         } else if (since < period) {
-            // A shorter period than learned: the learned one spanned a
-            // missed beacon.
+            // Early: a shorter period that divides the learned one, which
+            // then spanned missed beacons; anything else is not a beacon.
+            const std::uint32_t parts = (period + since / 2) / since;
+            const std::uint32_t rest = period > parts * since ? period - parts * since : parts * since - period;
+            if (parts < 2 || rest > tolerance * parts) {
+                return;
+            }
             e.periodCs = static_cast<std::uint16_t>(since / 10);
         }
         // Otherwise the beacon came late, after the repeater was busy: the
         // period stays and the beat moves to this beacon.
     }
     e.beaconMs = nowMs;
+    e.misses = 0;
 }
 
 void HeardList::missed(std::uint8_t position)
 {
     for (std::size_t i = 0; i < m_count; ++i) {
         Entry &e = m_entries[i];
-        if (e.position == position && ++e.misses >= MaxMisses) {
+        if (e.position != position || e.beaconMs == 0 || e.periodCs == 0) {
+            continue;
+        }
+        if (++e.misses >= MaxMisses) {
             // The period still holds; when the beacon comes is unknown.
             e.misses = 0;
             e.beaconMs = 0;
+        } else {
+            e.beaconMs += e.periodMs();
         }
     }
 }
@@ -103,6 +123,9 @@ std::uint32_t HeardList::nextBeacon(const Entry &e, std::uint32_t nowMs)
 {
     if (e.periodCs == 0 || e.beaconMs == 0) {
         return 0;
+    }
+    if (static_cast<std::int32_t>(e.beaconMs - nowMs) > 0) {
+        return e.beaconMs; // moved ahead by a missed beacon
     }
     const std::uint32_t period = e.periodMs();
     const std::uint32_t next = e.beaconMs + ((nowMs - e.beaconMs) / period + 1) * period;
@@ -189,6 +212,110 @@ int Pick::chosen() const
     }
     const int gain = m_bestDbm - m_currentDbm;
     return gain > 0 && gain >= m_marginDb ? m_best : m_current;
+}
+
+Health health(const HeardList &heard, int site, const Levels &levels, std::uint32_t nowMs)
+{
+    if (site < 0) {
+        return Health::Lost;
+    }
+    const HeardList::Entry *e = heard.find(static_cast<std::uint8_t>(site));
+    if (e == nullptr) {
+        return Health::Unknown;
+    }
+    // Its beacon timing was forgotten after missed beacons, and nothing
+    // was heard for two periods.
+    if (e->periodCs != 0 && e->beaconMs == 0 && nowMs - e->measuredMs > 2 * e->periodMs()) {
+        return Health::Lost;
+    }
+    if (!e->fresh(nowMs)) {
+        return Health::Unknown;
+    }
+    return e->levelDbm >= levels.weakDbm   ? Health::Good
+        : e->levelDbm >= levels.failingDbm ? Health::Weak
+                                           : Health::Failing;
+}
+
+int moveTo(const HeardList &heard, int site, Health state, const Levels &levels, std::uint32_t nowMs)
+{
+    if (state != Health::Weak && state != Health::Failing && state != Health::Lost) {
+        return -1;
+    }
+    const HeardList::Entry *own = site >= 0 ? heard.find(static_cast<std::uint8_t>(site)) : nullptr;
+    const int ownDbm = own != nullptr && state != Health::Lost ? own->levelDbm : -1000;
+    const int margin = state == Health::Weak ? levels.slowMarginDb : state == Health::Failing ? levels.fastMarginDb
+                                                                                              : 0;
+    const std::uint8_t samples = state == Health::Lost ? 1 : 2;
+    const HeardList::Entry *best = nullptr;
+    for (const HeardList::Entry &e : heard.entries()) {
+        if (static_cast<int>(e.position) != site && e.fresh(nowMs) && e.samples >= samples &&
+            (best == nullptr || e.levelDbm > best->levelDbm)) {
+            best = &e;
+        }
+    }
+    return best != nullptr && best->levelDbm >= ownDbm + margin ? best->position : -1;
+}
+
+std::uint32_t Visits::sweepGapMs(Health state)
+{
+    switch (state) {
+    case Health::Good:
+    case Health::Unknown:
+        return 63'500;
+    case Health::Weak:
+    case Health::Failing:
+        return 16'000;
+    case Health::Lost:
+        break;
+    }
+    return 2000;
+}
+
+Visit Visits::due(const HeardList &heard, int site, std::size_t zoneSize, Health state, std::uint32_t nowMs)
+{
+    // A beacon of a repeater with known timing, about to start.
+    const std::uint32_t refresh = state == Health::Good ? RefreshMs : 10'000;
+    for (const HeardList::Entry &e : heard.entries()) {
+        if (static_cast<int>(e.position) == site || e.position >= zoneSize || nowMs - e.measuredMs < refresh) {
+            continue;
+        }
+        const std::uint32_t next = HeardList::nextBeacon(e, nowMs);
+        if (next != 0 && next - nowMs <= LeadMs) {
+            return {e.position, next - nowMs + AfterMs, next, false};
+        }
+    }
+    if (m_followUp >= 0 && static_cast<std::int32_t>(nowMs - m_followUpMs) >= 0) {
+        return {m_followUp, FollowUpDwellMs, 0, true};
+    }
+    if (m_sweepWaits && static_cast<std::int32_t>(nowMs - m_nextSweepMs) < 0) {
+        return {};
+    }
+    // The next repeater of the zone whose beacon timing is not known.
+    for (std::size_t i = 0; i < zoneSize; ++i) {
+        const std::size_t p = (m_cursor + i) % zoneSize;
+        const HeardList::Entry *e = heard.find(static_cast<std::uint8_t>(p));
+        const bool timed = e != nullptr && e->periodCs != 0 && e->beaconMs != 0;
+        if (static_cast<int>(p) != site && !timed) {
+            m_cursor = p;
+            return {static_cast<int>(p), SweepDwellMs, 0, true};
+        }
+    }
+    return {};
+}
+
+void Visits::swept(int position, Found found, std::uint32_t arrivedMs, Health state)
+{
+    m_sweepWaits = true;
+    m_nextSweepMs = arrivedMs + sweepGapMs(state);
+    if (found == Found::UnderWay && m_followUp != position) {
+        m_followUp = position;
+        m_followUpMs = arrivedMs + FollowUpAfterMs;
+        return;
+    }
+    if (position == m_followUp) {
+        m_followUp = -1;
+    }
+    m_cursor = static_cast<std::size_t>(position) + 1;
 }
 
 void Watch::configure(const RoamingSettings &settings, std::uint32_t nowMs)
