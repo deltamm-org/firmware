@@ -585,7 +585,7 @@ void fillRoamStatus(ListPicker &list)
     const std::uint32_t now = os::nowMs();
     for (std::uint8_t k = 0; k < v.count; ++k) {
         const services::roaming::HeardList::Entry &e = v.entries[k];
-        // "2*434.5125 60.0": position, a star for the one in use, output
+        // "2*438.2125 60.0": position, a star for the one in use, output
         // frequency, beacon period in seconds.
         lib::StaticString<24> text;
         const std::uint32_t frac = v.receiveHz[k] / 100 % 10'000;
