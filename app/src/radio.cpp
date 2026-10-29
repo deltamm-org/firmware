@@ -1133,13 +1133,22 @@ void roamStep()
     sitesLock.lock();
     const services::roaming::HeardList::Entry *own = site >= 0 ? heardList.find(static_cast<std::uint8_t>(site)) : nullptr;
     std::uint32_t ownBeacon = 0;
+    std::uint32_t ownPeriod = 0;
     bool missed = false;
     if (own != nullptr && own->periodCs != 0 && own->beaconMs != 0) {
-        missed = static_cast<std::int32_t>(now - (own->beaconMs + own->periodMs() + MissGraceMs)) > 0;
-        if (missed) {
-            heardList.missed(static_cast<std::uint8_t>(site));
+        const std::uint32_t due = own->beaconMs + own->periodMs();
+        if (static_cast<std::int32_t>(now - (due + MissGraceMs)) > 0) {
+            // Heard around the time its beacon was due, though not from the
+            // beacon's start (the radio was away): that keeps the beat.
+            if (static_cast<std::int32_t>(baseHeardMs - (due - 500)) >= 0) {
+                heardList.beacon(static_cast<std::uint8_t>(site), own->levelDbm, due);
+            } else {
+                heardList.missed(static_cast<std::uint8_t>(site));
+                missed = true;
+            }
         }
         ownBeacon = services::roaming::HeardList::nextBeacon(*own, now);
+        ownPeriod = own->periodMs();
     }
     const services::roaming::Health state = rangeCheck.outOfRange()
         ? services::roaming::Health::Lost
@@ -1184,8 +1193,11 @@ void roamStep()
     sitesLock.lock();
     const services::roaming::Visit v = visits.due(heardList, site, zoneSize, state, now);
     sitesLock.unlock();
-    // The repeater in use's own beacon comes first.
-    if (v.position < 0 || (ownBeacon != 0 && ownBeacon - now < v.dwellMs + 1000)) {
+    // The repeater in use's own beacon comes first: no visit while it is
+    // due soon or may have just started.
+    const bool ownBeaconNear =
+        ownBeacon != 0 && (ownBeacon - now < v.dwellMs + 1000 || now - (ownBeacon - ownPeriod) < MaxBeaconMs);
+    if (v.position < 0 || ownBeaconNear) {
         return;
     }
     visit(v, state);
