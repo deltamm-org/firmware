@@ -383,6 +383,7 @@ enum class View : std::uint8_t
     TestPattern,
     Standby,    // the radio's main screen
     ZonePicker, // choosing a zone
+    RoamStatus, // what roaming knows, refreshed each second
     Menu,       // the settings list
     MenuValue,  // choosing one setting's value
     Gps,        // the GPS receiver's state and fix, from the menu
@@ -398,6 +399,18 @@ ListPicker zonePicker;
 ListPicker menu;
 ListPicker menuValue;
 
+// The screens that show a list; the roaming status screen borrows the
+// zone list's.
+bool isList(View v)
+{
+    return v == View::ZonePicker || v == View::RoamStatus || v == View::Menu || v == View::MenuValue;
+}
+ListPicker &listOf(View v)
+{
+    return v == View::Menu ? menu : v == View::MenuValue ? menuValue
+                                                         : zonePicker;
+}
+
 // The settings menu: one flat list, each item a list of values.
 enum class MenuItem : std::uint8_t
 {
@@ -406,6 +419,7 @@ enum class MenuItem : std::uint8_t
     Power,
     Roaming,
     RoamZone,
+    RoamStatus, // opens the roaming status screen
     Backlight,
     BacklightTime,
     BatterySave,
@@ -433,11 +447,14 @@ enum class MenuGroup : std::uint8_t
 struct GroupInfo
 {
     const char *name;
-    MenuItem items[5];
+    MenuItem items[6];
     std::uint8_t count;
 };
 constexpr GroupInfo Groups[] = {
-    {"Channel", {MenuItem::Squelch, MenuItem::SquelchMode, MenuItem::Power, MenuItem::Roaming, MenuItem::RoamZone}, 5},
+    {"Channel",
+        {MenuItem::Squelch, MenuItem::SquelchMode, MenuItem::Power, MenuItem::Roaming, MenuItem::RoamZone,
+            MenuItem::RoamStatus},
+        6},
     {"Display", {MenuItem::Backlight, MenuItem::BacklightTime}, 2},
     {"Keys", {MenuItem::KeyLock, MenuItem::AutoLock}, 2},
     {"Battery", {MenuItem::BatterySave}, 1},
@@ -523,6 +540,9 @@ struct RoamState
     char name[CodeplugSource::SiteNameBytes + 1] = {};
 };
 RoamState roam;
+// The radio task's roaming state, copied for the status screen and its
+// menu row; kept here, not on the stack.
+radio::RoamingView roamView;
 // Hands the roaming zone's repeaters to the radio task, which then looks
 // for one afresh.
 void loadRoamingSites()
@@ -533,6 +553,57 @@ void loadRoamingSites()
             : 0;
         return roamingSites;
     });
+}
+// Fills @p list with what roaming knows: the repeater in use, then each
+// repeater heard with its level, the age of that level and its beacon
+// period. The cursor stays on the same row.
+void fillRoamStatus(ListPicker &list)
+{
+    radio::RoamingView &v = roamView;
+    radio::roamingView(v);
+    const std::uint8_t at = list.empty() ? 0 : list.chosen();
+    list.open("Roaming");
+    lib::StaticString<9> state;
+    if (!v.roaming) {
+        state << "Off";
+    } else if (v.searching) {
+        state << "Search";
+    } else if (v.site < 0) {
+        state << "None";
+    } else {
+        state << "Rep " << v.site + 1;
+    }
+    list.add(0, "In use", state.view());
+    const std::uint32_t now = os::nowMs();
+    for (std::uint8_t k = 0; k < v.count; ++k) {
+        const services::roaming::HeardList::Entry &e = v.entries[k];
+        // "2*434.5125 60.0": position, a star for the one in use, output
+        // frequency, beacon period in seconds.
+        lib::StaticString<24> text;
+        const std::uint32_t frac = v.receiveHz[k] / 100 % 10'000;
+        text << e.position + 1 << (e.position == v.site ? '*' : ' ') << v.receiveHz[k] / 1'000'000 << '.'
+             << static_cast<char>('0' + frac / 1000) << static_cast<char>('0' + frac / 100 % 10)
+             << static_cast<char>('0' + frac / 10 % 10);
+        if (frac % 10 != 0) {
+            text << static_cast<char>('0' + frac % 10);
+        }
+        if (e.periodCs != 0) {
+            text << ' ' << e.periodCs / 100 << '.' << static_cast<char>('0' + e.periodCs % 100 / 10);
+        }
+        // "-35 12s": level and its age.
+        const std::uint32_t age = (now - e.measuredMs) / 1000;
+        lib::StaticString<12> value;
+        value << e.levelDbm << ' ';
+        if (age < 100) {
+            value << age << 's';
+        } else if (age < 6000) {
+            value << age / 60 << 'm';
+        } else {
+            value << "old";
+        }
+        list.add(static_cast<std::uint8_t>(k + 1), text.view(), value.view());
+    }
+    list.select(at);
 }
 // The side keys' functions, and whether a long press has already acted.
 services::KeyFunction sideShort[CodeplugSettings::SideKeys] = {};
@@ -856,7 +927,7 @@ void uiMain(void *)
         noticeShown = false;
         volumeNoticeUp = false;
         const bool radioScreen =
-            view == View::Standby || view == View::ZonePicker || view == View::Menu || view == View::MenuValue || view == View::Gps;
+            view == View::Standby || isList(view) || view == View::Gps;
         barHeader(radioScreen);
         if (view == View::Standby && heard.shown) {
             standby.drawCall(d, standbyState(), callInfo());
@@ -868,12 +939,10 @@ void uiMain(void *)
             standby.drawStatus(d, standbyState());
             drawBattery(d);
             drawGpsScreen(d, gpsState, true);
-        } else if (view == View::ZonePicker || view == View::Menu || view == View::MenuValue) {
+        } else if (isList(view)) {
             standby.drawStatus(d, standbyState());
             drawBattery(d);
-            ListPicker &list = view == View::ZonePicker ? zonePicker : view == View::Menu ? menu
-                                                                                          : menuValue;
-            list.draw(d, StandbyScreen::StatusH);
+            listOf(view).draw(d, StandbyScreen::StatusH);
         } else if (view == View::Log) {
             showLog(d);
         } else if (view == View::KeyTest) {
@@ -898,8 +967,7 @@ void uiMain(void *)
     auto refreshLockMark = [&] {
         if (view == View::Log || view == View::KeyTest) {
             drawLockMark(d);
-        } else if (view == View::Standby || view == View::ZonePicker || view == View::Menu || view == View::MenuValue ||
-            view == View::Gps) {
+        } else if (view == View::Standby || isList(view) || view == View::Gps) {
             standby.drawStatus(d, standbyState());
             drawBattery(d);
         }
@@ -929,6 +997,21 @@ void uiMain(void *)
             label = "Roaming";
             value << (roamingOn ? "On" : "Off");
             break;
+        case MenuItem::RoamStatus: {
+            label = "Roam status";
+            radio::RoamingView &v = roamView;
+            radio::roamingView(v);
+            if (!v.roaming) {
+                value << "Off";
+            } else if (v.searching) {
+                value << "Search";
+            } else if (v.site < 0) {
+                value << "None";
+            } else {
+                value << "Rep " << v.site + 1;
+            }
+            break;
+        }
         case MenuItem::RoamZone: {
             label = "Roam zone";
             std::array<char, CodeplugSource::ZoneNameBytes + 1> name{};
@@ -1052,6 +1135,11 @@ void uiMain(void *)
             menuValue.add(1, "On");
             menuValue.select(roamingOn ? 1 : 0);
             break;
+        case MenuItem::RoamStatus:
+            zonePicker.open("Roaming");
+            fillRoamStatus(zonePicker);
+            show(View::RoamStatus);
+            return;
         case MenuItem::RoamZone: {
             menuValue.open("Roam zone");
             std::uint8_t zones[CodeplugSource::MaxRoamingZones];
@@ -1202,6 +1290,8 @@ void uiMain(void *)
             roamingOn = v == 1;
             radio::post(radio::RoamingOn{roamingOn});
             break;
+        case MenuItem::RoamStatus:
+            break;
         case MenuItem::RoamZone:
             if (v != roamingZone) {
                 roamingZone = v;
@@ -1292,6 +1382,17 @@ void uiMain(void *)
                 } else {
                     show(View::Standby);
                 }
+            }
+            return;
+        }
+        if (view == View::RoamStatus) {
+            if (step && (key == Key::Up || key == Key::Down)) {
+                zonePicker.move(key == Key::Up ? -1 : 1);
+                zonePicker.draw(d, StandbyScreen::StatusH);
+            } else if (press && key == Key::Menu) {
+                radio::post(radio::RoamNow{});
+            } else if (press && key == Key::Exit) {
+                openGroup(menuGroup, menuQuick);
             }
             return;
         }
@@ -1490,7 +1591,7 @@ void uiMain(void *)
                                    }
                                    return;
                                }
-                               if (channels != nullptr && (view == View::Standby || view == View::ZonePicker || view == View::Menu || view == View::MenuValue)) {
+                               if (channels != nullptr && (view == View::Standby || isList(view))) {
                                    channelKey(e.key, e.type);
                                }
                            },
@@ -1580,10 +1681,8 @@ void uiMain(void *)
                                keyTest.setClicks(c.clicks);
                                refreshValues();
                                if (channels != nullptr && moved != 0) {
-                                   if (view == View::ZonePicker || view == View::Menu || view == View::MenuValue) {
-                                       ListPicker &list = view == View::ZonePicker ? zonePicker
-                                           : view == View::Menu                    ? menu
-                                                                                   : menuValue;
+                                   if (isList(view)) {
+                                       ListPicker &list = listOf(view);
                                        list.move(moved);
                                        list.draw(d, StandbyScreen::StatusH);
                                    } else if (view == View::Standby) {
@@ -1719,6 +1818,14 @@ void uiMain(void *)
             } else if (heard.active && second != lastSecond) {
                 lastSecond = second;
                 standby.drawCallTime(d, callInfo());
+            }
+        }
+        if (view == View::RoamStatus && !noticeShown) {
+            const os::Ticks second = os::nowMs() / 1000;
+            if (second != lastSecond) {
+                lastSecond = second;
+                fillRoamStatus(zonePicker);
+                zonePicker.draw(d, StandbyScreen::StatusH);
             }
         }
         if (view == View::Log) {
