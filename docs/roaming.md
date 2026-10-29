@@ -376,22 +376,22 @@ TETRA:
 
 ### 3.6 Codeplug settings used
 
-From the D878UVII general settings. Offsets and values follow QDMR's
-notes on the format; the range check's values are to be confirmed with
-the vendor's software:
+From the D878UVII general settings (`d878uv2_codeplug.cpp` has where
+each lives); the range check's values are to be confirmed with the
+vendor's software:
 
-| Setting | Offset | Use |
-|---|---|---|
-| Roaming zone, default | 0xDC | the zone at start |
-| Automatic roaming | 0xE7 | whether 3.3 and 3.5 run by themselves |
-| Start: periodic or out of range | 0xE0 | periodic: a full search every period; out of range: only on *Lost* |
-| Period (min) | 0xBA | for the periodic start |
-| Delay (s) | 0xBF | quiet time before *Lost* is assumed without a range check |
-| Repeater range check on | 0xDD | wake the repeater in use while it is not heard |
-| Range check interval | 0xDE: 0 = 5 s to 9 = 50 s | how often |
-| Range check tries | 0xDF: 0 = 3 to 2 = 5 (larger: the count itself) | unanswered in a row before out of range |
-| Range check notice, count | 0xE5 off or on; 0xEA: 0 = 1 to 9 = 10 | `Out of range` notices, one an interval |
-| Side keys | 0x10-0x12, 0x41-0x43 | the roaming key |
+| Setting | Use |
+|---|---|
+| Default roaming zone | the zone at start |
+| Automatic roaming | whether the radio moves by itself (3.5) |
+| Start: periodic or out of range | periodic: a full search every period; out of range: when the repeater in use has been quiet for the delay |
+| Period (min) | for the periodic start |
+| Delay (s) | quiet time before a search, without a range check |
+| Repeater range check | wake the repeater in use while it is not heard |
+| Range check interval | how often: 5 s to 50 s |
+| Range check tries | unanswered in a row before out of range: 3 to 5 |
+| Out-of-range notice and count | `Out of range` notices, one an interval, 1 to 10 times |
+| Side keys | the roaming key |
 
 The codeplug has no signal thresholds, hysteresis or beacon settings.
 These are constants in the firmware for now (section 4). A later DeltaMM
@@ -472,8 +472,8 @@ were found counts as usable at any level.
   entry, from the call information repeated in the voice bursts), and
   how much of the first words is lost? How long is the signal before the
   first words on our repeaters, really?
-- Codeplug byte 0xE7 and the range check fields: confirm on the radio
-  with the vendor's software.
+- The automatic roaming setting and the range check fields: confirm on
+  the radio with the vendor's software.
 
 ## Sources
 
