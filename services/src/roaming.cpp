@@ -228,7 +228,10 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
     if (e->periodCs != 0 && e->beaconMs == 0 && nowMs - e->measuredMs > 2 * e->periodMs()) {
         return Health::Lost;
     }
-    if (!e->fresh(nowMs)) {
+    // While its beacons keep their beat, the last level holds until one is
+    // missed, however long the period.
+    const bool timed = e->periodCs != 0 && e->beaconMs != 0;
+    if (!timed && !e->fresh(nowMs)) {
         return Health::Unknown;
     }
     return e->levelDbm >= levels.weakDbm   ? Health::Good

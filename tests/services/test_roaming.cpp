@@ -191,6 +191,10 @@ TEST_CASE("the repeater in use: good, weak, failing, unknown or lost")
     h.heard(4, -110, 1000);
     CHECK(roaming::health(h, 4, l, 1000) == Health::Failing);
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs) == Health::Unknown);
+    // A beacon every 60 s: the level holds past ValidMs until a miss.
+    h.beacon(6, -80, 10'000);
+    h.beacon(6, -80, 70'000);
+    CHECK(roaming::health(h, 6, l, 70'000 + HeardList::ValidMs + 500) == Health::Good);
     // Beacons stopped: two missed, and nothing heard for two periods.
     h.beacon(5, -70, 10'000);
     h.beacon(5, -70, 70'000);
