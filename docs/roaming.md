@@ -7,7 +7,7 @@ the plan for what comes next: listen for repeater beacons first, keep the
 repeaters in a learned order instead of trying them from the top of the
 list, and change repeater only on clear, lasting evidence.
 
-The codeplug stays in the D878UVII format, so the vendor's software and
+The codeplug stays in the D878UVII format, so codeplug tools such as
 QDMR keep writing it. Everything learned on the air lives in the radio.
 
 ## 1. What the standards say
@@ -377,8 +377,8 @@ TETRA:
 ### 3.6 Codeplug settings used
 
 From the D878UVII general settings (`d878uv2_codeplug.cpp` has where
-each lives); the range check's values are to be confirmed with the
-vendor's software:
+each lives); the range check's values are still to be confirmed on the
+radio:
 
 | Setting | Use |
 |---|---|
@@ -472,8 +472,8 @@ were found counts as usable at any level.
   entry, from the call information repeated in the voice bursts), and
   how much of the first words is lost? How long is the signal before the
   first words on our repeaters, really?
-- The automatic roaming setting and the range check fields: confirm on
-  the radio with the vendor's software.
+- The automatic roaming setting and the range check fields: confirm what
+  each value does on the radio.
 
 ## Sources
 
