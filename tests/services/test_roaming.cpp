@@ -278,6 +278,40 @@ TEST_CASE("a beacon under way brings a longer visit just before the next one")
     CHECK(v.due(h, 0, 3, Health::Good, 57'000 + 63'500).position == 2);
 }
 
+TEST_CASE("the range check wakes a quiet repeater and counts unanswered tries")
+{
+    RoamingSettings s;
+    s.rangeCheck = true;
+    s.checkIntervalS = 10;
+    s.checkTries = 3;
+    s.outOfRangeNotices = 2;
+    roaming::RangeCheck c;
+    c.configure(s, 0);
+    CHECK_FALSE(c.due(9'999));
+    CHECK(c.due(10'000));
+    c.heard(8000); // a beacon: no check yet
+    CHECK_FALSE(c.due(10'000));
+    CHECK(c.due(18'000));
+    CHECK_FALSE(c.checked(false, 18'000));
+    CHECK_FALSE(c.due(27'999));
+    CHECK_FALSE(c.checked(false, 28'000));
+    CHECK_FALSE(c.outOfRange());
+    CHECK_FALSE(c.noticeDue(28'000));
+    CHECK(c.checked(false, 38'000));
+    CHECK(c.outOfRange());
+    CHECK(c.noticeDue(38'000));
+    CHECK_FALSE(c.noticeDue(40'000)); // once an interval
+    CHECK(c.noticeDue(48'000));
+    CHECK_FALSE(c.noticeDue(60'000));      // as many as asked
+    CHECK_FALSE(c.checked(false, 48'000)); // already out of range
+    CHECK_FALSE(c.checked(true, 58'000));
+    CHECK_FALSE(c.outOfRange());
+    // Off in the codeplug: never due.
+    s.rangeCheck = false;
+    c.configure(s, 0);
+    CHECK_FALSE(c.due(1'000'000));
+}
+
 TEST_CASE("an automatic search is due after the repeater went quiet")
 {
     RoamingSettings s;

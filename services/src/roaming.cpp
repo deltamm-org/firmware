@@ -318,6 +318,50 @@ void Visits::swept(int position, Found found, std::uint32_t arrivedMs, Health st
     m_cursor = static_cast<std::size_t>(position) + 1;
 }
 
+void RangeCheck::configure(const RoamingSettings &settings, std::uint32_t nowMs)
+{
+    m_settings = settings;
+    heard(nowMs);
+}
+
+void RangeCheck::heard(std::uint32_t nowMs)
+{
+    m_heardMs = nowMs;
+    m_checkedMs = nowMs;
+    m_failures = 0;
+    m_notices = 0;
+}
+
+bool RangeCheck::due(std::uint32_t nowMs) const
+{
+    const std::uint32_t interval = m_settings.checkIntervalS * 1000u;
+    return m_settings.rangeCheck && nowMs - m_heardMs >= interval && nowMs - m_checkedMs >= interval;
+}
+
+bool RangeCheck::checked(bool answered, std::uint32_t nowMs)
+{
+    if (answered) {
+        heard(nowMs);
+        return false;
+    }
+    m_checkedMs = nowMs;
+    if (m_failures < 255) {
+        ++m_failures;
+    }
+    return m_settings.rangeCheck && m_failures == m_settings.checkTries;
+}
+
+bool RangeCheck::noticeDue(std::uint32_t nowMs)
+{
+    if (!outOfRange() || m_notices >= m_settings.outOfRangeNotices ||
+        (m_notices > 0 && nowMs - m_noticeMs < m_settings.checkIntervalS * 1000u)) {
+        return false;
+    }
+    ++m_notices;
+    m_noticeMs = nowMs;
+    return true;
+}
+
 void Watch::configure(const RoamingSettings &settings, std::uint32_t nowMs)
 {
     m_settings = settings;

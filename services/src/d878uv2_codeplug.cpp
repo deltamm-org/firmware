@@ -252,6 +252,16 @@ CodeplugSettings decodeSettings(std::span<const std::uint8_t> b)
         r.periodMinutes = b[0xBA];
         r.quietS = b[0xBF];
     }
+    // The repeater range check: interval in 5 s steps from 5 s, tries 0 to 2
+    // for 3 to 5 (larger values are taken as the count itself), notice off
+    // or on, and how many notices from 1.
+    if (b.size() >= 0xEB) {
+        RoamingSettings &r = s.roaming;
+        r.rangeCheck = b[0xDD] == 1;
+        r.checkIntervalS = static_cast<std::uint8_t>((std::min<int>(b[0xDE], 9) + 1) * 5);
+        r.checkTries = b[0xDF] <= 2 ? static_cast<std::uint8_t>(b[0xDF] + 3) : std::min<std::uint8_t>(b[0xDF], 10);
+        r.outOfRangeNotices = b[0xE5] != 0 ? static_cast<std::uint8_t>(std::min<int>(b[0xEA], 9) + 1) : 0;
+    }
     return s;
 }
 

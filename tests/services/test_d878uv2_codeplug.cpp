@@ -455,6 +455,23 @@ TEST_CASE("settings: roaming and the side keys")
     CHECK(t.roaming.zone == RoamingSettings::NoZone);
     CHECK(t.roaming.start == RoamingSettings::Start::Periodic);
     CHECK_FALSE(t.roaming.automatic);
+    CHECK_FALSE(s.roaming.rangeCheck);
+    CHECK(s.roaming.outOfRangeNotices == 0);
+    // The range check.
+    b[0xDD] = 1;
+    b[0xDE] = 3; // 20 s
+    b[0xDF] = 1; // 4 tries
+    b[0xE5] = 1; // notice
+    b[0xEA] = 2; // 3 times
+    const auto c = dmm::services::decodeSettings(b);
+    CHECK(c.roaming.rangeCheck);
+    CHECK(c.roaming.checkIntervalS == 20);
+    CHECK(c.roaming.checkTries == 4);
+    CHECK(c.roaming.outOfRangeNotices == 3);
+    b[0xDF] = 6; // a count written as itself
+    b[0xDE] = 200;
+    CHECK(dmm::services::decodeSettings(b).roaming.checkTries == 6);
+    CHECK(dmm::services::decodeSettings(b).roaming.checkIntervalS == 50);
     // A block too short for the roaming settings leaves them off.
     const auto u = dmm::services::decodeSettings(std::span(b).first(0xC0));
     CHECK(u.roaming.zone == RoamingSettings::NoZone);

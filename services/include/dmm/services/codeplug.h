@@ -85,6 +85,15 @@ struct RoamingSettings
     Start start = Start::OutOfRange;
     std::uint16_t periodMinutes = 0;
     std::uint16_t quietS = 0;
+    /// Checks the repeater in use, every checkIntervalS while it is not
+    /// heard, with a wake-up; checkTries unanswered in a row put it out of
+    /// range.
+    bool rangeCheck = false;
+    std::uint8_t checkIntervalS = 5;
+    std::uint8_t checkTries = 3;
+    /// How many times the user is told the repeater is out of range; 0 =
+    /// never.
+    std::uint8_t outOfRangeNotices = 0;
 };
 
 /// The general settings DeltaMM uses so far.
