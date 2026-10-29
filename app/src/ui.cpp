@@ -573,7 +573,8 @@ lib::StaticString<9> roamStateText(const radio::RoamingView &v)
 }
 // Fills @p list with what roaming knows: the repeater in use, then each
 // repeater heard with its level, the age of that level and its beacon
-// period. The cursor stays on the same row.
+// period, and a row that searches now. The cursor stays on the same row.
+constexpr std::uint8_t SearchNowRow = 0xFF;
 void fillRoamStatus(ListPicker &list)
 {
     radio::RoamingView &v = roamView;
@@ -610,6 +611,7 @@ void fillRoamStatus(ListPicker &list)
         }
         list.add(static_cast<std::uint8_t>(k + 1), text.view(), value.view());
     }
+    list.add(SearchNowRow, "Search now");
     list.select(at);
 }
 // The side keys' functions, and whether a long press has already acted.
@@ -1387,7 +1389,7 @@ void uiMain(void *)
             if (step && (key == Key::Up || key == Key::Down)) {
                 zonePicker.move(key == Key::Up ? -1 : 1);
                 zonePicker.draw(d, StandbyScreen::StatusH);
-            } else if (press && key == Key::Menu) {
+            } else if (press && key == Key::Menu && zonePicker.chosen() == SearchNowRow) {
                 radio::post(radio::RoamNow{});
             } else if (press && key == Key::Exit) {
                 openGroup(menuGroup, menuQuick);

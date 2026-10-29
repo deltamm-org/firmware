@@ -360,7 +360,7 @@ TETRA:
 | Weak | below *Weak* | visits at every beacon; move to one *Hyst slow* better |
 | Failing | below *Failing* | move to one *Hyst fast* better |
 | Lost | two beacons missed and nothing heard for two periods, or out of range by the range check | move to any repeater heard; else search, at most every 30 s |
-| Unknown | not heard for 60 s and no beacon timing | visits as when good; the codeplug's quiet time still starts a search |
+| Unknown | not heard for 60 s and no beacon timing | visits as when good; the codeplug's period or quiet time start a search, as without beacons |
 
 - The level is the latest smoothed one: each measurement of the repeater
   in use comes from a transmission, so a level below a threshold has
@@ -384,7 +384,7 @@ radio:
 |---|---|
 | Default roaming zone | the zone at start |
 | Automatic roaming | whether the radio moves by itself (3.5) |
-| Start: periodic or out of range | periodic: a full search every period; out of range: when the repeater in use has been quiet for the delay |
+| Start: periodic or out of range | periodic: a full search every period; out of range: when the repeater in use has been quiet for the delay. Either only while that repeater cannot be judged by its beacons |
 | Period (min) | for the periodic start |
 | Delay (s) | quiet time before a search, without a range check |
 | Repeater range check | wake the repeater in use while it is not heard |
@@ -419,7 +419,8 @@ on by itself, and the user only talks.
   status): the repeater in use and its state (`2 Good`), then each
   repeater heard: position, a star on the one in use, output frequency,
   beacon period once learned, level and its age. It updates every second,
-  so a walk or drive shows what the radio sees. Menu there searches now.
+  so a walk or drive shows what the radio sees. Its last row, Search
+  now, searches.
 - The console: `roam` logs the same list with the next beacon's time;
   each visit, missed beacon and move is logged too.
 
