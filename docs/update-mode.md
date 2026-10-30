@@ -37,7 +37,8 @@ Before sending anything, the tool checks that:
 With `--wait <seconds>`, the tool first waits that long for a radio to
 appear in update mode, so it can be started before the radio is switched
 on. A radio running its factory firmware has the same USB IDs as one in
-update mode, so a radio already connected when the wait starts has to be
+update mode (DeltaMM's ports also say `DeltaMM` as their serial number),
+so a radio already connected when the wait starts has to be
 switched off and back on in update mode first.
 
 After the transfer ends, the radio starts the new firmware by itself, and

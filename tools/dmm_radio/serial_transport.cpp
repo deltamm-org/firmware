@@ -7,22 +7,28 @@
 
 namespace {
 
-// USB IDs of the GD32-based AnyTone radios' programming port.
+// USB IDs of the GD32-based AnyTone radios' programming port. DeltaMM uses
+// them too, with the serial number string "DeltaMM".
 constexpr quint16 RadioVendorId = 0x28E9;
 constexpr quint16 RadioProductId = 0x018A;
-// DeltaMM in development: the pid.codes test IDs.
-constexpr quint16 DeltaMmVendorId = 0x1209;
-constexpr quint16 DeltaMmProductId = 0x0001;
+const QString DeltaMmSerial = QStringLiteral("DeltaMM");
+// Earlier DeltaMM builds: the pid.codes test IDs.
+constexpr quint16 TestVendorId = 0x1209;
+constexpr quint16 TestProductId = 0x0001;
+
+bool hasIds(const QSerialPortInfo &info, quint16 vendorId, quint16 productId)
+{
+    return info.hasVendorIdentifier() && info.hasProductIdentifier() && info.vendorIdentifier() == vendorId &&
+        info.productIdentifier() == productId;
+}
 
 } // namespace
 
 QList<QSerialPortInfo> SerialTransport::findRadios()
 {
     QList<QSerialPortInfo> radios;
-    const auto ports = QSerialPortInfo::availablePorts();
-    for (const QSerialPortInfo &info : ports) {
-        if (info.hasVendorIdentifier() && info.hasProductIdentifier() &&
-            info.vendorIdentifier() == RadioVendorId && info.productIdentifier() == RadioProductId) {
+    for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
+        if (hasIds(info, RadioVendorId, RadioProductId) && info.serialNumber() != DeltaMmSerial) {
             radios.append(info);
         }
     }
@@ -33,8 +39,8 @@ QList<QSerialPortInfo> SerialTransport::findDeltaMmPorts()
 {
     QList<QSerialPortInfo> ports;
     for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
-        if (info.hasVendorIdentifier() && info.hasProductIdentifier() && info.vendorIdentifier() == DeltaMmVendorId &&
-            info.productIdentifier() == DeltaMmProductId) {
+        if ((hasIds(info, RadioVendorId, RadioProductId) && info.serialNumber() == DeltaMmSerial) ||
+            hasIds(info, TestVendorId, TestProductId)) {
             ports.append(info);
         }
     }

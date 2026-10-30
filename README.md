@@ -188,9 +188,9 @@ The GPS mark in the status bar, shown while the GPS is on:
 ## Programming the codeplug
 
 The data port also speaks the radio's programming protocol, so codeplug
-tools read and write the codeplug. QDMR needs
-to know DeltaMM's USB ID (1209:0001 during development); a QDMR with that
-added finds the radio as a D878UVII. The radio starts again after a write,
+tools read and write the codeplug. DeltaMM keeps the radio's own USB IDs
+(28e9:018a), so codeplug tools find it as a D878UVII; of its two ports,
+the data port is the one to choose. The radio starts again after a write,
 with the new codeplug. Only the codeplug is written, never calibration or
 the radio's own data; the callsign database is not written yet.
 

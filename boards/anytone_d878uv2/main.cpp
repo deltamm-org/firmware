@@ -213,9 +213,10 @@ private:
 
 namespace usb = dmm::drivers::usb;
 
-// USB identity: the pid.codes test IDs while DeltaMM is in development.
+// USB identity: the radio's own IDs, so codeplug tools find it as they find
+// the radio itself; the serial number string "DeltaMM" tells DeltaMM apart.
 // Two serial ports: the data port (DeltaMM's PC protocol), then the log.
-constexpr auto DeviceDescriptor = usb::compositeDeviceDescriptor({0x1209, 0x0001, 0x0001, 1, 2, 0});
+constexpr auto DeviceDescriptor = usb::compositeDeviceDescriptor({0x28E9, 0x018A, 0x0001, 1, 2, 5});
 constexpr auto DataPort = usb::cdcAcmDescriptors(0, 0x83, 0x01, 0x81, 4);
 constexpr auto LogPort = usb::cdcAcmDescriptors(2, 0x84, 0x02, 0x82, 3);
 constexpr auto ConfigurationDescriptor =
@@ -225,7 +226,8 @@ constexpr auto Manufacturer = usb::stringDescriptor("DeltaMM");
 constexpr auto Product = usb::stringDescriptor("DeltaMM AnyTone D878UVII");
 constexpr auto LogPortName = usb::stringDescriptor("DeltaMM log");
 constexpr auto DataPortName = usb::stringDescriptor("DeltaMM data");
-constexpr std::span<const std::uint8_t> Strings[] = {Language, Manufacturer, Product, LogPortName, DataPortName};
+constexpr auto SerialNumber = usb::stringDescriptor("DeltaMM");
+constexpr std::span<const std::uint8_t> Strings[] = {Language, Manufacturer, Product, LogPortName, DataPortName, SerialNumber};
 
 hal::Usbd usbd{UsbPullUp, UsbIrqPriority};
 usb::CdcAcm dataPort{0, 0x83, 0x01, 0x81};

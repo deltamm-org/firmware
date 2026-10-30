@@ -194,8 +194,8 @@ the SCT3258 are built when the option is given.
 - Display: 160 × 128 colour panel on an 8-bit parallel bus.
 - Storage: SPI NAND flash.
 - USB: full-speed device on PA11/PA12, clocked from the crystal PLL; a
-  board pin switches the D+ pull-up. DeltaMM uses the pid.codes test IDs
-  (1209:0001) during development.
+  board pin switches the D+ pull-up. DeltaMM keeps the radio's own USB IDs
+  (28e9:018a), with the serial number string `DeltaMM`.
 
 ## Testing
 
