@@ -359,3 +359,31 @@ TEST_CASE("a periodic search, and none when automatic roaming is off")
     CHECK_FALSE(w.automatic());
     CHECK_FALSE(w.due(1'000'000));
 }
+
+TEST_CASE("with its beacon period known, a level stays fresh a period and the longest beacon")
+{
+    HeardList h;
+    // Beacons exactly 60 s apart count every level as fresh.
+    h.beacon(1, -70, 1);
+    h.beacon(1, -80, 60'001);
+    h.beacon(1, -90, 120'001);
+    CHECK(h.find(1)->samples == 3);
+    // A period of 120 s.
+    h.beacon(2, -70, 1);
+    h.beacon(2, -70, 120'001);
+    CHECK(h.find(2)->fresh(120'001 + 120'000 + HeardList::MaxBeaconMs - 1));
+    CHECK_FALSE(h.find(2)->fresh(120'001 + 120'000 + HeardList::MaxBeaconMs));
+}
+
+TEST_CASE("a beacon's length is kept until another is measured")
+{
+    HeardList h;
+    h.beacon(3, -70, 1, 12'340);
+    CHECK(h.find(3)->lengthMs() == 12'340);
+    h.beacon(3, -70, 60'001); // length not known: kept
+    CHECK(h.find(3)->lengthMs() == 12'340);
+    h.beacon(3, -70, 120'001, HeardList::MaxBeaconMs + 10); // too long for a beacon
+    CHECK(h.find(3)->lengthMs() == 12'340);
+    h.beacon(3, -70, 180'001, 4320);
+    CHECK(h.find(3)->lengthMs() == 4320);
+}
