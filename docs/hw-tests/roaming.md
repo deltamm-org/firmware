@@ -94,10 +94,6 @@ to roaming, and a duplex hotspot as the only repeater on the air.
 
 Findings:
 
-- The search found nothing at first: this radio's frequency reference
-  had drifted, and nothing it sent was decoded, neither by the hotspot nor
-  by a second radio. With the menu's frequency offset set, the hotspot
-  answered the wake-up and the search chose it.
 - The USB link drops while the radio transmits next to the PC; the log
   lines wait in the radio until the port is opened again.
 - The codeplug's per-channel roaming bit excludes a channel from roaming
