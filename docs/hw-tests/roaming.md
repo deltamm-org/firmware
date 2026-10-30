@@ -166,6 +166,18 @@ same hotspot and a Parrot talkgroup:
 Also seen: PTT on a repeater that did not answer started a search for
 the call, which found the hotspot in 1.5 s and sent the call through it.
 
+Steps 9, 18, 19 and 25, run 2026-10-31 on upstream 0.22.0 with the open
+pull requests merged, the same zone and hotspot, the codeplug's
+automatic roaming on with a quiet time of 0; the hotspot beacons 60 s
+after its last transmission:
+
+| # | Result |
+| --- | --- |
+| 9 | Pass: 35 s after start a search by itself; repeater 1 did not answer two wake-ups, the hotspot answered and the radio moved to it |
+| 18 | Pass: the period learned as 60.01 s from the first two beacons (3.39 s each), under 4 minutes after start |
+| 19 | Pass: one sweep visit about every 63.5 s, around the zone in order |
+| 25 | Pass after two fixes: searches at 35 s and 97 s, then none once the beacons judged the hotspot. Before them, a search every 61 s kept landing on the hotspot's beacon, so it was never learned, and later a level that went stale just as the second beacon began let a search cover it |
+
 Findings:
 
 - The USB link drops while the radio transmits next to the PC; the log
