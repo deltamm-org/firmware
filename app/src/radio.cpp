@@ -126,8 +126,8 @@ bool away = false;
 services::roaming::Visits visits;
 services::roaming::RangeCheck rangeCheck;
 // Searches by itself while the repeater in use is lost or cannot be judged:
-// the first after LostSearchMs, then each that finds nothing doubles the
-// wait, up to MaxLostSearchMs.
+// the first after LostSearchMs, then each doubles the wait, up to
+// MaxLostSearchMs, until its beacons judge it.
 constexpr std::uint32_t LostSearchMs = 30'000;
 constexpr std::uint32_t MaxLostSearchMs = 120'000;
 std::uint32_t lostSearchMs = 0;
@@ -1179,9 +1179,12 @@ void roamStep()
     }
     // Searches by itself while the repeater in use is lost, and as the
     // codeplug's period or quiet time say while it cannot be judged by its
-    // beacons; backing off while they find nothing.
+    // beacons; backing off until its beacons judge it. A search's own
+    // measurement keeps it good only until that goes stale, and searching
+    // again then can keep landing on a beacon sent a fixed time after the
+    // repeater's last transmission.
     using services::roaming::Health;
-    if (state != Health::Lost && state != Health::Unknown) {
+    if (state != Health::Lost && state != Health::Unknown && ownBeacon != 0) {
         lostSearchGapMs = LostSearchMs;
     }
     const bool searchDue = state == Health::Lost ? roamWatch.automatic() : state == Health::Unknown && roamWatch.due(now);

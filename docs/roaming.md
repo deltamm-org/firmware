@@ -327,7 +327,7 @@ TETRA:
 | Weak | below *Weak* | visits at every beacon; move to one *Hyst slow* better |
 | Failing | below *Failing* | move to one *Hyst fast* better |
 | Lost | two beacons missed and nothing heard for two periods, or out of range by the range check | move to any repeater heard; else search after 30 s, then 1 and at most 2 minutes apart while nothing is found |
-| Unknown | not heard for 60 s and no beacon timing | visits as when good; the codeplug's period or quiet time start a search, as without beacons |
+| Unknown | not heard for 60 s and no beacon timing | visits as when good; the codeplug's period or quiet time start a search, as without beacons, 30 s, then 1 and at most 2 minutes apart until beacons judge the repeater (a search finding it does not start the wait over, so a repeater that beacons a fixed time after its last transmission is not kept busy) |
 
 - The level is the latest smoothed one: each measurement of the repeater
   in use comes from a transmission, so a level below a threshold has

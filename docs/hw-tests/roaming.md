@@ -96,6 +96,7 @@ repeater's name, or `Searching...`.
 | 22 | Switch it back on | Its next beacon brings Roam status back to `N Good` |
 | 23 | With two repeaters on the air at different distances, `roam auto on`, move away from the one in use | Visits learn the other's beacon; when the one in use falls below -95 dBm and the other is 6 dB better, `moving from repeater N (weak) to repeater M` |
 | 24 | Codeplug: repeater range check on, 10 s, 3 tries, notice on; the repeater off | A wake-up of the repeater every 10 s while it is not heard; after the third unanswered, `repeater N out of range` and an `Out of range` notice |
+| 25 | Codeplug: automatic roaming on, quiet time 0; a repeater whose beacon comes a fixed time (60 s) after its last transmission; restart on its roaming channel | Searches 30 s, 60 s, then 120 s apart, not every minute; its beacon is heard between them and `roam` shows its period within about 5 minutes |
 
 Undo: flash the previous release.
 
