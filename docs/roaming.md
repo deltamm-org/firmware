@@ -198,7 +198,7 @@ Each entry, 16 bytes:
 | Beacon period | 2 | 10 ms steps: the period has to be learned to the tens of ms (measured, section 1) |
 | Beacon length | 2 | 10 ms steps, measured on the repeater in use |
 | Last beacon heard | 4 | ms |
-| Last measured | 4 | ms; older than 60 s counts as unknown, as in TETRA; once the period is known, older than a period and the longest beacon (16.5 s) |
+| Last measured | 4 | ms; older than 60 s counts as unknown, as in TETRA; after a beacon, older than 60 s and the longest beacon (16.5 s), so the next beacon of the usual period comes first; once the period is known, older than a period and the longest beacon |
 
 8 entries take 128 bytes. The basic roaming in place today holds the
 whole zone's frequencies and one probe result per repeater, about 1.3 kB
@@ -406,7 +406,7 @@ were found counts as usable at any level.
 | *Hyst slow* | 6 dB | better by this to move while weak |
 | *Hyst fast* | 3 dB | better by this to move while failing |
 | Guard | 15 s | no move within this time of the last one |
-| Validity | 60 s, or a beacon period and 16.5 s | older measurements count as unknown |
+| Validity | 60 s; 76.5 s after a beacon; a beacon period and 16.5 s once the period is known | older measurements count as unknown |
 | Beacon miss | 2 | misses before a beacon's timing is forgotten |
 | Base quiet | 10 s | the repeater in use quiet this long before a visit |
 | User quiet | 5 s | no key this long before a visit |

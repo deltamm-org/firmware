@@ -375,6 +375,17 @@ TEST_CASE("with its beacon period known, a level stays fresh a period and the lo
     CHECK_FALSE(h.find(2)->fresh(120'001 + 120'000 + HeardList::MaxBeaconMs));
 }
 
+TEST_CASE("after one beacon, its level stays fresh past the usual period")
+{
+    HeardList h;
+    h.beacon(4, -70, 1000);
+    CHECK(h.find(4)->fresh(1000 + 60'000));
+    CHECK(h.find(4)->fresh(1000 + HeardList::ValidMs + HeardList::MaxBeaconMs - 1));
+    CHECK_FALSE(h.find(4)->fresh(1000 + HeardList::ValidMs + HeardList::MaxBeaconMs));
+    h.heard(5, -70, 1000); // heard, no beacon
+    CHECK_FALSE(h.find(5)->fresh(1000 + HeardList::ValidMs));
+}
+
 TEST_CASE("a beacon's length is kept until another is measured")
 {
     HeardList h;

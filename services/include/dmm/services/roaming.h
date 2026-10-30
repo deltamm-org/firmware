@@ -22,8 +22,10 @@ class HeardList
 {
 public:
     static constexpr std::size_t Capacity = 8;
-    /// A level older than this is unknown; with the beacon period known,
-    /// one older than a period and the longest beacon.
+    /// A level older than this is unknown; after a beacon, one older than
+    /// this and the longest beacon, and with the beacon period known, one
+    /// older than a period and the longest beacon. A beacon's level so
+    /// stays fresh until the next beacon of the usual period has come.
     static constexpr std::uint32_t ValidMs = 60'000;
     /// Repeaters send beacons every 10 s to 210 s, each 0.72 s to 16.32 s
     /// long, as each is set up. Periods outside this range are not taken
@@ -48,7 +50,13 @@ public:
 
         std::uint32_t periodMs() const { return periodCs * 10u; }
         std::uint32_t lengthMs() const { return lengthCs * 10u; }
-        std::uint32_t validMs() const { return periodMs() + MaxBeaconMs > ValidMs ? periodMs() + MaxBeaconMs : ValidMs; }
+        std::uint32_t validMs() const
+        {
+            if (periodCs == 0) {
+                return beaconMs != 0 ? ValidMs + MaxBeaconMs : ValidMs;
+            }
+            return periodMs() + MaxBeaconMs > ValidMs ? periodMs() + MaxBeaconMs : ValidMs;
+        }
         bool fresh(std::uint32_t nowMs) const { return nowMs - measuredMs < validMs(); }
     };
 
