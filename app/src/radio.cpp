@@ -445,8 +445,9 @@ void onDmrEvent(const services::dmr::Event &e)
 {
     using Kind = services::dmr::Event::Kind;
     using services::dmr::DataType;
-    // Anything on the repeater's output counts as hearing it.
-    if (roamingChannel && (e.kind == Kind::SlotFound || e.kind == Kind::Burst || e.kind == Kind::CarrierFound)) {
+    // DMR timing or a burst on the repeater's output counts as hearing it;
+    // a carrier alone may be another signal.
+    if (roamingChannel && (e.kind == Kind::SlotFound || e.kind == Kind::Burst)) {
         roamWatch.heard(os::nowMs());
     }
     switch (e.kind) {
