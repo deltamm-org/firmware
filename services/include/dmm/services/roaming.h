@@ -22,11 +22,15 @@ class HeardList
 {
 public:
     static constexpr std::size_t Capacity = 8;
-    /// A level older than this is unknown.
+    /// A level older than this is unknown; with the beacon period known,
+    /// one older than a period and the longest beacon.
     static constexpr std::uint32_t ValidMs = 60'000;
-    /// Beacon periods outside this range are not taken as periods.
+    /// Repeaters send beacons every 10 s to 210 s, each 0.72 s to 16.32 s
+    /// long, as each is set up. Periods outside this range are not taken
+    /// as periods, and longer transmissions are not beacons.
     static constexpr std::uint32_t MinPeriodMs = 10'000;
     static constexpr std::uint32_t MaxPeriodMs = 600'000;
+    static constexpr std::uint32_t MaxBeaconMs = 16'500;
     /// Beacons expected and not heard, in a row, before the timing is
     /// forgotten.
     static constexpr std::uint8_t MaxMisses = 2;
@@ -38,22 +42,25 @@ public:
         std::uint8_t misses = 0;
         std::uint8_t samples = 0;   // levels measured while fresh, up to 255
         std::uint16_t periodCs = 0; // beacon period in 10 ms steps; 0 = not known
+        std::uint16_t lengthCs = 0; // the last beacon's length in 10 ms steps; 0 = not known
         std::uint32_t beaconMs = 0; // when the last beacon started; 0 = none heard
         std::uint32_t measuredMs = 0;
 
         std::uint32_t periodMs() const { return periodCs * 10u; }
-        bool fresh(std::uint32_t nowMs) const { return nowMs - measuredMs < ValidMs; }
+        std::uint32_t lengthMs() const { return lengthCs * 10u; }
+        std::uint32_t validMs() const { return periodMs() + MaxBeaconMs > ValidMs ? periodMs() + MaxBeaconMs : ValidMs; }
+        bool fresh(std::uint32_t nowMs) const { return nowMs - measuredMs < validMs(); }
     };
 
     void clear() { m_count = 0; }
     /// Repeater @p position heard at @p levelDbm.
     void heard(std::uint8_t position, int levelDbm, std::uint32_t nowMs);
     /// A beacon of repeater @p position started at @p nowMs, heard at
-    /// @p levelDbm. Two beacons give the period; later ones refine it, also
-    /// across missed ones. One that comes late moves the beat; one that
-    /// comes early is taken only when it divides the period, which then
-    /// spanned missed beacons.
-    void beacon(std::uint8_t position, int levelDbm, std::uint32_t nowMs);
+    /// @p levelDbm, and lasted @p lengthMs (0 = not known). Two beacons give
+    /// the period; later ones refine it, also across missed ones. One that
+    /// comes late moves the beat; one that comes early is taken only when
+    /// it divides the period, which then spanned missed beacons.
+    void beacon(std::uint8_t position, int levelDbm, std::uint32_t nowMs, std::uint32_t lengthMs = 0);
     /// A beacon of repeater @p position did not come when it was due: the
     /// next one is expected a period later, until MaxMisses in a row make
     /// the beat unknown.

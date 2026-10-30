@@ -15,6 +15,56 @@ std::int8_t clampDbm(int dbm)
     return static_cast<std::int8_t>(std::clamp(dbm, -128, 127));
 }
 
+// Takes a beacon starting at @p nowMs into the beat of @p e.
+void keepBeat(HeardList::Entry &e, std::uint32_t nowMs)
+{
+    using L = HeardList;
+    if (e.beaconMs == 0) {
+        e.beaconMs = nowMs;
+        e.misses = 0;
+        return;
+    }
+    if (static_cast<std::int32_t>(nowMs - e.beaconMs) < 0) {
+        // Moved ahead by a missed beacon, and came late after all: the beat
+        // follows it.
+        e.beaconMs = nowMs;
+        e.misses = 0;
+        return;
+    }
+    const std::uint32_t since = nowMs - e.beaconMs;
+    if (since < L::MinPeriodMs) {
+        // Still the same beacon, or traffic: the beat stays.
+        return;
+    }
+    if (e.periodCs == 0) {
+        if (since <= L::MaxPeriodMs) {
+            e.periodCs = static_cast<std::uint16_t>(since / 10);
+        }
+    } else {
+        const std::uint32_t period = e.periodMs();
+        const std::uint32_t beats = (since + period / 2) / period;
+        const std::uint32_t off = since > beats * period ? since - beats * period : beats * period - since;
+        const std::uint32_t tolerance = std::max<std::uint32_t>(300, period / 100);
+        if (beats >= 1 && off <= tolerance) {
+            const std::uint32_t measured = since / beats;
+            e.periodCs = static_cast<std::uint16_t>((period * 3 + measured) / 4 / 10);
+        } else if (since < period) {
+            // Early: a shorter period that divides the learned one, which
+            // then spanned missed beacons; anything else is not a beacon.
+            const std::uint32_t parts = (period + since / 2) / since;
+            const std::uint32_t rest = period > parts * since ? period - parts * since : parts * since - period;
+            if (parts < 2 || rest > tolerance * parts) {
+                return;
+            }
+            e.periodCs = static_cast<std::uint16_t>(since / 10);
+        }
+        // Otherwise the beacon came late, after the repeater was busy: the
+        // period stays and the beat moves to this beacon.
+    }
+    e.beaconMs = nowMs;
+    e.misses = 0;
+}
+
 } // namespace
 
 HeardList::Entry &HeardList::place(std::uint8_t position, std::uint32_t nowMs)
@@ -52,54 +102,22 @@ void HeardList::heard(std::uint8_t position, int levelDbm, std::uint32_t nowMs)
     e.measuredMs = nowMs;
 }
 
-void HeardList::beacon(std::uint8_t position, int levelDbm, std::uint32_t nowMs)
+void HeardList::beacon(std::uint8_t position, int levelDbm, std::uint32_t nowMs, std::uint32_t lengthMs)
 {
+    // The beat first, so that a period learned from this beacon already
+    // keeps the last level fresh.
+    const bool known = find(position) != nullptr;
+    if (known) {
+        keepBeat(place(position, nowMs), nowMs);
+    }
     heard(position, levelDbm, nowMs);
     Entry &e = place(position, nowMs);
-    if (e.beaconMs == 0) {
-        e.beaconMs = nowMs;
-        e.misses = 0;
-        return;
+    if (!known) {
+        keepBeat(e, nowMs);
     }
-    if (static_cast<std::int32_t>(nowMs - e.beaconMs) < 0) {
-        // Moved ahead by a missed beacon, and came late after all: the beat
-        // follows it.
-        e.beaconMs = nowMs;
-        e.misses = 0;
-        return;
+    if (lengthMs != 0 && lengthMs <= MaxBeaconMs) {
+        e.lengthCs = static_cast<std::uint16_t>(lengthMs / 10);
     }
-    const std::uint32_t since = nowMs - e.beaconMs;
-    if (since < MinPeriodMs) {
-        // Still the same beacon, or traffic: the beat stays.
-        return;
-    }
-    if (e.periodCs == 0) {
-        if (since <= MaxPeriodMs) {
-            e.periodCs = static_cast<std::uint16_t>(since / 10);
-        }
-    } else {
-        const std::uint32_t period = e.periodMs();
-        const std::uint32_t beats = (since + period / 2) / period;
-        const std::uint32_t off = since > beats * period ? since - beats * period : beats * period - since;
-        const std::uint32_t tolerance = std::max<std::uint32_t>(300, period / 100);
-        if (beats >= 1 && off <= tolerance) {
-            const std::uint32_t measured = since / beats;
-            e.periodCs = static_cast<std::uint16_t>((period * 3 + measured) / 4 / 10);
-        } else if (since < period) {
-            // Early: a shorter period that divides the learned one, which
-            // then spanned missed beacons; anything else is not a beacon.
-            const std::uint32_t parts = (period + since / 2) / since;
-            const std::uint32_t rest = period > parts * since ? period - parts * since : parts * since - period;
-            if (parts < 2 || rest > tolerance * parts) {
-                return;
-            }
-            e.periodCs = static_cast<std::uint16_t>(since / 10);
-        }
-        // Otherwise the beacon came late, after the repeater was busy: the
-        // period stays and the beat moves to this beacon.
-    }
-    e.beaconMs = nowMs;
-    e.misses = 0;
 }
 
 void HeardList::missed(std::uint8_t position)

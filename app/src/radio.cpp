@@ -144,7 +144,6 @@ constexpr os::Ticks UserQuietMs = 5000;
 constexpr std::uint32_t MissGraceMs = 1500;
 // The repeater in use's current transmission: a short one of idle bursts
 // only, not started by our own wake-up, is a beacon.
-constexpr std::uint32_t MaxBeaconMs = 5000;
 struct BaseTransmission
 {
     bool on = false;
@@ -502,12 +501,12 @@ void noteHeard(int i, int dbm)
 {
     baseTx.on = false;
     const std::uint32_t length = os::nowMs() - baseTx.startMs;
-    if (site < 0 || !baseTx.idleOnly || !baseTx.measured || length > MaxBeaconMs ||
+    if (site < 0 || !baseTx.idleOnly || !baseTx.measured || length > services::roaming::HeardList::MaxBeaconMs ||
         baseTx.startMs - lastWakeMs < 3000) {
         return;
     }
     sitesLock.lock();
-    heardList.beacon(static_cast<std::uint8_t>(site), baseTx.dbm, baseTx.startMs);
+    heardList.beacon(static_cast<std::uint8_t>(site), baseTx.dbm, baseTx.startMs, length);
     sitesLock.unlock();
     log::debug("roam") << "beacon of repeater " << site + 1 << ", " << baseTx.dbm << " dBm, " << length << " ms";
 }
@@ -1137,6 +1136,7 @@ void roamStep()
     const services::roaming::HeardList::Entry *own = site >= 0 ? heardList.find(static_cast<std::uint8_t>(site)) : nullptr;
     std::uint32_t ownBeacon = 0;
     std::uint32_t ownPeriod = 0;
+    std::uint32_t ownLength = services::roaming::HeardList::MaxBeaconMs;
     bool missed = false;
     if (own != nullptr && own->periodCs != 0 && own->beaconMs != 0) {
         const std::uint32_t due = own->beaconMs + own->periodMs();
@@ -1152,6 +1152,9 @@ void roamStep()
         }
         ownBeacon = services::roaming::HeardList::nextBeacon(*own, now);
         ownPeriod = own->periodMs();
+        if (own->lengthCs != 0) {
+            ownLength = own->lengthMs() + 500;
+        }
     }
     const services::roaming::Health state = rangeCheck.outOfRange()
         ? services::roaming::Health::Lost
@@ -1199,7 +1202,7 @@ void roamStep()
     // The repeater in use's own beacon comes first: no visit while it is
     // due soon or may have just started.
     const bool ownBeaconNear =
-        ownBeacon != 0 && (ownBeacon - now < v.dwellMs + 1000 || now - (ownBeacon - ownPeriod) < MaxBeaconMs);
+        ownBeacon != 0 && (ownBeacon - now < v.dwellMs + 1000 || now - (ownBeacon - ownPeriod) < ownLength);
     if (v.position < 0 || ownBeaconNear) {
         return;
     }
