@@ -33,11 +33,10 @@ keying at High and Turbo are implemented, not yet tested on the radio.
 repeater of the codeplug's roaming zone answers best, so one channel per
 talkgroup covers a whole network. The radio tries each repeater, waking
 quiet ones, on a side key the codeplug sets to roaming, when PTT finds
-no repeater, and by itself as the codeplug's roaming settings say
-(implemented, not yet tested on the radio). The Channel menu turns
-roaming off, or picks another roaming zone, for the session. This is
-basic roaming, by signal strength; roaming as the ETSI DMR standards
-describe it is still to come.
+no repeater, and by itself as the codeplug's roaming settings say. The
+Channel menu turns roaming off, or picks another roaming zone, for the
+session. This is basic roaming, by signal strength; roaming as the ETSI
+DMR standards describe it is still to come.
 `docs/roaming-setup.md` shows how to set roaming up in the codeplug and
 how to use it.
 
