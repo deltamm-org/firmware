@@ -330,8 +330,8 @@ TEST_CASE("contact names are found by ID through the sorted ID table")
         table.insert(table.end(), e.begin(), e.end());
     }
     table.resize(0x2000, 0xFF);
-    markValid(0x04340000);
-    chip.put(0x04340000, table);
+    markValid(0x04800000);
+    chip.put(0x04800000, table);
     markValid(0x02680000);
     auto named = [&](std::uint32_t index, const char *name) {
         std::vector<std::uint8_t> r(0x10, 0);

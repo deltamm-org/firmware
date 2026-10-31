@@ -39,7 +39,7 @@ constexpr unsigned MaxContacts = 10'000;
 // Every contact's ID, sorted: 8-byte entries, the ID in BCD shifted left
 // by one with the talkgroup flag in bit 0, then the contact index (both
 // little-endian); unused entries are all ones.
-constexpr std::uint32_t ContactIds = 0x04340000;
+constexpr std::uint32_t ContactIds = 0x04800000;
 constexpr std::uint32_t ContactIdBytes = 8;
 // Receive group lists: 0x200 bytes each, 64 little-endian contact indices
 // first (unused ones all ones); a bitmap of the lists in use.
