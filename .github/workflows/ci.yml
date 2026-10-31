@@ -14,7 +14,7 @@ jobs:
     name: Host build and tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Ninja and GL headers
         run: sudo apt-get update && sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-dev
       - uses: jurplel/install-qt-action@v4
@@ -23,7 +23,7 @@ jobs:
           modules: 'qtserialport'
           cache: true
       - name: Configure
-        run: cmake --preset host -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+        run: cmake --preset host -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
       - name: Build
         run: cmake --build --preset host
       - name: Test
@@ -38,12 +38,12 @@ jobs:
       matrix:
         preset: [fw-d878uv2-release, fw-d878uv2-debug]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Cache Arm GNU Toolchain
         id: toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/arm-gnu-toolchain
           key: arm-gnu-toolchain-14.2.rel1-x86_64
@@ -54,7 +54,7 @@ jobs:
           curl -sSL https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi.tar.xz \
             | tar -xJ --strip-components=1 -C ~/arm-gnu-toolchain
       - name: Configure
-        run: ARM_GNU_TOOLCHAIN=~/arm-gnu-toolchain cmake --preset ${{ matrix.preset }}
+        run: ARM_GNU_TOOLCHAIN=~/arm-gnu-toolchain cmake --preset ${{ matrix.preset }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
@@ -62,7 +62,7 @@ jobs:
     name: Formatting and licences
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: clang-format
         run: |
           pip install clang-format==22.1.8
