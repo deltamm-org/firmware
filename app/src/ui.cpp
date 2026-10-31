@@ -895,8 +895,10 @@ void uiMain(void *)
         s.gps = gpsState;
         clockText = localClockText();
         s.clock = clockText.view();
-        const std::optional<Channel> ch = channels != nullptr ? channels->current() : std::nullopt;
-        s.roaming = roamingOn && ch && ch->digital() && ch->roaming && roamingSites > 0;
+        if (channels != nullptr) {
+            const std::optional<Channel> &ch = channels->current();
+            s.roaming = roamingOn && ch && ch->digital() && ch->roaming && roamingSites > 0;
+        }
         s.roamSearching = roam.searching;
         s.roamHz = roam.receiveHz;
         s.roamColourCode = roam.colourCode;
