@@ -16,27 +16,32 @@ the AnyTone CPS, and is written to the radio as usual (see
 the CPS has the same items under Roaming Channel, Roaming Zone, the
 digital channels and the optional settings.
 
-### 1. One roaming channel per repeater
+### 1. One roaming channel per frequency pair
 
-A roaming channel describes one repeater:
+In a network where repeaters far apart share frequencies, a roaming
+channel stands for a frequency pair, not for one repeater: the radio
+works with whichever repeater on that pair it reaches.
 
 | Item | What to enter |
 | --- | --- |
-| Receive frequency | The repeater's output |
-| Transmit frequency | The repeater's input |
-| Colour code | The repeater's colour code; tools that leave it out use the channel's |
-| Name | Short; the working screen shows it for the repeater in use |
+| Receive frequency | The pair's repeater output |
+| Transmit frequency | The pair's repeater input |
+| Colour code | The colour code used on the pair; tools that leave it out use the channel's |
+| Name | Short, such as the pair's channel name; the working screen shows it for the pair in use |
 
 Its time slot is not used: the slot comes from the channel, so the same
-repeater serves channels on either slot.
+pair serves channels on either slot.
 
-### 2. A roaming zone with the network's repeaters
+The radio cannot tell apart two repeaters on the same pair and colour
+code; in places where both are in reach it hears them as one.
 
-A roaming zone lists the repeaters the radio may move between, up to 64.
-Put every repeater of the network in it that a call on your talkgroups
-can go through. The zone's name shows in the menu. A codeplug can hold
-several zones, for example one per region or band; the radio uses one at
-a time.
+### 2. A roaming zone with all the pairs
+
+A roaming zone lists the frequency pairs the radio may move between, up
+to 64. Put in every pair the network's repeaters use, so that whichever
+repeater is in reach can be found. The zone's name shows in the menu. A
+codeplug can hold several zones, for example one per band; the radio
+uses one at a time.
 
 Choose the zone used at start as the default roaming zone in the general
 settings (QDMR: `settings.anytone.roamingSettings.defaultZone`).
@@ -49,8 +54,9 @@ talkgroup), time slot and colour code. Turn roaming on for it (QDMR:
 channel; in the CPS, the channel's roaming option left on).
 
 The channel's own frequency is used only while roaming is off. Setting
-it to one of the zone's repeaters is a good choice: the radio then starts
-on that repeater, and with roaming off the channel still works there.
+it to one of the zone's pairs, such as your local repeater's, is a good
+choice: the radio then starts there, and with roaming off the channel
+still works there.
 
 Channels you never want to roam, such as simplex or hotspot channels,
 get roaming off.
@@ -80,21 +86,22 @@ are heard about equally.
 
 ### Example
 
-A network of three repeaters and two talkgroups, in QDMR's YAML (the
-frequencies, IDs and names are made up):
+A network on three frequency pairs, each shared by several repeaters,
+and two talkgroups, in QDMR's YAML (the frequencies, IDs and names are
+made up):
 
 ```yaml
 roamingChannels:
   - id: rch1
-    name: North
+    name: R1
     rxFrequency: 439.1000 MHz
     txFrequency: 431.5000 MHz
   - id: rch2
-    name: Hill
+    name: R2
     rxFrequency: 439.1250 MHz
     txFrequency: 431.5250 MHz
   - id: rch3
-    name: Coast
+    name: R3
     rxFrequency: 439.1500 MHz
     txFrequency: 431.5500 MHz
 roamingZones:
@@ -137,12 +144,12 @@ settings:
   repeater in use stays; the new channel's talkgroup and slot apply at
   once, without a search.
 - **The working screen** shows `DMR ROAMING`, and under the channel name
-  the repeater in use: its frequency, the slot, the colour code and the
+  the pair in use: its frequency, the slot, the colour code and the
   roaming channel's name. While the radio looks for a repeater, the line
   says `Searching...`.
 - **Searching on the key:** press the side key set to Roaming. The radio
-  tries the zone's repeaters in turn, listening for one already on the
-  air and waking quiet ones, and uses the strongest that answered.
+  tries the zone's pairs in turn, listening for a repeater already on
+  the air and waking quiet ones, and uses the strongest that answered.
   `No repeater` means none answered.
 - **PTT:** before a call the radio wakes the repeater in use. If it does
   not answer, or no repeater is in use yet, the radio searches and the
@@ -160,6 +167,6 @@ settings:
 
 - Each search wakes quiet repeaters with a short transmission at the
   channel's power, so it uses a little battery and air time; a search
-  over many repeaters takes a few seconds.
+  over many pairs takes a few seconds.
 - The repeater in use is shared by all roaming channels, and the radio
   starts again from the channel's own frequency after a restart.
