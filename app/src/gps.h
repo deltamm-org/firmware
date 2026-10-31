@@ -6,8 +6,10 @@
 #include "dmm/board/parts.h"
 #include "dmm/lib/format.h"
 #include "dmm/services/gps_schedule.h"
+#include "dmm/services/nmea.h"
 
 #include <cstdint>
+#include <optional>
 #include <variant>
 
 namespace dmm::app::gps {
@@ -65,5 +67,8 @@ const char *debugHelp();
 /// Queues a message for the gps task; false when the queue is full or there
 /// is no receiver.
 bool post(const Message &message);
+
+/// The latest valid fix, if it is at most @p maxAgeMs old.
+std::optional<services::GpsFix> latestFix(std::uint32_t maxAgeMs);
 
 } // namespace dmm::app::gps

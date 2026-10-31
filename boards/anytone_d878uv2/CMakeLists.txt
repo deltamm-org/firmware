@@ -4,7 +4,7 @@
 include(BasebandBootBlob)
 dmm_baseband_boot_blob(dmm_baseband_boot_blob "${DMM_STOCK_FIRMWARE}")
 
-add_executable(deltamm main.cpp pins.h panel_bus.h board_display.h board_display.cpp include/dmm/board/board_input.h board_input.cpp board_adc.h include/dmm/board/board_battery.h board_battery.cpp include/dmm/board/parts.h board_baseband.h board_baseband.cpp board_audio.h board_audio.cpp board_rf.h board_rf.cpp board_fm_tuning.h board_fm_tuning.cpp include/dmm/board/board_gps.h board_gps.cpp include/dmm/board/board_rtc.h board_rtc.cpp)
+add_executable(deltamm main.cpp pins.h panel_bus.h board_display.h board_display.cpp include/dmm/board/board_input.h board_input.cpp board_adc.h include/dmm/board/board_battery.h board_battery.cpp include/dmm/board/parts.h board_baseband.h board_baseband.cpp board_audio.h board_audio.cpp board_rf.h board_rf.cpp board_fm_tuning.h board_fm_tuning.cpp include/dmm/board/board_gps.h board_gps.cpp include/dmm/board/board_rtc.h board_rtc.cpp include/dmm/board/board_modem.h board_modem.cpp include/dmm/board/board_aprs_link.h board_aprs_link.cpp)
 target_link_libraries(deltamm PRIVATE dmm_app dmm_drivers_display dmm_drivers_storage dmm_drivers_baseband dmm_baseband_boot_blob
     dmm_hal_gd32f30x)
 dmm_core_options(deltamm)

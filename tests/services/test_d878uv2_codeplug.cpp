@@ -411,3 +411,46 @@ TEST_CASE("users are found in the user directory by radio ID, also across a bank
     CHECK(std::string(user.callsign.data()) == "XY9ZZ");
     CHECK_FALSE(cp.dmrUser(1234567, user));
 }
+
+TEST_CASE("the APRS settings block gives callsign, path, symbol, comment, frequency and power")
+{
+    std::array<std::uint8_t, 0xCC> b{};
+    const std::string call = "N0CALL";
+    std::memcpy(&b[0x1D], call.data(), call.size());
+    b[0x23] = 9;
+    const std::string path = "WIDE1-1,WIDE2-1";
+    std::memcpy(&b[0x24], path.data(), path.size());
+    b[0x39] = '/';
+    b[0x3A] = '>';
+    b[0x0B] = 10; // 300 s
+    b[0x3B] = 1;
+    b[0xAA] = 1;
+    b[0xAC] = 0x14; // 14480000 x 10 Hz
+    b[0xAD] = 0x48;
+    std::array<std::uint8_t, 60> comment{};
+    const std::string text = "Testing";
+    std::memcpy(comment.data(), text.data(), text.size());
+
+    const auto s = dmm::services::decodeAprsSettings(b, comment);
+    REQUIRE(s);
+    CHECK(std::string(s->callsign) == "N0CALL");
+    CHECK(s->ssid == 9);
+    CHECK(std::string(s->path) == "WIDE1-1,WIDE2-1");
+    CHECK(s->symbolTable == '/');
+    CHECK(s->symbol == '>');
+    CHECK(s->power == PowerLevel::Mid);
+    CHECK(s->wide);
+    CHECK(s->frequencyHz == 144'800'000);
+    CHECK(std::string(s->comment) == "Testing");
+    CHECK(s->beaconIntervalS == 300);
+
+    // A short callsign is padded with spaces.
+    std::memcpy(&b[0x1D], "OH0A  ", 6);
+    CHECK(std::string(dmm::services::decodeAprsSettings(b, comment)->callsign) == "OH0A");
+    // A frequency that is not BCD, such as an erased one, is not set.
+    std::memset(&b[0xAC], 0xFF, 4);
+    CHECK(dmm::services::decodeAprsSettings(b, comment)->frequencyHz == 0);
+    // An erased block has no callsign.
+    b.fill(0xFF);
+    CHECK_FALSE(dmm::services::decodeAprsSettings(b, comment));
+}

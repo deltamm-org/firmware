@@ -52,6 +52,10 @@ struct Platform
     board::Gps *gps = nullptr;
     /// The real-time clock, or nullptr.
     board::Rtc *rtc = nullptr;
+    /// The packet radio modem, or nullptr.
+    board::Modem *modem = nullptr;
+    /// The link to a board that decodes received APRS, or nullptr.
+    board::AprsLink *aprsLink = nullptr;
 };
 
 /// The board has a baseband processor.

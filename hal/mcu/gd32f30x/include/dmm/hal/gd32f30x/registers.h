@@ -71,6 +71,7 @@ inline constexpr std::uint32_t Timer3Clock = 1u << 2;
 inline constexpr std::uint32_t Timer4Clock = 1u << 3;
 inline constexpr std::uint32_t Timer6Clock = 1u << 5;
 inline constexpr std::uint32_t Usart1Clock = 1u << 17;
+inline constexpr std::uint32_t Uart3Clock = 1u << 19;
 inline constexpr std::uint32_t BkpClock = 1u << 27;
 inline constexpr std::uint32_t PmuClock = 1u << 28;
 inline constexpr std::uint32_t UsbdClock = 1u << 23;
@@ -193,6 +194,7 @@ inline constexpr std::uint32_t WriteFinished = 1u << 5; // LWOFF: the last write
 
 namespace usart {
 inline constexpr std::uintptr_t Usart1 = 0x40004400;
+inline constexpr std::uintptr_t Uart3 = 0x40004C00;
 inline constexpr std::uintptr_t Stat0 = 0x00;
 inline constexpr std::uintptr_t Data = 0x04;
 inline constexpr std::uintptr_t Baud = 0x08;

@@ -36,6 +36,8 @@ int main(int argc, char *argv[])
     static SimAudio audio;
     static SimGps gps;
     static SimRtc rtc;
+    static SimModem modem;
+    static SimAprsLink aprsLink;
     static dmm::services::D878Uv2Calibration calibration;
     static dmm::services::D878Uv2Codeplug codeplug{bridge->storage()};
     static SimFm fm;
@@ -54,6 +56,8 @@ int main(int argc, char *argv[])
         .codeplug = &codeplug,
         .gps = &gps,
         .rtc = &rtc,
+        .modem = &modem,
+        .aprsLink = &aprsLink,
     };
 
     QQmlApplicationEngine engine;

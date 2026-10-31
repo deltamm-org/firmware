@@ -15,6 +15,7 @@ namespace dmm::hal::gd32f30x {
 enum class UsartPort : std::uint8_t
 {
     Usart1, // PA2 sends, PA3 receives; on the 60 MHz APB1 clock
+    Uart3,  // PC10 sends, PC11 receives; on the 60 MHz APB1 clock
 };
 
 /// An asynchronous serial port, 8 data bits, no parity, one stop bit.

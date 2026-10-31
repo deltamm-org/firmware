@@ -22,7 +22,7 @@ target_link_libraries(tests PRIVATE dmm_lib dmm_drivers_usb dmm_drivers_display 
 target_compile_definitions(tests PRIVATE DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS)
 dmm_core_options(tests)
 if(TARGET dmm_os)
-    target_sources(tests PRIVATE os/test_os.cpp services/test_log.cpp services/test_power.cpp services/test_text.cpp services/test_input.cpp services/test_battery.cpp services/test_battery_saver.cpp services/test_d878uv2_storage.cpp services/test_data_link.cpp services/test_baseband.cpp services/test_audio.cpp services/test_d878uv2_calibration.cpp services/test_fm.cpp services/test_key_lock.cpp services/test_d878uv2_codeplug.cpp services/test_dmr.cpp services/test_channel_selector.cpp services/test_nmea.cpp services/test_casic_receiver.cpp services/test_clock.cpp services/test_gps_schedule.cpp)
+    target_sources(tests PRIVATE os/test_os.cpp services/test_log.cpp services/test_power.cpp services/test_text.cpp services/test_input.cpp services/test_battery.cpp services/test_battery_saver.cpp services/test_d878uv2_storage.cpp services/test_data_link.cpp services/test_baseband.cpp services/test_audio.cpp services/test_d878uv2_calibration.cpp services/test_fm.cpp services/test_key_lock.cpp services/test_d878uv2_codeplug.cpp services/test_dmr.cpp services/test_channel_selector.cpp services/test_nmea.cpp services/test_casic_receiver.cpp services/test_clock.cpp services/test_gps_schedule.cpp services/test_aprs.cpp services/test_afsk.cpp services/test_d878uv2_link_board.cpp)
     target_link_libraries(tests PRIVATE dmm_os dmm_services)
 endif()
 add_test(NAME tests COMMAND tests)

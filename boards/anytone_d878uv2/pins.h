@@ -92,12 +92,12 @@ inline constexpr int BatteryFullScaleMv = 13200;
 
 // Held low from the first instructions on: the transmit path and power
 // amplifier enables, the speaker amplifier, its receive-audio switch and
-// the Bluetooth module's power.
+// the BT+APRS board's power.
 inline constexpr Pin TransmitEnable{Port::C, 4};
 inline constexpr Pin PowerAmplifierEnable{Port::E, 6};
 inline constexpr Pin SpeakerAmplifier{Port::A, 7};  // high = on
 inline constexpr Pin ReceiveAudioRoute{Port::E, 0}; // high = codec output to the amplifier
-inline constexpr Pin BluetoothPower{Port::A, 1};
+inline constexpr Pin LinkBoardPower{Port::A, 1};    // high = on
 // The baseband's transmit slot timing: high while its slot is on air.
 inline constexpr Pin TransmitSlot{Port::D, 0};
 inline constexpr unsigned TransmitSlotIrqPriority = 1;
@@ -120,6 +120,8 @@ inline constexpr unsigned AmplifierSettleMs = 150;
 inline constexpr unsigned ToneIrqPriority = 2;
 // Beep level 15 gives this PWM duty peak (of 255).
 inline constexpr unsigned LoudestTonePeak = 90;
+// Flags after a packet, so its end is not cut by the transmitter ramping down.
+inline constexpr std::uint8_t PacketTailFlags = 3;
 
 // DMR baseband (SCT3258): an 8-bit host port on PD8-PD15 with chip select
 // PD2, write PD3 and read PD4; PD5 is low while the chip has data. PD6 is
@@ -161,5 +163,13 @@ inline constexpr Pin GpsToReceiver{Port::A, 2};
 inline constexpr dmm::hal::gd32f30x::UsartPort GpsUsart = dmm::hal::gd32f30x::UsartPort::Usart1;
 inline constexpr std::uint32_t GpsBaud = 9600;
 inline constexpr unsigned GpsIrqPriority = 8;
+
+// BT+APRS board: its serial link on UART3 (PC10 to the board, PC11 from
+// it), 8N1; its power is LinkBoardPower.
+inline constexpr Pin LinkBoardTx{Port::C, 10};
+inline constexpr Pin LinkBoardRx{Port::C, 11};
+inline constexpr dmm::hal::gd32f30x::UsartPort LinkBoardUsart = dmm::hal::gd32f30x::UsartPort::Uart3;
+inline constexpr std::uint32_t LinkBoardBaud = 115200;
+inline constexpr unsigned LinkBoardIrqPriority = 8;
 
 } // namespace board

@@ -32,6 +32,12 @@ path = ["docs/hw-tests/gps.md", "docs/hw-tests/gps-setup.md", "docs/hw-tests/rtc
 SPDX-FileCopyrightText = "2026 Henri Lavikainen"
 SPDX-License-Identifier = "MIT"
 
+# Docs added with APRS.
+[[annotations]]
+path = ["docs/hw-tests/aprs.md"]
+SPDX-FileCopyrightText = "2026 Henri Lavikainen"
+SPDX-License-Identifier = "MIT"
+
 # The Spleen bitmap font by Frederic Cambus, as released (2.1.0).
 [[annotations]]
 path = ["third_party/spleen/**"]

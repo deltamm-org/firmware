@@ -21,6 +21,7 @@ class FakeCodeplug final : public CodeplugSource
 {
 public:
     std::optional<CodeplugSettings> settings() override { return s; }
+    std::optional<dmm::services::AprsSettings> aprsSettings() override { return std::nullopt; }
     std::optional<Channel> channel(std::uint16_t index) override
     {
         const auto it = channels.find(index);

@@ -8,6 +8,7 @@ namespace board {
 namespace hal = dmm::hal::gd32f30x;
 
 hal::PwmToneOutput BoardAudio::s_tone;
+bool BoardAudio::s_packet = false;
 
 void BoardAudio::configure()
 {
@@ -29,6 +30,9 @@ void BoardAudio::setReceiveRoute(bool on)
 // beeps, the muted microphone was heard in the speaker.
 void BoardAudio::setToneOutput(bool on)
 {
+    if (s_packet) {
+        return;
+    }
     if (on) {
         hal::configure(ToneOutput, hal::PinMode::Alternate, hal::PinSpeed::Medium);
     } else {

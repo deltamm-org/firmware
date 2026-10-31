@@ -29,7 +29,11 @@ public:
     static void onToneInterrupt() { s_tone.onSampleInterrupt(); }
 
 private:
+    friend class BoardModem;
+
     static dmm::hal::gd32f30x::PwmToneOutput s_tone;
+    // A packet holds the tone pin until its last sample.
+    static bool s_packet;
 };
 
 } // namespace board

@@ -132,8 +132,30 @@ struct Gps
     bool asleep;
 };
 
+/// Whether a queued packet went out, or was given up.
+struct Packet
+{
+    bool sent;
+};
+/// The APRS heard list changed.
+struct AprsHeard
+{
+};
+/// An APRS beacon could not be queued.
+struct AprsProblem
+{
+    enum class Kind : std::uint8_t
+    {
+        NoCallsign,
+        NoFrequency,
+        NoFix,
+        Busy,
+    };
+    Kind kind;
+};
+
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, Notice, Gps>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, Notice, Gps, Packet, AprsProblem, AprsHeard>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels.

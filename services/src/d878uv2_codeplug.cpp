@@ -25,6 +25,10 @@ constexpr std::uint32_t SettingsExtensionBytes = 0x40;
 constexpr std::uint32_t ZoneSelections = 0x02500100; // u16 list position per zone, side A then B
 constexpr std::uint32_t ZoneSelectionSideB = 0x200;
 constexpr std::uint32_t ZoneNames = 0x02540000;
+// APRS: the settings, and the text sent after the position.
+constexpr std::uint32_t AprsSettingsBlock = 0x02501000;
+constexpr std::uint32_t AprsSettingsBytes = 0xCC;
+constexpr std::uint32_t AprsComment = 0x02501200;
 constexpr std::uint32_t ZoneNameStride = 0x20;
 constexpr std::uint32_t ZoneBitmap = 0x024C1300;
 constexpr std::uint32_t ChannelBitmap = 0x024C1500;
@@ -266,6 +270,74 @@ StorageResult D878Uv2Codeplug::read(std::uint32_t address, std::span<std::uint8_
         data = data.subspan(n);
     }
     return worst;
+}
+
+std::optional<AprsSettings> decodeAprsSettings(std::span<const std::uint8_t> block, std::span<const std::uint8_t> comment)
+{
+    // Offsets in the APRS block: the automatic beacon interval in 30 s
+    // steps; our callsign (space padded) and SSID; the path,
+    // zero-terminated; symbol table and code; transmit power; wide; the
+    // first of eight frequencies, in 10 Hz, big-endian BCD.
+    constexpr std::size_t Interval = 0x0B;
+    constexpr std::size_t Callsign = 0x1D;
+    constexpr std::size_t Ssid = 0x23;
+    constexpr std::size_t Path = 0x24;
+    constexpr std::size_t Symbol = 0x39;
+    constexpr std::size_t Power = 0x3B;
+    constexpr std::size_t Wide = 0xAA;
+    constexpr std::size_t Frequency = 0xAC;
+    if (block.size() < AprsSettingsBytes) {
+        return std::nullopt;
+    }
+    AprsSettings s;
+    std::size_t n = 0;
+    for (std::size_t i = 0; i < AprsSettings::CallBytes; ++i) {
+        const char c = static_cast<char>(block[Callsign + i]);
+        if (c == ' ' || c == '\0') {
+            break;
+        }
+        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+            return std::nullopt;
+        }
+        s.callsign[n++] = c;
+    }
+    if (n == 0 || block[Ssid] > 15) {
+        return std::nullopt;
+    }
+    s.ssid = block[Ssid];
+    for (std::size_t i = 0; i < AprsSettings::PathBytes; ++i) {
+        const char c = static_cast<char>(block[Path + i]);
+        if (c < ' ' || c > '~') {
+            break;
+        }
+        s.path[i] = c;
+    }
+    s.symbolTable = static_cast<char>(block[Symbol]);
+    s.symbol = static_cast<char>(block[Symbol + 1]);
+    s.power = static_cast<PowerLevel>(block[Power] & 3);
+    s.wide = block[Wide] == 1;
+    s.beaconIntervalS = static_cast<std::uint16_t>(block[Interval] * 30);
+    if (const auto tenHz = bcd8(&block[Frequency])) {
+        s.frequencyHz = *tenHz * 10;
+    }
+    for (std::size_t i = 0; i < AprsSettings::CommentBytes && i < comment.size(); ++i) {
+        const char c = static_cast<char>(comment[i]);
+        if (c < ' ' || c > '~') {
+            break;
+        }
+        s.comment[i] = c;
+    }
+    return s;
+}
+
+std::optional<AprsSettings> D878Uv2Codeplug::aprsSettings()
+{
+    std::uint8_t block[AprsSettingsBytes];
+    std::uint8_t comment[AprsSettings::CommentBytes];
+    if (!readable(read(AprsSettingsBlock, block)) || !readable(read(AprsComment, comment))) {
+        return std::nullopt;
+    }
+    return decodeAprsSettings(block, comment);
 }
 
 void decodeSettingsExtension(std::span<const std::uint8_t> b, CodeplugSettings &s)

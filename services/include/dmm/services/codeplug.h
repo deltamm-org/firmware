@@ -76,6 +76,30 @@ struct CodeplugSettings
     std::int16_t timeZoneMinutes = 0; // local time minus UTC
 };
 
+/// The analog APRS settings DeltaMM uses.
+struct AprsSettings
+{
+    static constexpr std::size_t CallBytes = 6;
+    static constexpr std::size_t PathBytes = 20;
+    static constexpr std::size_t CommentBytes = 60;
+
+    /// Our callsign (letters and digits, zero-terminated) and its SSID.
+    char callsign[CallBytes + 1] = {};
+    std::uint8_t ssid = 0;
+    /// The digipeater path, such as "WIDE1-1,WIDE2-1"; empty for none.
+    char path[PathBytes + 1] = {};
+    char symbolTable = '/';
+    char symbol = '[';
+    /// Text sent after the position, zero-terminated.
+    char comment[CommentBytes + 1] = {};
+    /// Where packets go out; 0 = not set.
+    std::uint32_t frequencyHz = 0;
+    bool wide = true;
+    PowerLevel power = PowerLevel::Low;
+    /// Time between automatic beacons; 0 = off.
+    std::uint16_t beaconIntervalS = 0;
+};
+
 /// What the radio reads from its codeplug, whatever its format. The
 /// limits are the most DeltaMM handles.
 class CodeplugSource
@@ -89,6 +113,8 @@ public:
     static constexpr std::size_t ContactNameBytes = 16;
 
     virtual std::optional<CodeplugSettings> settings() = 0;
+    /// The APRS settings, if the codeplug has a callsign for them.
+    virtual std::optional<AprsSettings> aprsSettings() = 0;
     /// Channel @p index (0-based), if it is in use.
     virtual std::optional<Channel> channel(std::uint16_t index) = 0;
     /// The VFO of side A or B: a channel record whose frequency and

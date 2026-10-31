@@ -21,9 +21,11 @@ struct PortInfo
     unsigned irq;
 };
 
-// USART1 is the only port so far.
-constexpr PortInfo info(UsartPort)
+constexpr PortInfo info(UsartPort port)
 {
+    if (port == UsartPort::Uart3) {
+        return {usart::Uart3, rcu::Apb1En, rcu::Uart3Clock, SystemClockHz / 2, irq::Uart3};
+    }
     return {usart::Usart1, rcu::Apb1En, rcu::Usart1Clock, SystemClockHz / 2, irq::Usart1};
 }
 
