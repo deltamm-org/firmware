@@ -187,15 +187,9 @@ The GPS mark in the status bar, shown while the GPS is on:
 
 ## Programming the codeplug
 
-The data port also speaks the radio's programming protocol, so codeplug
-tools read and write the codeplug. DeltaMM keeps the radio's own USB IDs
-(28e9:018a), so codeplug tools find it as a D878UVII; of its two ports,
-the data port is the one to choose. The radio starts again after a write,
-with the new codeplug. Only the codeplug is written, never calibration or
-the radio's own data; the callsign database is not written yet.
+The radio codeplug can be updated using the original CPS software or compatible software.
 
-A write that stops halfway keeps the blocks already written and leaves
-the rest as they were, so finish it with a complete write.
+Contact list updating is not yet supported.
 
 ## Log and console
 
