@@ -79,12 +79,16 @@ the best repeater now.
 With automatic roaming on, the radio also looks by itself (QDMR:
 `settings.anytone.roamingSettings`):
 
-| Item (QDMR key) | Meaning |
-| --- | --- |
-| Automatic roaming (`autoRoam`) | On or off |
-| Start (`roamStart`) | `OutOfRange`: when the repeater in use has been quiet for the delay; `Periodic`: every period |
-| Delay (`autoRoamDelay`) | Seconds of quiet before a search; at least 30 s is used |
-| Period (`autoRoamPeriod`) | Minutes between searches; at least 1 min is used |
+| Item (QDMR key) | Meaning | Start with |
+| --- | --- | --- |
+| Automatic roaming (`autoRoam`) | On or off | On |
+| Start (`roamStart`) | `OutOfRange`: when the repeater in use has been quiet for the delay; `Periodic`: every period | `OutOfRange` |
+| Delay (`autoRoamDelay`) | Seconds of quiet before a search; at least 30 s is used | 30 s (0 also gives 30 s) |
+| Period (`autoRoamPeriod`) | Minutes between searches; at least 1 min is used | 1 min (0 also gives 1 min) |
+
+The values in the last column are a good start for most networks; a
+longer delay makes the radio stay longer on a repeater that has gone
+quiet.
 
 An automatic search moves only to a repeater clearly stronger than the
 one in use, so the radio does not swap back and forth between two that
@@ -149,7 +153,8 @@ settings:
     roamingSettings:
       autoRoam: true
       roamStart: OutOfRange
-      autoRoamDelay: 60 s
+      autoRoamDelay: 30 s
+      autoRoamPeriod: 1 min
       defaultZone: roam1
 ```
 
