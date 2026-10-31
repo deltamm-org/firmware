@@ -213,6 +213,9 @@ repeater in use is not heard, the radio wakes it every interval (5 s to
 50 s), and after the set number of unanswered tries says
 `Out of range`.
 
+A good start: range check on, an interval of 10 s, 3 tries and the
+notice on.
+
 **Menu > Channel > Roam status** shows the pair in use with a star and
 its state, then each pair heard with its level, how long ago it was
 measured and its beacon period once learned. Search now searches
