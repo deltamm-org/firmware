@@ -38,6 +38,8 @@ no repeater, and by itself as the codeplug's roaming settings say
 roaming off, or picks another roaming zone, for the session. This is
 basic roaming, by signal strength; roaming as the ETSI DMR standards
 describe it is still to come.
+`docs/roaming-setup.md` shows how to set roaming up in the codeplug and
+how to use it.
 
 **Channels.** Channels, zones and the VFO come from the codeplug already
 on the radio. Pick zones from a list, step channels with the knob, or type
