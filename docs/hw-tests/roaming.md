@@ -182,9 +182,26 @@ after its last transmission:
 | 8 | Pass: on a channel whose repeater (1) is off the air, PTT woke it twice without an answer, searched for the call, found the hotspot and sent the call through it 2.9 s after PTT |
 | 13 | Pass: `roam` shows the hotspot in use, -35 dBm, automatic on |
 | 14 | Pass: lowest unused stack 95 words (ui) |
+| 3 | Pass: PF3 searched and stayed on the hotspot (`staying on repeater 2`) |
+| 10 | Pass: on an FM channel, PF3 shows `Not roaming` |
+| 11 | Pass: Roaming off showed the channel's own frequency and the usual frequency line, PF3 said `Not roaming`; on again brought the hotspot back |
+| 12 | Pass: the other zone named in the menu, `roaming zone 0, 20 repeaters`, PF3 found the hotspot there |
+| 15 | Pass: after a restart, PF3 woke repeater 1 twice without an answer, then stopped at the hotspot without trying the other 13 |
+| 16 | Pass: only the hotspot tried, `staying on repeater 2` |
+| 17 | Pass: the hotspot with a star, its level and an age counting up; Search now searched, Exit went back |
+| 20 | Pass: `ptt 2000` during a sweep visit ended it (`cut short`); the wake-up was answered and the call went out |
+| 21 | Pass: hotspot off; two beacons missed, an automatic search after the second; Roam status showed `2 Lost` with the period and an age of 4 minutes. Searches then came 60 s, then 120 s apart |
+| 22 | Pass: hotspot on; the next automatic search had the wake-up answered and Roam status showed `2 Good`; the next beacon was caught on time |
 | 25 | Pass after two fixes: searches at 35 s and 97 s, then none once the beacons judged the hotspot. Before them, a search every 61 s kept landing on the hotspot's beacon, so it was never learned, and later a level that went stale just as the second beacon began let a search cover it |
 
 Findings:
+
+- The Channel menu's Roam status row is not redrawn while the menu
+  stays open: it kept `Search` after the search had ended.
+- `roam` on an FM channel prints the repeater number with the FM
+  channel's own frequency.
+- The radio task's unused stack fell to 104 words during a full search
+  of 15 repeaters.
 
 - The USB link drops while the radio transmits next to the PC; the log
   lines wait in the radio until the port is opened again.
