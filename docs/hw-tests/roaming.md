@@ -176,6 +176,12 @@ after its last transmission:
 | 9 | Pass: 35 s after start a search by itself; repeater 1 did not answer two wake-ups, the hotspot answered and the radio moved to it |
 | 18 | Pass: the period learned as 60.01 s from the first two beacons (3.39 s each), under 4 minutes after start |
 | 19 | Pass: one sweep visit about every 63.5 s, around the zone in order |
+| 4 | Pass: the knob to two other roaming channels kept the hotspot with no search; slot 1, then slot 2, as each channel says |
+| 5 | Pass: wake-up answered, the call through the hotspot to the Parrot, its reply received |
+| 7 | Failed with the console's timed PTT: it ran out during the search, but the call still went out after it (0.5 s), as the search watched only for the key's release. Fixed; to run again |
+| 8 | Pass: on a channel whose repeater (1) is off the air, PTT woke it twice without an answer, searched for the call, found the hotspot and sent the call through it 2.9 s after PTT |
+| 13 | Pass: `roam` shows the hotspot in use, -35 dBm, automatic on |
+| 14 | Pass: lowest unused stack 95 words (ui) |
 | 25 | Pass after two fixes: searches at 35 s and 97 s, then none once the beacons judged the hotspot. Before them, a search every 61 s kept landing on the hotspot's beacon, so it was never learned, and later a level that went stale just as the second beacon began let a search cover it |
 
 Findings:
