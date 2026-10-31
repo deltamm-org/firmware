@@ -65,6 +65,11 @@ bool SerialTransport::open(const QString &portName, QString *error)
     return true;
 }
 
+void SerialTransport::close()
+{
+    m_port.close();
+}
+
 bool SerialTransport::write(const QByteArray &data)
 {
     if (m_port.write(data) != data.size()) {

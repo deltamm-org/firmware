@@ -513,35 +513,6 @@ int commandCheckBackup(const QStringList &args, const QString &portRequest, cons
 
 constexpr const char *UpdateModeHint = "Switch the radio off, then on while holding PTT and PF3, the top key (red LED blinking).";
 
-// Waits up to @p seconds for exactly one radio in update mode and returns
-// its port, or an empty string.
-QString waitForUpdateMode(int seconds)
-{
-    out() << "Waiting up to " << seconds << " s for the radio in update mode. " << UpdateModeHint << Qt::endl;
-    // A radio running its factory firmware has the same USB IDs as one in
-    // update mode, so only a radio that appears after none was connected
-    // counts.
-    bool noneConnected = SerialTransport::findRadios().isEmpty();
-    if (!noneConnected) {
-        out() << "A radio is connected now; waiting for it to be switched off first." << Qt::endl;
-    }
-    QDeadlineTimer deadline{std::chrono::seconds(seconds)};
-    while (!deadline.hasExpired()) {
-        const auto radios = SerialTransport::findRadios();
-        if (radios.isEmpty()) {
-            noneConnected = true;
-        } else if (noneConnected && radios.size() == 1) {
-            return radios.constFirst().portName();
-        } else if (noneConnected) {
-            err() << "Several radios found; choose one with --port." << Qt::endl;
-            return {};
-        }
-        QThread::msleep(300);
-    }
-    err() << "No radio in update mode appeared." << Qt::endl;
-    return {};
-}
-
 // Waits a few seconds for a radio running DeltaMM and prints its version.
 void reportStartedFirmware()
 {
@@ -585,6 +556,44 @@ bool startUpdate(const QString &port, SerialTransport &transport, UpdateClient &
     return true;
 }
 
+// Waits up to @p seconds for a radio in update mode and starts the update on
+// it; returns its port, or an empty string. A radio running its factory
+// firmware has the same USB IDs as one in update mode, so a radio counts
+// only once it answers the start of an update. One that does not is taken
+// as switched on normally, and the wait goes on until it has been off.
+QString waitAndStartUpdate(int seconds, SerialTransport &transport, UpdateClient &client)
+{
+    out() << "Waiting up to " << seconds << " s for the radio in update mode. " << UpdateModeHint << Qt::endl;
+    bool ask = true;
+    bool told = false;
+    QDeadlineTimer deadline{std::chrono::seconds(seconds)};
+    while (!deadline.hasExpired()) {
+        const auto radios = SerialTransport::findRadios();
+        if (radios.isEmpty()) {
+            ask = true;
+        } else if (ask && radios.size() > 1) {
+            err() << "Several radios found; choose one with --port." << Qt::endl;
+            return {};
+        } else if (ask) {
+            ask = false;
+            const QString port = radios.constFirst().portName();
+            QString error;
+            if (startUpdate(port, transport, client, true, &error)) {
+                return port;
+            }
+            transport.close();
+            if (!told) {
+                out() << "No answer on " << port << ": the radio is not in update mode. " << UpdateModeHint
+                      << Qt::endl;
+                told = true;
+            }
+        }
+        QThread::msleep(300);
+    }
+    err() << "No radio in update mode appeared." << Qt::endl;
+    return {};
+}
+
 // Sends a firmware set to a radio in update mode, optionally waiting for
 // the radio to be switched on in it.
 int commandFlash(const QStringList &args, const QString &portRequest, const QString &radioId, const QString &root, int waitSeconds)
@@ -614,14 +623,14 @@ int commandFlash(const QStringList &args, const QString &portRequest, const QStr
         err() << "The radio is running DeltaMM. " << UpdateModeHint << Qt::endl;
         return 2;
     }
-    const QString port = wait ? waitForUpdateMode(waitSeconds) : pickPort(portRequest);
-    if (port.isEmpty()) {
-        return 2;
-    }
     SerialTransport transport;
     UpdateClient client(transport);
     QString error;
-    if (!startUpdate(port, transport, client, wait, &error)) {
+    const QString port = wait ? waitAndStartUpdate(waitSeconds, transport, client) : pickPort(portRequest);
+    if (port.isEmpty()) {
+        return 2;
+    }
+    if (!wait && !startUpdate(port, transport, client, false, &error)) {
         err() << "Error on " << port << ": " << error << "." << Qt::endl
               << "Is the radio in update mode? " << UpdateModeHint << Qt::endl;
         return 2;
