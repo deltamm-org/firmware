@@ -41,5 +41,7 @@ before. The log line then still says `codeplug written from the PC`.
 
 2026-10-31, step 10: with the radio already in update mode when the wait
 started, the flash command asked it, got the boot loader's answer and
-flashed at once. Step 11 needs the factory firmware on the radio and is
-still to run.
+flashed at once. Step 11: with the radio running its factory firmware,
+the wait said `No answer on <port>: the radio is not in update mode` and
+went on; after the radio was switched off and on in update mode, the
+update started at once.
