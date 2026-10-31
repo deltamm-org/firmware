@@ -192,6 +192,7 @@ after its last transmission:
 | 20 | Pass: `ptt 2000` during a sweep visit ended it (`cut short`); the wake-up was answered and the call went out |
 | 21 | Pass: hotspot off; two beacons missed, an automatic search after the second; Roam status showed `2 Lost` with the period and an age of 4 minutes. Searches then came 60 s, then 120 s apart |
 | 22 | Pass: hotspot on; the next automatic search had the wake-up answered and Roam status showed `2 Good`; the next beacon was caught on time |
+| 24 | Pass, with automatic roaming off so that no search moved the radio first: on a repeater off the air, a wake-up every 10.7 s; after the third unanswered, `repeater 1 out of range` and the `Out of range` notice. The checks went on every 10.7 s after that. With automatic roaming on, its search moved the radio to the hotspot before the third try |
 | 25 | Pass after two fixes: searches at 35 s and 97 s, then none once the beacons judged the hotspot. Before them, a search every 61 s kept landing on the hotspot's beacon, so it was never learned, and later a level that went stale just as the second beacon began let a search cover it |
 
 Findings:
