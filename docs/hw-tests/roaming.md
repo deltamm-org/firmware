@@ -90,7 +90,22 @@ to roaming, and a duplex hotspot as the only repeater on the air.
 | 10 | Pass: `Not roaming` with roaming off |
 | 11 | Pass: Roaming Off made the channels work on their own frequencies |
 | 12 | Pass: of three roaming zones, the two with the hotspot's pair found it after PF3; the third, without it, found nothing |
-| 4-9, 13, 14 | Open |
+| 4-9, 13, 14 | Open (run on 2026-10-31, below) |
+
+Steps 4 to 9, 13 and 14, run 2026-10-31 on 0.22.0 with this and the other
+open pull requests merged, beacon roaming among them, the same zone and
+hotspot, and the codeplug's automatic roaming on with a quiet time of 0:
+
+| # | Result |
+| --- | --- |
+| 4 | Pass: the knob to two other roaming channels kept the hotspot with no search; slot 1, then slot 2, as each channel says |
+| 5 | Pass: wake-up answered, the call through the hotspot to the Parrot, its reply received |
+| 6 | Pass: channel 1 moved off the zone's frequencies; after a restart, PTT started `searching ... (for a call)` at once, with nothing sent on the channel's own frequency; the call went out through the hotspot 1.8 s after PTT |
+| 7 | Pass: PTT released during the search for a call; the search found the hotspot and nothing was transmitted after it |
+| 8 | Pass: on a channel whose repeater (1) is off the air, PTT woke it twice without an answer, searched for the call, found the hotspot and sent the call through it 2.9 s after PTT |
+| 9 | Pass: 35 s after start a search by itself; repeater 1 did not answer two wake-ups, the hotspot answered and the radio moved to it |
+| 13 | Pass: `roam` shows the hotspot in use, -35 dBm, automatic on |
+| 14 | Pass: lowest unused stack 95 words (ui) |
 
 Findings:
 
