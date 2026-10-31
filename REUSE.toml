@@ -47,5 +47,5 @@ SPDX-License-Identifier = "MIT"
 # Docs added with DMR roaming.
 [[annotations]]
 path = ["docs/hw-tests/roaming.md"]
-SPDX-FileCopyrightText = "2026 Henri Lavikainen"
+SPDX-FileCopyrightText = ["2026 Henri Lavikainen", "2026 Tommi Tauriainen"]
 SPDX-License-Identifier = "MIT"
