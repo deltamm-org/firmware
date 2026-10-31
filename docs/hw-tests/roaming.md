@@ -166,23 +166,13 @@ same hotspot and a Parrot talkgroup:
 Also seen: PTT on a repeater that did not answer started a search for
 the call, which found the hotspot in 1.5 s and sent the call through it.
 
-Steps 9, 18, 19 and 25, run 2026-10-31 on upstream 0.22.0 with the open
-pull requests merged, the same zone and hotspot, the codeplug's
-automatic roaming on with a quiet time of 0; the hotspot beacons 60 s
-after its last transmission:
+Steps 3, 10 to 12, 15 to 22, 24 and 25, run 2026-10-31 on upstream
+0.22.0 with the open pull requests merged, the same zone and hotspot,
+the codeplug's automatic roaming on with a quiet time of 0; the hotspot
+beacons 60 s after its last transmission:
 
 | # | Result |
 | --- | --- |
-| 9 | Pass: 35 s after start a search by itself; repeater 1 did not answer two wake-ups, the hotspot answered and the radio moved to it |
-| 18 | Pass: the period learned as 60.01 s from the first two beacons (3.39 s each), under 4 minutes after start |
-| 19 | Pass: one sweep visit about every 63.5 s, around the zone in order |
-| 4 | Pass: the knob to two other roaming channels kept the hotspot with no search; slot 1, then slot 2, as each channel says |
-| 5 | Pass: wake-up answered, the call through the hotspot to the Parrot, its reply received |
-| 6 | Pass: channel 1 moved off the zone's frequencies; after a restart, `ptt 3000` started `searching ... (for a call)` at once, with nothing sent on the channel's own frequency; the call went out through the hotspot 1.8 s after PTT |
-| 7 | Pass after a fix: the console's timed PTT (1.5 s) ran out during the search for a call; the search found the hotspot and nothing was transmitted after it. Before the fix the call still went out after the search, as the search watched only for the key's release |
-| 8 | Pass: on a channel whose repeater (1) is off the air, PTT woke it twice without an answer, searched for the call, found the hotspot and sent the call through it 2.9 s after PTT |
-| 13 | Pass: `roam` shows the hotspot in use, -35 dBm, automatic on |
-| 14 | Pass: lowest unused stack 95 words (ui) |
 | 3 | Pass: PF3 searched and stayed on the hotspot (`staying on repeater 2`) |
 | 10 | Pass: on an FM channel, PF3 shows `Not roaming` |
 | 11 | Pass: Roaming off showed the channel's own frequency and the usual frequency line, PF3 said `Not roaming`; on again brought the hotspot back |
@@ -190,6 +180,8 @@ after its last transmission:
 | 15 | Pass: after a restart, PF3 woke repeater 1 twice without an answer, then stopped at the hotspot without trying the other 13 |
 | 16 | Pass: only the hotspot tried, `staying on repeater 2` |
 | 17 | Pass: the hotspot with a star, its level and an age counting up; Search now searched, Exit went back |
+| 18 | Pass: the period learned as 60.01 s from the first two beacons (3.39 s each), under 4 minutes after start |
+| 19 | Pass: one sweep visit about every 63.5 s, around the zone in order |
 | 20 | Pass: `ptt 2000` during a sweep visit ended it (`cut short`); the wake-up was answered and the call went out |
 | 21 | Pass: hotspot off; two beacons missed, an automatic search after the second; Roam status showed `2 Lost` with the period and an age of 4 minutes. Searches then came 60 s, then 120 s apart |
 | 22 | Pass: hotspot on; the next automatic search had the wake-up answered and Roam status showed `2 Good`; the next beacon was caught on time |
