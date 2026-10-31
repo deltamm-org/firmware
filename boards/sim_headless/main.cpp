@@ -2,12 +2,13 @@
 // Copyright (c) 2026 Tommi Tauriainen
 
 // Simulator without a window: runs the app on the PC and prints its log
-// (and optionally LED changes) to standard output.
+// (and optionally LED changes, as log lines) to standard output.
 
 #include "dmm/app/app.h"
 #include "dmm/os/os.h"
 #include "dmm/services/d878uv2_calibration.h"
 #include "dmm/services/d878uv2_codeplug.h"
+#include "dmm/services/log.h"
 
 #include "dmm/board/sim_battery.h"
 #include "dmm/board/sim_gps.h"
@@ -55,10 +56,12 @@ public:
             return;
         }
         m_state[index] = on;
+        // Through the log, so a change comes out after the lines logged
+        // before it.
         if (m_print) {
-            const QString name = led == Led::Red ? QStringLiteral("red") : led == Led::Green ? QStringLiteral("green")
-                                                                                             : QStringLiteral("blue");
-            printLine(QStringLiteral("LED %1 %2").arg(name, on ? QStringLiteral("on") : QStringLiteral("off")));
+            const char *name = led == Led::Red ? "red" : led == Led::Green ? "green"
+                                                                           : "blue";
+            dmm::services::log::info("sim") << "LED " << name << (on ? " on" : " off");
         }
     }
 
