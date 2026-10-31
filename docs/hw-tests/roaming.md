@@ -178,7 +178,7 @@ after its last transmission:
 | 19 | Pass: one sweep visit about every 63.5 s, around the zone in order |
 | 4 | Pass: the knob to two other roaming channels kept the hotspot with no search; slot 1, then slot 2, as each channel says |
 | 5 | Pass: wake-up answered, the call through the hotspot to the Parrot, its reply received |
-| 7 | Failed with the console's timed PTT: it ran out during the search, but the call still went out after it (0.5 s), as the search watched only for the key's release. Fixed; to run again |
+| 7 | Pass after a fix: the console's timed PTT (1.5 s) ran out during the search for a call; the search found the hotspot and nothing was transmitted after it. Before the fix the call still went out after the search, as the search watched only for the key's release |
 | 8 | Pass: on a channel whose repeater (1) is off the air, PTT woke it twice without an answer, searched for the call, found the hotspot and sent the call through it 2.9 s after PTT |
 | 13 | Pass: `roam` shows the hotspot in use, -35 dBm, automatic on |
 | 14 | Pass: lowest unused stack 95 words (ui) |
