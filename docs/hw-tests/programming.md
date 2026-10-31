@@ -31,3 +31,8 @@ under 0.4 s. Step 6 was seen in earlier builds, whose slow answers made
 QDMR stop: the radio started again ten seconds later with the block being
 written as before, and the blocks already written kept. QDMR's own
 encode and decode of the written file gave exactly what was read back.
+
+2026-10-31, step 6 on upstream 0.22.0 with the open pull requests
+merged: one block written with a change and the session left without
+`END`; ten seconds later the radio started again and the block read as
+before. The log line then still says `codeplug written from the PC`.
