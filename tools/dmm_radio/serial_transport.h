@@ -20,6 +20,7 @@ public:
     static QList<QSerialPortInfo> findDeltaMmPorts();
 
     bool open(const QString &portName, QString *error);
+    void close();
     bool write(const QByteArray &data) override;
     QByteArray read(qsizetype count, int timeoutMs) override;
     void discardInput() override;

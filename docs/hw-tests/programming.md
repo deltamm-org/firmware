@@ -22,6 +22,8 @@ reads and writes the codeplug. These steps use QDMR's `dmrconf`.
 | 7 | `dmm-radio check-backup` | Calibration, radio information and system area still match the backup |
 | 8 | `lsusb -v -d 28e9:018a`; `dmm-radio ports` | `iSerial` `DeltaMM`, two CDC interfaces "DeltaMM data" and "DeltaMM log"; `dmm-radio ports` lists both as DeltaMM, none as factory firmware |
 | 9 | An unchanged QDMR: `dmrconf detect`, then `dmrconf read` on the data port | The radio found as a D878UVII; the read as in step 2 |
+| 10 | `dmm-radio flash --wait 600 <.CDD>` with the radio already in update mode | The update starts at once |
+| 11 | As 10, with the radio running its factory firmware; then switch it off and on in update mode | `No answer on <port>: the radio is not in update mode`; after the switch the update starts |
 
 ## Results
 
