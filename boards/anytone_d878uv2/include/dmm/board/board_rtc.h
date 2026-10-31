@@ -16,7 +16,10 @@ class BoardRtc
 public:
     bool start();
     std::uint32_t seconds();
+    dmm::services::ClockReading read();
     void setSeconds(std::uint32_t utc);
+    void setRateCorrection(std::int32_t ppb);
+    std::int32_t rateCorrection();
 };
 
 } // namespace board

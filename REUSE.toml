@@ -28,7 +28,7 @@ SPDX-License-Identifier = "MIT"
 
 # Docs added with the GPS receiver.
 [[annotations]]
-path = ["docs/hw-tests/gps.md", "docs/hw-tests/gps-setup.md", "docs/hw-tests/rtc-clock.md", "docs/hw-tests/gps-power.md"]
+path = ["docs/hw-tests/gps.md", "docs/hw-tests/gps-setup.md", "docs/hw-tests/rtc-clock.md", "docs/hw-tests/gps-power.md", "docs/hw-tests/rtc-calibration.md"]
 SPDX-FileCopyrightText = "2026 Henri Lavikainen"
 SPDX-License-Identifier = "MIT"
 

@@ -40,3 +40,35 @@ TEST_CASE("clock round trips every day for three centuries")
         REQUIRE(secondsSince1970(t) == s);
     }
 }
+
+TEST_CASE("clock rate fit finds a clock running fast")
+{
+    // 31.7 ppm fast with a 400 ms delay and up to 5 ms of jitter, one
+    // sample a second for half an hour.
+    ClockRateFit fit;
+    const std::int64_t start = 1'793'043'255'000;
+    for (std::int64_t s = 0; s < 1800; ++s) {
+        const std::int32_t jitter = static_cast<std::int32_t>((s * 7919) % 11) - 5;
+        const auto error = static_cast<std::int32_t>(-1300 + 400 + s * 317 / 10'000) + jitter;
+        fit.add(start + s * 1000, error);
+    }
+    CHECK(fit.count() == 1800);
+    CHECK(fit.spanMs() == 1'799'000);
+    CHECK(fit.ratePpb() > 31'000);
+    CHECK(fit.ratePpb() < 32'400);
+    CHECK(fit.scatterMs() <= 5);
+}
+
+TEST_CASE("clock rate fit finds a slow clock and needs two samples")
+{
+    ClockRateFit fit;
+    CHECK(fit.ratePpb() == 0);
+    fit.add(0, 0);
+    CHECK(fit.ratePpb() == 0);
+    // 10 ms behind after 1000 s: 10 ppm slow.
+    fit.add(1'000'000, -10);
+    CHECK(fit.ratePpb() == -10'000);
+    CHECK(fit.scatterMs() == 0);
+    fit.clear();
+    CHECK(fit.count() == 0);
+}

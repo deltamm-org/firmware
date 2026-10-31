@@ -24,7 +24,21 @@ public:
     /// Call once, before the scheduler starts or from one task.
     static Start start();
     static std::uint32_t seconds();
+    /// The seconds and the crystal cycles into the next one (0..32767).
+    struct Reading
+    {
+        std::uint32_t seconds;
+        std::uint16_t cycles;
+    };
+    static Reading read();
     static void setSeconds(std::uint32_t seconds);
+
+    /// The rate calibration: @p steps crystal cycles added (positive) or
+    /// removed (negative) in every 2^20, about 0.954 ppm each, up to
+    /// MaxCalibrationSteps either way. Kept in the backup domain.
+    static void setCalibration(int steps);
+    static int calibration();
+    static constexpr int MaxCalibrationSteps = 127;
 
     /// The marker in backup data register 0 of a clock that has been set up.
     static constexpr std::uint16_t Marker = 0x5050;

@@ -96,6 +96,38 @@ std::uint32_t Rtc::seconds()
     }
 }
 
+Rtc::Reading Rtc::read()
+{
+    // The divider counts down from 32767 to 0 within each second; read
+    // again if the counter moved while the divider was read.
+    for (;;) {
+        const std::uint32_t before = seconds();
+        const std::uint32_t divider = ((reg(rtc::Divh) & 0xF) << 16) | (reg(rtc::Divl) & 0xFFFF);
+        if (seconds() == before) {
+            return {before, static_cast<std::uint16_t>(0x7FFF - (divider & 0x7FFF))};
+        }
+    }
+}
+
+void Rtc::setCalibration(int steps)
+{
+    steps = steps > MaxCalibrationSteps ? MaxCalibrationSteps : steps < -MaxCalibrationSteps ? -MaxCalibrationSteps
+                                                                                             : steps;
+    std::uint32_t octl = reg(bkp::Octl) & ~(bkp::CalibrationMask | bkp::SpeedUp);
+    octl |= static_cast<std::uint32_t>(steps < 0 ? -steps : steps);
+    if (steps > 0) {
+        octl |= bkp::SpeedUp;
+    }
+    reg(bkp::Octl) = octl;
+}
+
+int Rtc::calibration()
+{
+    const std::uint32_t octl = reg(bkp::Octl);
+    const auto steps = static_cast<int>(octl & bkp::CalibrationMask);
+    return (octl & bkp::SpeedUp) != 0 ? steps : -steps;
+}
+
 void Rtc::setSeconds(std::uint32_t seconds)
 {
     configure([seconds] {

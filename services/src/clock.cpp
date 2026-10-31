@@ -46,6 +46,55 @@ DateTime dateTime(std::uint32_t seconds)
     return t;
 }
 
+void ClockRateFit::add(std::int64_t atMs, std::int32_t errorMs)
+{
+    if (m_count == 0) {
+        m_firstMs = atMs;
+        m_firstErrorMs = errorMs;
+    }
+    ++m_count;
+    m_lastMs = atMs - m_firstMs;
+    const double x = static_cast<double>(m_lastMs) / 1000;
+    const double y = errorMs - m_firstErrorMs;
+    m_sx += x;
+    m_sy += y;
+    m_sxx += x * x;
+    m_sxy += x * y;
+    m_syy += y * y;
+}
+
+std::int32_t ClockRateFit::ratePpb() const
+{
+    const double n = m_count;
+    const double sxx = m_sxx - m_sx * m_sx / n;
+    if (m_count < 2 || sxx <= 0) {
+        return 0;
+    }
+    // Slope in ms per second, which is parts per thousand.
+    const double slope = (m_sxy - m_sx * m_sy / n) / sxx;
+    const double ppb = slope * 1'000'000;
+    return static_cast<std::int32_t>(ppb < 0 ? ppb - 0.5 : ppb + 0.5);
+}
+
+std::uint32_t ClockRateFit::scatterMs() const
+{
+    if (m_count < 3) {
+        return 0;
+    }
+    const double n = m_count;
+    const double sxx = m_sxx - m_sx * m_sx / n;
+    const double sxy = m_sxy - m_sx * m_sy / n;
+    const double syy = m_syy - m_sy * m_sy / n;
+    const double residual = sxx > 0 ? syy - sxy * sxy / sxx : syy;
+    const double meanSquare = residual > 0 ? residual / n : 0;
+    // Square root by Newton's method; the library's sqrt may set errno.
+    double r = meanSquare > 1 ? meanSquare : 1;
+    for (int i = 0; i < 40; ++i) {
+        r = (r + meanSquare / r) / 2;
+    }
+    return static_cast<std::uint32_t>(r + 0.5);
+}
+
 std::uint32_t secondsSince1970(const DateTime &t)
 {
     const std::int64_t days = daysFromCivil(t.year, t.month, t.day);

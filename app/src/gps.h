@@ -53,7 +53,14 @@ struct ChipCommand
     lib::StaticString<64> text;
 };
 
-using Message = std::variant<Power, PowerSave, Need, Report, Raw, Systems, ChipCommand>;
+/// Measures the clock's rate against GPS time for @p minutes, keeping the
+/// receiver on, then corrects the rate; 0 stops a run. Needs the GPS on.
+struct CalibrateClock
+{
+    std::uint8_t minutes;
+};
+
+using Message = std::variant<Power, PowerSave, Need, Report, Raw, Systems, ChipCommand, CalibrateClock>;
 
 /// Starts the gps task, which owns @p port. The receiver stays off until
 /// a Power message.

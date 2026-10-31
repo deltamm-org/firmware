@@ -181,7 +181,16 @@ the SCT3258 are built when the option is given.
   amplifier, so they need neither the codec nor the baseband.
 - Clock: the MCU's real-time clock on a 32.768 kHz crystal, kept running
   from the battery while the radio is off. It counts UTC seconds since
-  1970; backup data register 0 holds 0x5050 once it is set up.
+  1970; backup data register 0 holds 0x5050 once it is set up. The
+  prescaler divides by 32768; the backup domain's calibration register
+  (BKP_OCTL) removes or adds 0 to 127 crystal cycles in every 2^20, about
+  0.954 ppm each, and keeps its value with the clock. A crystal can run
+  tens of ppm fast, so a calibration run measures the rate against GPS
+  time: the gps task fits a line through the clock's error at each
+  second's first sentence, and the system task applies the correction. The
+  receiver sends its first sentence about 30 ms after the second, but that
+  delay wanders by about 10 ms over minutes, which limits a 30-minute run
+  to about 5 ppm.
 - GPS: an ATGM336H module (AT6558 chip, CASIC command set, as the
   receiver reports itself) sending NMEA at 9600 baud, 8N1, on USART1 (PA3
   in, PA2 out). Its supply is the FM transceiver's GPIO2, so the radio task

@@ -175,6 +175,10 @@ constexpr std::uintptr_t data(unsigned n)
 {
     return 0x40006C04 + 4 * n;
 }
+// BKP_OCTL: the RTC's rate calibration, kept with the RTC.
+inline constexpr std::uintptr_t Octl = 0x40006C2C;
+inline constexpr std::uint32_t CalibrationMask = 0x7F; // RCCV: clock cycles per 2^20 to remove or add
+inline constexpr std::uint32_t SpeedUp = 1u << 15;     // CALDIR: add cycles instead of removing them
 } // namespace bkp
 
 namespace rtc {
@@ -182,6 +186,8 @@ inline constexpr std::uintptr_t Base = 0x40002800;
 inline constexpr std::uintptr_t Ctl = Base + 0x04;
 inline constexpr std::uintptr_t Psch = Base + 0x08;
 inline constexpr std::uintptr_t Pscl = Base + 0x0C;
+inline constexpr std::uintptr_t Divh = Base + 0x10;
+inline constexpr std::uintptr_t Divl = Base + 0x14;
 inline constexpr std::uintptr_t Cnth = Base + 0x18;
 inline constexpr std::uintptr_t Cntl = Base + 0x1C;
 

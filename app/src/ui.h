@@ -132,8 +132,28 @@ struct Gps
     bool asleep;
 };
 
+/// The system task applied a new rate correction to the clock.
+struct ClockRate
+{
+};
+/// The clock calibration's progress and outcome.
+struct ClockCalibration
+{
+    enum class State : std::uint8_t
+    {
+        Running,
+        Done,
+        TooFewFixes,
+        Stopped,
+        GpsOff,
+    };
+    State state;
+    std::uint8_t minutesDone;
+    std::uint8_t minutes;
+};
+
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, Notice, Gps>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, Notice, Gps, ClockRate, ClockCalibration>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels.

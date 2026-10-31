@@ -16,6 +16,7 @@
 #include "dmm/version.h"
 
 #include <atomic>
+#include <string_view>
 
 namespace dmm::app::system {
 
@@ -48,6 +49,13 @@ std::atomic<bool> clockSetWanted{false};
 std::atomic<std::uint32_t> clockSetTo{0};
 std::atomic<const char *> clockSetSource{nullptr};
 std::atomic<bool> clockReportWanted{false};
+// The tick at which the current clock second began, published with
+// clockSeconds; clockSequence is odd while the two change.
+std::atomic<os::Ticks> clockSecondTick{0};
+std::atomic<std::uint32_t> clockSequence{0};
+std::atomic<bool> clockRateWanted{false};
+std::atomic<std::int32_t> clockRateTo{0};
+std::atomic<std::int32_t> clockRatePpb{0};
 
 // The system task's battery monitor, with the board's levels; without a
 // battery sense no level is ever low or empty.
@@ -234,6 +242,17 @@ void logClock(const char *what)
     } else {
         line << dateTimeText(clockSeconds.load()).view() << " UTC";
     }
+    if (clockRunning.load() && clockRatePpb.load() != 0) {
+        line << ", rate correction " << ppmText(clockRatePpb.load()).view();
+    }
+}
+
+void publishClock(const services::ClockReading &r)
+{
+    clockSequence.fetch_add(1);
+    clockSeconds.store(r.seconds);
+    clockSecondTick.store(os::nowMs() - r.milliseconds);
+    clockSequence.fetch_add(1);
 }
 
 void startClock()
@@ -245,7 +264,8 @@ void startClock()
         log::warning("clock") << "the real-time clock did not start";
         return;
     }
-    clockSeconds.store(platform->rtc->seconds());
+    publishClock(platform->rtc->read());
+    clockRatePpb.store(platform->rtc->rateCorrection());
     clockRunning.store(true);
     logClock("");
 }
@@ -260,7 +280,7 @@ void serviceClock()
         const std::uint32_t before = platform->rtc->seconds();
         const std::uint32_t to = clockSetTo.load();
         platform->rtc->setSeconds(to);
-        clockSeconds.store(to);
+        publishClock(platform->rtc->read());
         auto line = log::info("clock");
         line << "set from " << clockSetSource.load() << ": " << dateTimeText(to).view() << " UTC";
         if (before >= services::EarliestValidSeconds) {
@@ -271,7 +291,15 @@ void serviceClock()
         }
         return;
     }
-    clockSeconds.store(platform->rtc->seconds());
+    if (clockRateWanted.exchange(false)) {
+        const std::int32_t before = clockRatePpb.load();
+        platform->rtc->setRateCorrection(clockRateTo.load());
+        clockRatePpb.store(platform->rtc->rateCorrection());
+        log::info("clock") << "rate correction " << ppmText(clockRatePpb.load()).view() << " (was "
+                           << ppmText(before).view() << ")";
+        ui::post(ui::ClockRate{});
+    }
+    publishClock(platform->rtc->read());
     if (clockReportWanted.exchange(false)) {
         logClock("");
     }
@@ -316,7 +344,7 @@ void systemMain(void *)
         switchWasOff = switchOff;
 
         sinceClock += StepMs;
-        if (sinceClock >= ClockEveryMs || clockSetWanted.load()) {
+        if (sinceClock >= ClockEveryMs || clockSetWanted.load() || clockRateWanted.load()) {
             sinceClock = 0;
             serviceClock();
         }
@@ -410,6 +438,22 @@ std::optional<std::uint32_t> utcNow()
     return s;
 }
 
+std::optional<std::int64_t> utcNowMs()
+{
+    for (;;) {
+        const std::uint32_t sequence = clockSequence.load();
+        const std::uint32_t s = clockSeconds.load();
+        const os::Ticks secondTick = clockSecondTick.load();
+        if ((sequence & 1) != 0 || clockSequence.load() != sequence) {
+            continue;
+        }
+        if (!clockRunning.load() || s < services::EarliestValidSeconds) {
+            return std::nullopt;
+        }
+        return static_cast<std::int64_t>(s) * 1000 + static_cast<os::Ticks>(os::nowMs() - secondTick);
+    }
+}
+
 void setClock(std::uint32_t utc, const char *source)
 {
     clockSetTo.store(utc);
@@ -420,6 +464,50 @@ void setClock(std::uint32_t utc, const char *source)
 void reportClock()
 {
     clockReportWanted.store(true);
+}
+
+void setClockRate(std::int32_t ppb)
+{
+    clockRateTo.store(ppb);
+    clockRateWanted.store(true);
+}
+
+std::int32_t clockRate()
+{
+    return clockRatePpb.load();
+}
+
+namespace {
+
+// n / d rounded half away from zero.
+std::int64_t roundedDivide(std::int64_t n, std::int64_t d)
+{
+    return (n < 0 ? n - d / 2 : n + d / 2) / d;
+}
+
+// "+3.2 <unit>" from tenths; no sign on zero.
+lib::StaticString<12> tenthsText(std::int64_t tenths, std::string_view unit)
+{
+    lib::StaticString<12> s;
+    if (tenths != 0) {
+        s << (tenths < 0 ? '-' : '+');
+    }
+    const std::int64_t magnitude = tenths < 0 ? -tenths : tenths;
+    s << magnitude / 10 << '.' << magnitude % 10 << ' ' << unit;
+    return s;
+}
+
+} // namespace
+
+lib::StaticString<12> ppmText(std::int32_t ppb)
+{
+    return tenthsText(roundedDivide(ppb, 100), "ppm");
+}
+
+lib::StaticString<12> perDayText(std::int32_t ppb)
+{
+    // 86 400 s a day: tenths of a second are ppb * 864 / 10^6.
+    return tenthsText(roundedDivide(static_cast<std::int64_t>(ppb) * 864, 1'000'000), "s");
 }
 
 const board::Calibration *calibration()

@@ -52,7 +52,11 @@ it sleeps.
 
 **Clock.** The radio's real-time clock keeps UTC while the radio is off; a
 GPS fix corrects it. The status bar shows the local time from the
-codeplug's time zone.
+codeplug's time zone. Menu, GPS and time, Calibrate measures the clock
+against GPS time for 60 or 30 minutes and corrects its rate, so it keeps
+time between fixes and while the radio is off. The receiver's timing
+wanders by a few milliseconds, so a 30-minute run gets the rate to within
+about 5 ppm (0.4 s a day); a 60-minute run does better.
 
 **Programming.** Codeplug tools that speak the radio's own programming
 protocol read and write the codeplug over USB. Tested with QDMR.
@@ -174,7 +178,8 @@ screen, and Exit or Menu goes back to the list. The console's `gps raw on`
 logs every sentence the receiver sends; `gps query`, `gps restart` and
 `gps send` talk to the receiver itself; `gps need <s>` asks for a
 position every so many seconds (0: none). `time` logs the clock, and
-`time set YYYY-MM-DD HH:MM:SS` sets it (UTC).
+`time set YYYY-MM-DD HH:MM:SS` sets it (UTC); `time cal <min>` runs a
+calibration (0 stops it) and `time cal reset` clears the correction.
 
 The GPS mark in the status bar, shown while the GPS is on:
 

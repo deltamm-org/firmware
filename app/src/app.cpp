@@ -432,7 +432,8 @@ void runCommand(std::string_view command)
                                 "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
-        log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>; clock: time, time set YYYY-MM-DD HH:MM:SS (UTC)";
+        log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>";
+        log::info("console") << "clock: time, time set YYYY-MM-DD HH:MM:SS (UTC), time cal <min> (0 stops), time cal reset";
         log::info("console") << "GPS receiver: " << gps::debugHelp();
     } else if (command == "fault") {
         log::info("console") << "crashing on purpose";
@@ -474,6 +475,12 @@ void runCommand(std::string_view command)
         ui::post(ui::PanelPower{command == "panel on"});
     } else if (command == "time") {
         system::reportClock();
+    } else if (command == "time cal reset") {
+        system::setClockRate(0);
+    } else if (std::int32_t calMinutes[1] = {}; numbersAfter(command, "time cal ", 10, calMinutes, 1) && calMinutes[0] <= 120) {
+        if (!gps::post(gps::CalibrateClock{static_cast<std::uint8_t>(calMinutes[0])})) {
+            log::info("console") << "no GPS receiver";
+        }
     } else if (lib::startsWith(command, "time set ")) {
         const auto utc = parseDateTime(std::string_view(command.data() + 9, command.size() - 9));
         if (utc) {
