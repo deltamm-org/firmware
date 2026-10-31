@@ -33,8 +33,8 @@ hears, and Menu, APRS, Heard lists the stations.
 
 ## Results
 
-2026-10-27: steps 1 to 6, 8 and 9 pass; step 7 was not run, because the
-log port drops while the second radio transmits next to the first. A
+2026-10-27: steps 1 to 6, 8 and 9 pass; step 7 was not run then, because
+the log port drops while the second radio transmits next to the first. A
 beacon took about 0.8 s on air and the radio was back on the working
 channel at once. Received packets were listed, but the board decoded only
 strong ones: a station the second radio decoded at a noise reading of
@@ -50,3 +50,12 @@ went on, and the hotspot's next beacon came on time.
 frequency cleared, the start line said `no frequency wide`; `aprs send`
 gave `beacon not sent: the codeplug has no APRS frequency` and the
 notice `No APRS frequency`, and nothing was transmitted.
+
+2026-10-31, step 7 on the same build, with the second radio at 0.5 W on
+a short antenna, the console's timed PTT for the key and a made-up
+position: failed first, then passed after a fix. The beacon queued while
+the second radio transmitted was dropped as having no FM channel once
+the voice transmission started, since the transmitter being on was
+checked after the receiver. After the fix it waited through the second
+radio and the 9.8 s voice transmission and went out 0.3 s after it
+(`packet: sending 63 bytes after 11342 ms`).
