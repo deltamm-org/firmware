@@ -188,23 +188,23 @@ settings:
 Roaming works best when the network's repeaters send beacons: a short
 transmission at a fixed period, set up on the repeater by its keeper
 (any period from 10 s to 210 s, up to 16.5 s long). The radio learns
-each repeater's beacon timing by itself; nothing in the codeplug is
-needed for it.
+the beacon timing of the repeater it hears on each pair by itself;
+nothing in the codeplug is needed for it.
 
 - **Judging the repeater in use:** from its beacons and calls the radio
   rates it Good, Weak, Failing or Lost. Missed beacons tell it a
   repeater has gone quiet or out of reach before a call is tried.
 - **Visits:** while the channel is quiet (no call for 10 s and no key
-  for 5 s), the radio briefly listens to the zone's other repeaters, one
-  at a time, timed to their beacons, so it knows how they are heard. It
+  for 5 s), the radio briefly listens on the zone's other pairs, one at
+  a time, timed to their beacons, so it knows how they are heard. It
   never leaves during a call, and PTT cuts a visit short.
-- **Automatic roaming** then moves to another repeater when the one in
-  use gets weak (below about -95 dBm) and the other is clearly better
+- **Automatic roaming** then moves to another pair when the one in use
+  gets weak (below about -95 dBm) and the other is clearly better
   (6 dB). The delay and period settings are used only while beacons
   cannot judge the repeater, and searches that find nothing come further
   and further apart, up to 2 minutes.
-- **Searches** try the repeaters most likely to answer first and stop at
-  a good one.
+- **Searches** try the pairs most likely to answer first and stop at a
+  good one.
 
 The codeplug's **repeater range check** is followed too (QDMR:
 `rangeCheck`, `checkInterval`, `retryCount`, `notification` and
@@ -213,9 +213,9 @@ repeater in use is not heard, the radio wakes it every interval (5 s to
 50 s), and after the set number of unanswered tries says
 `Out of range`.
 
-**Menu > Channel > Roam status** shows the repeater in use with a star
-and its state, then each repeater heard with its level, how long ago it
-was measured and its beacon period once learned. Search now searches
+**Menu > Channel > Roam status** shows the pair in use with a star and
+its state, then each pair heard with its level, how long ago it was
+measured and its beacon period once learned. Search now searches
 from there.
 
 ## Notes
