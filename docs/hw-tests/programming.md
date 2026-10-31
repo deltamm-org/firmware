@@ -38,3 +38,8 @@ encode and decode of the written file gave exactly what was read back.
 merged: one block written with a change and the session left without
 `END`; ten seconds later the radio started again and the block read as
 before. The log line then still says `codeplug written from the PC`.
+
+2026-10-31, step 10: with the radio already in update mode when the wait
+started, the flash command asked it, got the boot loader's answer and
+flashed at once. Step 11 needs the factory firmware on the radio and is
+still to run.
