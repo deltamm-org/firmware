@@ -779,9 +779,12 @@ bool searchInterrupted()
     return deferredCount == std::size(deferred);
 }
 
-// PTT went up while a search ran.
+// PTT went up while a search ran, or the console's timed PTT ran out.
 bool pttReleasedMeanwhile()
 {
+    if (pttTimed && static_cast<std::int32_t>(os::nowMs() - pttReleaseAt) >= 0) {
+        return true;
+    }
     for (std::size_t i = 0; i < deferredCount; ++i) {
         if (const Ptt *p = std::get_if<Ptt>(&deferred[i]); p != nullptr && !p->down) {
             return true;
