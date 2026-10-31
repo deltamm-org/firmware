@@ -58,6 +58,12 @@ it to one of the zone's pairs, such as your local repeater's, is a good
 choice: the radio then starts there, and with roaming off the channel
 still works there.
 
+A talkgroup that you use on both time slots, for example one that some
+repeaters carry on slot 1 and others on slot 2, needs two channels: the
+same contact, one channel on slot 1 and one on slot 2. The slot always
+comes from the channel, never from the repeater, so pick the channel
+whose slot the repeater in use carries the talkgroup on.
+
 Channels you never want to roam, such as simplex or hotspot channels,
 get roaming off.
 
@@ -87,7 +93,7 @@ are heard about equally.
 ### Example
 
 A network on three frequency pairs, each shared by several repeaters,
-and two talkgroups, in QDMR's YAML (the frequencies, IDs and names are
+and two talkgroups, the second on both slots, in QDMR's YAML (the frequencies, IDs and names are
 made up):
 
 ```yaml
@@ -120,11 +126,20 @@ channels:
       roaming: !<!default> ""
   - dmr:
       id: ch2
-      name: Wide TG
+      name: Wide TG TS1
       rxFrequency: 439.1000 MHz
       txFrequency: 431.5000 MHz
       colorCode: 1
       timeSlot: TS1
+      contact: cont2
+      roaming: !<!default> ""
+  - dmr:
+      id: ch3
+      name: Wide TG TS2
+      rxFrequency: 439.1000 MHz
+      txFrequency: 431.5000 MHz
+      colorCode: 1
+      timeSlot: TS2
       contact: cont2
       roaming: !<!default> ""
 settings:
