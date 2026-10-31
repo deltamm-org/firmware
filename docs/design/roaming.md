@@ -155,8 +155,8 @@ console `dmr rx` and `fm status` every 250 ms, October 2026:
 | Asking a site to answer | not needed | wake-up block: a transmission per site |
 
 The network is sparse. Finland has 32 DMR-only repeaters on the air (25
-on 70 cm, 7 on 2 m); multimode repeaters need their own activation and
-are left out. Sites are high, so a repeater reaches about 50 km. Within
+on 70 cm, 7 on 2 m); multimode repeaters (FM and DMR) are not counted
+here. Sites are high, so a repeater reaches about 50 km. Within
 50 km of a repeater there are no other DMR repeaters for 12 of them, one
 or two for 14, and at most 6, in the capital area. A cellular network
 plans for many overlapping cells; here the radio keeps track of a
