@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Henri Lavikainen
+// Copyright (c) 2026 Tommi Tauriainen
 
 #include "dmm/services/roaming.h"
 
