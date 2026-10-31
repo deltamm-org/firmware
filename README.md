@@ -39,8 +39,8 @@ try the most likely repeaters first. The codeplug's repeater range check
 is followed. Menu > Channel turns roaming off or picks another roaming
 zone for the session, and Roam status shows what the radio hears. How to
 set roaming up and use it is in `docs/roaming-setup.md`, the design in
-`docs/roaming.md`; moving between two real repeaters is still to be
-tested.
+`docs/design/roaming.md`; moving between two real repeaters is still to
+be tested.
 
 **Channels.** Channels, zones and the VFO come from the codeplug already
 on the radio. Pick zones from a list, step channels with the knob, or type
