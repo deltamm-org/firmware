@@ -5,6 +5,8 @@
 #include "dmm/lib/sha256.h"
 #include <doctest/doctest.h>
 
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -17,6 +19,16 @@ TEST_CASE("TextWriter formats text, integers, bools and hex")
     w << "x=" << 42 << ' ' << -7 << ' ' << true << ' ' << hex(0x2a, 4) << ' ' << std::uint64_t{1} << 40;
     CHECK(w.view() == "x=42 -7 true 002a 140");
     CHECK_FALSE(w.truncated());
+}
+
+TEST_CASE("TextWriter formats the ends of each integer range")
+{
+    char buf[128];
+    TextWriter w(buf);
+    w << 0 << ' ' << std::int8_t{-128} << ' ' << std::uint8_t{255} << ' ' << std::numeric_limits<std::int32_t>::min()
+      << ' ' << std::numeric_limits<std::uint32_t>::max() << ' ' << std::numeric_limits<std::int64_t>::min() << ' '
+      << std::numeric_limits<std::uint64_t>::max();
+    CHECK(w.view() == "0 -128 255 -2147483648 4294967295 -9223372036854775808 18446744073709551615");
 }
 
 TEST_CASE("TextWriter pads decimals with zeros")

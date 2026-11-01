@@ -3,12 +3,13 @@
 
 #pragma once
 
-#include <charconv>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <string_view>
+#include <type_traits>
 
 namespace dmm::lib {
 
@@ -69,9 +70,16 @@ public:
         requires(!std::same_as<I, char> && !std::same_as<I, bool>)
     TextWriter &operator<<(I value)
     {
-        char tmp[24];
-        auto res = std::to_chars(tmp, tmp + sizeof(tmp), value);
-        return *this << std::string_view(tmp, static_cast<std::size_t>(res.ptr - tmp));
+        using U = std::make_unsigned_t<I>;
+        auto magnitude = static_cast<U>(value);
+        if constexpr (std::is_signed_v<I>) {
+            if (value < 0) {
+                put('-');
+                magnitude = static_cast<U>(U{0} - magnitude);
+            }
+        }
+        putDecimal(magnitude, 1);
+        return *this;
     }
 
     TextWriter &operator<<(Hex h)
@@ -85,13 +93,8 @@ public:
 
     TextWriter &operator<<(ZeroPadded z)
     {
-        char tmp[12];
-        const auto res = std::to_chars(tmp, tmp + sizeof(tmp), z.value);
-        const auto length = static_cast<std::size_t>(res.ptr - tmp);
-        for (std::size_t i = length; i < z.digits; ++i) {
-            put('0');
-        }
-        return *this << std::string_view(tmp, length);
+        putDecimal(z.value, z.digits);
+        return *this;
     }
 
     std::string_view view() const { return {m_buf.data(), m_len}; }
@@ -105,6 +108,25 @@ private:
             m_buf[m_len++] = c;
         } else {
             m_truncated = true;
+        }
+    }
+
+    // Digits are made here rather than with std::to_chars, whose digit
+    // table is copied onto the stack.
+    template <std::unsigned_integral U>
+    void putDecimal(U value, std::size_t minDigits)
+    {
+        char digits[std::numeric_limits<U>::digits10 + 1];
+        std::size_t n = 0;
+        do {
+            digits[n++] = static_cast<char>('0' + value % 10);
+            value /= 10;
+        } while (value != 0);
+        for (std::size_t i = n; i < minDigits; ++i) {
+            put('0');
+        }
+        while (n > 0) {
+            put(digits[--n]);
         }
     }
 
