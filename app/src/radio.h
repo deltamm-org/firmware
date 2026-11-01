@@ -6,6 +6,7 @@
 #include "dmm/app/app.h"
 #include "dmm/lib/fn_ref.h"
 #include "dmm/lib/format.h"
+#include "dmm/os/os.h"
 #include "dmm/services/codeplug.h"
 #include "dmm/services/fm_transceiver.h"
 #include "dmm/services/roaming.h"
@@ -251,5 +252,15 @@ struct RoamingView
     std::uint32_t receiveHz[services::roaming::HeardList::Capacity] = {};
 };
 void roamingView(RoamingView &out);
+
+/// The level of the signal last heard, for the screens: read while a
+/// signal is there, never from the noise between signals.
+struct SignalLevel
+{
+    bool known = false;
+    int dbm = 0;
+    os::Ticks atMs = 0;
+};
+SignalLevel signalLevel();
 
 } // namespace dmm::app::radio
