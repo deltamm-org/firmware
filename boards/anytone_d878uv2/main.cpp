@@ -9,6 +9,9 @@
 #include "board_display.h"
 #include "board_fm_tuning.h"
 #include "board_rf.h"
+#ifdef DMM_FLASH_PROBE
+#include "flash_probe.h"
+#endif
 #include "dmm/board/board_battery.h"
 #include "dmm/board/board_gps.h"
 #include "dmm/board/board_input.h"
@@ -223,6 +226,12 @@ public:
     }
     bool debugCommand(std::string_view command) override
     {
+#ifdef DMM_FLASH_PROBE
+        if (command == "flashprobe") {
+            dmm::services::log::info("board") << flashProbeReport();
+            return true;
+        }
+#endif
         if (command != "usb clock pll" && command != "usb clock internal") {
             return false;
         }
@@ -235,7 +244,11 @@ public:
     }
     const char *debugHelp() const override
     {
+#ifdef DMM_FLASH_PROBE
+        return "board usb clock pll|internal, board flashprobe";
+#else
         return "board usb clock pll|internal";
+#endif
     }
 
 private:

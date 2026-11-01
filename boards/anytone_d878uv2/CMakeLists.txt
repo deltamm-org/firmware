@@ -14,6 +14,18 @@ option(DMM_KEEP_SWD "Keep the SWD debug port; PF2 then does not work" OFF)
 if(DMM_KEEP_SWD)
     target_compile_definitions(deltamm PRIVATE DMM_KEEP_SWD)
 endif()
+# A test image that times code and data reads at three places in flash and
+# logs the result at start. The image grows past 512 KB.
+option(DMM_FLASH_PROBE "Build the flash speed probe into the image" OFF)
+if(DMM_FLASH_PROBE)
+    target_sources(deltamm PRIVATE flash_probe.h flash_probe.cpp)
+    target_compile_definitions(deltamm PRIVATE DMM_FLASH_PROBE)
+endif()
+
+# End of the flash the GD32F303 executes without wait states (the first
+# 256 KB, GD32F30x User Manual, flash memory controller chapter).
+set(DMM_ZERO_WAIT_FLASH_END 0x08040000)
+
 target_link_options(deltamm PRIVATE
     -nostartfiles
     -T${CMAKE_CURRENT_SOURCE_DIR}/gd32f303_app.ld
@@ -31,6 +43,7 @@ endforeach()
 
 add_custom_command(TARGET deltamm POST_BUILD
     COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} "-DLIBS=$<JOIN:${_core_files},|>" -P ${PROJECT_SOURCE_DIR}/cmake/CheckHeapFree.cmake
+    COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DELF=$<TARGET_FILE:deltamm> -DLIMIT=${DMM_ZERO_WAIT_FLASH_END} -P ${PROJECT_SOURCE_DIR}/cmake/CheckCodeEnd.cmake
     COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:deltamm> $<TARGET_FILE_DIR:deltamm>/deltamm.bin
     COMMAND ${CMAKE_SIZE} $<TARGET_FILE:deltamm>
     COMMENT "Checking the core libraries and writing deltamm.bin"
