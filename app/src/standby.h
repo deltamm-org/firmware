@@ -103,12 +103,11 @@ public:
 /// drawn over the old ones.
 void drawGpsScreen(services::Display &d, const GpsState &gps, bool full);
 
-/// A list to pick one item from, drawn over the screen body: a title bar
-/// and up to Rows rows, the chosen one inverted.
+/// A list to pick one item from, drawn as the menu's lists are, under the
+/// status bar.
 class ListPicker
 {
 public:
-    static constexpr int Rows = 7;
     static constexpr std::size_t MaxItems = 250;
     static constexpr std::size_t TextBytes = 17;
 
@@ -121,7 +120,8 @@ public:
     void move(int steps);
     bool empty() const { return m_count == 0; }
     std::uint8_t chosen() const { return m_ids[m_cursor]; }
-    void draw(services::Display &d, int top);
+    /// The list with @p hint naming the keys.
+    void draw(services::Display &d, std::string_view hint);
 
 private:
     char m_title[TextBytes] = {};
