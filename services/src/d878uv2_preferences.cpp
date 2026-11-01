@@ -22,7 +22,16 @@ static_assert(CrcAt - FieldsAt == PreferencesFieldBytes);
 // The fields, in record order. A new field goes after the last one and
 // moves FieldsEnd past it; no field ever moves or changes its meaning.
 constexpr std::size_t RoamingAt = FieldsAt + 0; // 0 off, 1 on
-constexpr std::size_t FieldsEnd = FieldsAt + 1;
+// The home screen's layout: top line, clock (0 off, 1 on), large name,
+// middle row, the reading next to the power, bottom row; each a choice of
+// HomeLayout's in its order.
+constexpr std::size_t HomeTopAt = FieldsAt + 1;
+constexpr std::size_t HomeClockAt = FieldsAt + 2;
+constexpr std::size_t HomeBigAt = FieldsAt + 3;
+constexpr std::size_t HomeMiddleAt = FieldsAt + 4;
+constexpr std::size_t HomeBesideAt = FieldsAt + 5;
+constexpr std::size_t HomeBottomAt = FieldsAt + 6;
+constexpr std::size_t FieldsEnd = FieldsAt + 7;
 static_assert(FieldsEnd <= CrcAt);
 
 // The field bytes a record holds; a field past them reads as its default.
@@ -43,6 +52,13 @@ public:
     {
         const auto b = byte(at);
         return b && *b <= 1 ? *b == 1 : fallback;
+    }
+    /// One of @p E's values below E::Count; anything else gives @p fallback.
+    template <class E>
+    E choice(std::size_t at, E fallback) const
+    {
+        const auto b = byte(at);
+        return b && *b < static_cast<std::uint8_t>(E::Count) ? static_cast<E>(*b) : fallback;
     }
 
 private:
@@ -68,6 +84,12 @@ std::optional<RadioPreferences> decodePreferences(std::span<const std::uint8_t, 
     const RadioPreferences d;
     RadioPreferences p;
     p.roaming = f.flag(RoamingAt, d.roaming);
+    p.home.top = f.choice(HomeTopAt, d.home.top);
+    p.home.clock = f.flag(HomeClockAt, d.home.clock);
+    p.home.big = f.choice(HomeBigAt, d.home.big);
+    p.home.middle = f.choice(HomeMiddleAt, d.home.middle);
+    p.home.beside = f.choice(HomeBesideAt, d.home.beside);
+    p.home.bottom = f.choice(HomeBottomAt, d.home.bottom);
     return p;
 }
 
@@ -78,6 +100,12 @@ void encodePreferences(const RadioPreferences &p, std::span<std::uint8_t, Prefer
     record[VersionAt] = Version;
     record[LengthAt] = static_cast<std::uint8_t>(FieldsEnd - FieldsAt);
     record[RoamingAt] = p.roaming ? 1 : 0;
+    record[HomeTopAt] = static_cast<std::uint8_t>(p.home.top);
+    record[HomeClockAt] = p.home.clock ? 1 : 0;
+    record[HomeBigAt] = static_cast<std::uint8_t>(p.home.big);
+    record[HomeMiddleAt] = static_cast<std::uint8_t>(p.home.middle);
+    record[HomeBesideAt] = static_cast<std::uint8_t>(p.home.beside);
+    record[HomeBottomAt] = static_cast<std::uint8_t>(p.home.bottom);
     const std::uint32_t crc = lib::crc32(record.data(), CrcAt);
     for (std::size_t i = 0; i < 4; ++i) {
         record[CrcAt + i] = static_cast<std::uint8_t>(crc >> (8 * i));

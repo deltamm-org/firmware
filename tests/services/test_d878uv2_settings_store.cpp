@@ -505,3 +505,49 @@ TEST_CASE("preferences record: fields a shorter record lacks, or out of range, r
     REQUIRE(q.has_value());
     CHECK_FALSE(q->roaming);
 }
+
+TEST_CASE("preferences record: the home screen layout round trip")
+{
+    using dmm::services::HomeLayout;
+    RadioPreferences p;
+    p.home.top = HomeLayout::Top::Number;
+    p.home.clock = false;
+    p.home.big = HomeLayout::Big::Zone;
+    p.home.middle = HomeLayout::Middle::Signal;
+    p.home.beside = HomeLayout::Beside::Volume;
+    p.home.bottom = HomeLayout::Bottom::Position;
+    const auto q = dmm::services::d878uv2::decodePreferences(encoded(p));
+    REQUIRE(q.has_value());
+    CHECK(q->home == p.home);
+    CHECK(q->roaming == p.roaming);
+}
+
+TEST_CASE("preferences record: a record without the home screen bytes gives the default layout")
+{
+    using dmm::services::HomeLayout;
+    RadioPreferences p;
+    p.roaming = false;
+    p.home.big = HomeLayout::Big::Contact;
+    p.home.clock = false;
+    // A record from before the layout: only the roaming byte.
+    Record r = encoded(p);
+    r[5] = 1;
+    seal(r);
+    auto q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK_FALSE(q->roaming);
+    CHECK(q->home == HomeLayout{});
+
+    // Values out of range read as their defaults, one by one.
+    r = encoded(p);
+    r[7] = static_cast<std::uint8_t>(HomeLayout::Top::Count);
+    r[8] = 2;
+    r[9] = 0xFF;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->home.top == HomeLayout{}.top);
+    CHECK(q->home.clock == HomeLayout{}.clock);
+    CHECK(q->home.big == HomeLayout{}.big);
+    CHECK(q->home.middle == p.home.middle);
+}

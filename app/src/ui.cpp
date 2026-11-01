@@ -794,6 +794,7 @@ void uiMain(void *)
         }
         if (const auto p = codeplug->preferences()) {
             roamingOn = p->roaming;
+            homeLayout = p->home;
         }
         if (!roamingOn) {
             radio::post(radio::RoamingOn{false});
@@ -1111,6 +1112,7 @@ void uiMain(void *)
         if (settingsStore != nullptr) {
             services::RadioPreferences p;
             p.roaming = roamingOn;
+            p.home = homeLayout;
             settingsStore->keepPreferences(p, os::nowMs());
         }
     };
@@ -1657,7 +1659,11 @@ void uiMain(void *)
                                                    << ", roaming zone " << s->roaming.zone;
                                }
                                if (const auto p = codeplug->preferences()) {
-                                   log::info("ui") << "preferences record: roaming " << (p->roaming ? "on" : "off");
+                                   const services::HomeLayout &h = p->home;
+                                   log::info("ui") << "preferences record: roaming " << (p->roaming ? "on" : "off")
+                                                   << ", home screen " << static_cast<int>(h.top) << ' ' << (h.clock ? 1 : 0)
+                                                   << ' ' << static_cast<int>(h.big) << ' ' << static_cast<int>(h.middle)
+                                                   << ' ' << static_cast<int>(h.beside) << ' ' << static_cast<int>(h.bottom);
                                } else {
                                    log::info("ui") << "no preferences record";
                                }

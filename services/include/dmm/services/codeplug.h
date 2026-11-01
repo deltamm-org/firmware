@@ -4,6 +4,7 @@
 #pragma once
 
 #include "dmm/services/dmr.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/key_lock.h"
 #include "dmm/services/power_level.h"
 #include "dmm/services/tone.h"
@@ -131,6 +132,8 @@ struct RadioPreferences
     /// Roaming channels follow the roaming zone's repeaters; off, every
     /// channel works on its own frequencies.
     bool roaming = true;
+    /// What each row of the home screen shows.
+    HomeLayout home;
 };
 
 /// One repeater of a roaming zone.
