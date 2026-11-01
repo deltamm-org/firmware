@@ -138,6 +138,15 @@ switched on holding PTT and PF3. `tools/dmm_radio` speaks its protocol
 (`dmm-radio flash`). The boot loader itself is never written.
 `docs/update-mode.md` describes update mode.
 
+With the `DMM_LOADER` build option, a stub at 0x08004000 starts DeltaMM's
+own loader near the top of flash, and the app is linked for a run slot
+just above the stub. The loader takes new images over USB into a spare
+slot, swaps them in as a trial and swaps the previous image back when a
+new one does not confirm itself; a journal in two flash sectors makes
+every step resumable after a power loss. Its logic (`services/boot_*`,
+`loader_protocol`) needs no kernel and is tested on the host, with a
+power cut after every flash operation. `docs/loader.md` describes it.
+
 ## Data on the radio
 
 Settings, codeplug and calibration are kept in the radio's existing
