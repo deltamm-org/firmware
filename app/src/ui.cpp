@@ -20,6 +20,7 @@
 #include "dmm/services/home_screen.h"
 #include "dmm/services/input.h"
 #include "dmm/services/log.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/services/power.h"
 #include "dmm/version.h"
 
@@ -810,7 +811,9 @@ void uiMain(void *)
             if (selector.settings().voiceEnhancement) {
                 radio::post(radio::VoiceEnhancement{true});
             }
-            radio::post(radio::FmMicrophoneLevel{selector.settings().fmMicrophoneLevel});
+            radio::post(radio::MicrophoneGain{
+                static_cast<std::int8_t>(services::microphone_gain::fromLevel(selector.settings().dmrMicrophoneLevel)),
+                static_cast<std::int8_t>(services::microphone_gain::fromLevel(selector.settings().fmMicrophoneLevel))});
             gpsAtStart = selector.settings().gps;
             gpsSystems = selector.settings().gpsSystems;
             timeZoneMinutes = selector.settings().timeZoneMinutes;
