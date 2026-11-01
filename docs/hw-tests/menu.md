@@ -4,9 +4,10 @@ The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (status, on or off, roaming zone), GPS
 (status, receiver on or off) and Display (brightness, light time).
 Settings holds the setup in groups of its own: Home screen
-(`home-screen.md`), Keys & battery (what the lock covers, auto lock,
-battery save), Clock (time zone) and GPS (satellite systems). Tools
-opens the log and the key test and shows the version.
+(`home-screen.md`), Audio (microphone gain, `mic-gain.md`), Keys &
+battery (what the lock covers, auto lock, battery save), Clock (time
+zone) and GPS (satellite systems). Tools opens the log and the key test
+and shows the version.
 
 A list shows a title band with where it is and the place in it (`2/5`),
 five rows, a scroll bar when there are more, a panel of two lines about
@@ -55,8 +56,8 @@ two clicks anticlockwise. Each step starts where the one before ended.
 | 10 | Press Down, Menu, Menu; look; press Exit | The roaming status list in the menu's style, hint `Menu: search   Exit: back`; Exit: `Menu > Roaming` on Status |
 | 11 | Press Exit, Down, Menu, Menu; look; press Exit; look | The GPS screen; Exit: `Menu > GPS` on Status |
 | 12 | Press Exit, Down, Menu; look; press Menu; look; press Exit | `Menu > Display`: Brightness and Light time with their values, the panel `Display brightness`; Menu: `Brightness`, the level large between arrows with `In use: <n>` under it; Exit: back on Brightness, the level unchanged |
-| 13 | Press Exit, Down, Menu; look | `Menu > Settings`: Home screen, Keys & battery, Clock, GPS; the panel `What each row of the home screen shows` |
-| 14 | Press Down, Menu; look; press Exit; look | `Keys & battery` (the long name alone); Exit: `Menu > Settings` on Keys & battery |
+| 13 | Press Exit, Down, Menu; look | `Menu > Settings`, `1/5`: Home screen, Audio, Keys & battery, Clock, GPS; the panel `What each row of the home screen shows` |
+| 14 | Press Down twice, then Menu; look; press Exit; look | `Keys & battery` (the long name alone); Exit: `Menu > Settings` on Keys & battery |
 | 15 | Press Menu, Up, Menu; look; press Exit | Battery save as a list: Off, On `150 ms`, Fast wake `70 ms`, the one in use chosen; Exit leaves it |
 | 16 | Press Exit, Down, Menu, Menu; look | `Clock > Time zone`: the zone large (`UTC+2:00`), a marker on a track, `In use:` under it, the place `n/53` |
 | 17 | Press Exit three times, then Down, Menu, Down, Down; look; press Menu | `Menu > Tools` on Version: the panel shows the version and `up <n> min`; hint `Exit: back`; Menu does nothing |

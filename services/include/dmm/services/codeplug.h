@@ -138,6 +138,10 @@ struct RadioPreferences
     bool roaming = true;
     /// What each row of the home screen shows.
     HomeLayout home;
+    /// Microphone gain in dB (microphone_gain) on DMR and on FM channels;
+    /// none follows the codeplug's level.
+    std::optional<std::uint8_t> dmrMicGainDb;
+    std::optional<std::uint8_t> fmMicGainDb;
 };
 
 /// One repeater of a roaming zone.

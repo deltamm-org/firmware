@@ -551,3 +551,44 @@ TEST_CASE("preferences record: a record without the home screen bytes gives the 
     CHECK(q->home.big == HomeLayout{}.big);
     CHECK(q->home.middle == p.home.middle);
 }
+
+TEST_CASE("preferences record: the microphone gains, or none to follow the codeplug")
+{
+    RadioPreferences p;
+    auto q = dmm::services::d878uv2::decodePreferences(encoded(p));
+    REQUIRE(q.has_value());
+    CHECK_FALSE(q->dmrMicGainDb.has_value());
+    CHECK_FALSE(q->fmMicGainDb.has_value());
+
+    p.dmrMicGainDb = 0;
+    p.fmMicGainDb = 24;
+    Record r = encoded(p);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->dmrMicGainDb == std::optional<std::uint8_t>(0));
+    CHECK(q->fmMicGainDb == std::optional<std::uint8_t>(24));
+
+    // A record from before the fields: the codeplug's levels, the fields
+    // before them kept.
+    p.home.big = dmm::services::HomeLayout::Big::Zone;
+    r = encoded(p);
+    r[5] = 7;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK_FALSE(q->dmrMicGainDb.has_value());
+    CHECK_FALSE(q->fmMicGainDb.has_value());
+    CHECK(q->roaming);
+    CHECK(q->home.big == dmm::services::HomeLayout::Big::Zone);
+
+    // Out of range: beyond each one's top.
+    p.dmrMicGainDb = 30;
+    r = encoded(p);
+    r[6 + 7] = 31;
+    r[6 + 8] = 25;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK_FALSE(q->dmrMicGainDb.has_value());
+    CHECK_FALSE(q->fmMicGainDb.has_value());
+}

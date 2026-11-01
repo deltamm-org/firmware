@@ -53,8 +53,7 @@ struct Microphone
     bool on;
 };
 /// Microphone gain in dB (services::microphone_gain) on DMR and on FM
-/// channels, from the next transmission; a negative value keeps that one.
-/// Logs both.
+/// channels, from the next transmission. Logs both.
 struct MicrophoneGain
 {
     std::int8_t dmrDb;

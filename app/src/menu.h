@@ -8,10 +8,12 @@
 #include "dmm/services/home_screen.h"
 #include "dmm/services/input.h"
 #include "dmm/services/key_lock.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/services/power_level.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -38,6 +40,8 @@ enum class Item : std::uint8_t
     Gps,
     Backlight,
     BacklightTime,
+    DmrMicGain,
+    FmMicGain,
     KeyLock,
     AutoLock,
     BatterySave,
@@ -68,6 +72,7 @@ enum class Group : std::uint8_t
     Settings,
     Tools,
     Home,
+    Audio,
     Keys,
     Clock,
     GpsSettings,
@@ -162,7 +167,17 @@ struct Settings
     std::uint8_t gpsSystems = 3;
     std::int16_t timeZoneMinutes = 0;
     services::HomeLayout home;
+    /// Microphone gain in dB on DMR and on FM channels; none follows the
+    /// codeplug's level, whose gain the plug values give.
+    std::optional<std::uint8_t> dmrMicGainDb;
+    std::optional<std::uint8_t> fmMicGainDb;
+    std::uint8_t plugDmrMicGainDb = services::microphone_gain::StandardDb;
+    std::uint8_t plugFmMicGainDb = services::microphone_gain::StandardDb;
 };
+
+/// A microphone gain choice of FromCodeplug + N follows the codeplug's
+/// level, N dB; a choice below FromCodeplug is that many dB.
+inline constexpr std::int32_t FromCodeplug = 0x100;
 
 /// Where a setting is kept: the general settings, the radio's own
 /// preferences, the channel in use, or nowhere.
@@ -210,9 +225,10 @@ private:
     std::size_t m_count = 0;
 };
 
-/// Lists @p item's choices into @p out; false for an item whose choices
-/// come from the codeplug (the roaming zones), which the caller lists.
-bool listChoices(Item item, Choices &out);
+/// Lists @p item's choices into @p out, those that depend on the settings
+/// as in @p s; false for an item whose choices come from the codeplug (the
+/// roaming zones), which the caller lists.
+bool listChoices(Item item, Choices &out, const Settings &s = {});
 
 /// How a value screen shows its choices: up to four as large buttons, more
 /// as one large value with its place on a scale, or a list where they
