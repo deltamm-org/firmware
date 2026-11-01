@@ -184,10 +184,11 @@ settings:
   stronger than that one was. Never during a call.
 - **Menu > Channel > Roaming:** off makes every channel use its own
   frequency again at once, until the radio restarts or roaming is turned
-  back on. **Roam zone** picks another of the codeplug's roaming zones for
-  the session; the pair in use stays in use when the new roaming zone
-  has it. **Roam status** shows the pair in use and its state, then
-  each pair heard with its level and how long ago.
+  back on. **Roam zone** picks another of the codeplug's roaming zones,
+  kept across restarts (`docs/settings-storage.md`); the pair in use
+  stays in use when the new roaming zone has it. **Roam status** shows
+  the pair in use and its state, then each pair heard with its level and
+  how long ago.
 - On an FM channel the key says `Not roaming`.
 
 ## Notes
