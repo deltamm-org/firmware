@@ -189,9 +189,9 @@ The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (on or off, status, roaming zone), GPS
 (on or off, status, satellite systems) and Display (brightness, light
 time, help text). Settings holds the setup in groups: Home screen (a
-preset, or what each row shows, and what Up and Down do), Keys (what
-the lock covers, auto lock), Battery (battery save) and Clock (time
-zone).
+preset, or what each row shows, and what Up and Down do), Audio (DMR
+and FM microphone gain), Keys (what the lock covers, auto lock), Battery
+(battery save) and Clock (time zone).
 Tools opens the log and shows the version; debug builds also have the
 key test there (built in any build with `-DDMM_KEY_TEST=ON`). The panel
 under the list says what the chosen row does (Display > Help text Off

@@ -130,8 +130,6 @@ bool transmitting = false;
 // FM transmit audio takes the transceiver's own microphone input; adding
 // the route through the baseband gives a delayed second copy.
 FmTransmitAudio::Route transmitAudio = FmTransmitAudio::Route::Direct;
-int dmrMicGainDb = services::microphone_gain::StandardDb;
-int fmMicGainDb = services::microphone_gain::StandardDb;
 os::Ticks transmitStarted = 0;
 
 // How long the end of a DMR transmission may take to go out.
@@ -1402,12 +1400,11 @@ void handle(Message &message)
                        log::info("fm") << "microphone " << (m.on ? "on" : "muted");
                    },
                    [](const MicrophoneGain &g) {
-                       using namespace services::microphone_gain;
-                       dmrMicGainDb = g.dmrDb >= 0 ? clampDigital(g.dmrDb) : dmrMicGainDb;
-                       fmMicGainDb = g.fmDb >= 0 ? clampFm(g.fmDb) : fmMicGainDb;
-                       fm->setMicrophoneGain(fmMicGainDb);
-                       withBaseband([](auto &b) { b.setMicrophoneGain(dmrMicGainDb, fmMicGainDb); });
-                       log::info("radio") << "microphone gain: DMR +" << dmrMicGainDb << " dB, FM +" << fmMicGainDb << " dB";
+                       const int dmrDb = services::microphone_gain::clampDigital(g.dmrDb);
+                       const int fmDb = services::microphone_gain::clampFm(g.fmDb);
+                       fm->setMicrophoneGain(fmDb);
+                       withBaseband([&](auto &b) { b.setMicrophoneGain(dmrDb, fmDb); });
+                       log::info("radio") << "microphone gain: DMR +" << dmrDb << " dB, FM +" << fmDb << " dB";
                    },
                    [](const ChipCommand &c) {
                        bool known = false;

@@ -17,7 +17,7 @@ constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Di
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
-constexpr Row SettingsRows[] = {Group::Home, Group::Keys, Group::Battery, Group::Clock};
+constexpr Row SettingsRows[] = {Group::Home, Group::Audio, Group::Keys, Group::Battery, Group::Clock};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime, Item::MenuHelp};
 // The key test, for bringing up a radio, only in builds that have it.
 #ifdef DMM_KEY_TEST
@@ -29,6 +29,7 @@ constexpr std::string_view ToolsAbout = "The log and the version";
 #endif
 constexpr Row HomeRows[] = {Item::HomePreset, Item::HomeTop, Item::HomeClock, Item::HomeBig, Item::HomeMiddle,
     Item::HomeBeside, Item::HomeBottom, Item::HomeUpDown};
+constexpr Row AudioRows[] = {Item::DmrMicGain, Item::FmMicGain};
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock};
 constexpr Row BatteryRows[] = {Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
@@ -39,9 +40,10 @@ constexpr GroupInfo Groups[] = {
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "On or off, the fix and the satellite systems", GpsRows},
     {"Display", "Brightness, light time, help text", DisplayRows},
-    {"Settings", "Home screen, keys, battery and clock", SettingsRows},
+    {"Settings", "Home screen, audio, keys, battery, clock", SettingsRows},
     {"Tools", ToolsAbout, ToolsRows},
     {"Home screen", "What each row of the home screen shows", HomeRows},
+    {"Audio", "The microphone gain on DMR and FM", AudioRows},
     {"Keys", "What the key lock covers, and auto lock", KeysRows},
     {"Battery", "Battery save while the radio is quiet", BatteryRows},
     {"Clock", "The time zone", ClockRows},
@@ -60,6 +62,8 @@ constexpr ItemInfo Items[] = {
     {"Brightness", "Display brightness", Kind::Value},
     {"Light time", "How long the light stays on after a key", Kind::Value},
     {"Help text", "These two lines about the chosen row", Kind::Value},
+    {"DMR mic gain", "Voice level sent on DMR, from the next call", Kind::Value},
+    {"FM mic gain", "Voice level sent on FM, from the next call", Kind::Value},
     {"Lock covers", "What the key lock covers", Kind::Value},
     {"Auto lock", "Lock the keys after this long without use", Kind::Value},
     {"Battery save", "Sleep between checks for a signal while quiet", Kind::Value},
@@ -120,6 +124,7 @@ constexpr int ZoneFirstMinutes = -12 * 60;
 constexpr int ZoneLastMinutes = 14 * 60;
 constexpr int ZoneStepMinutes = 30;
 constexpr int MaxLevel = 5;
+namespace mic = services::microphone_gain;
 
 std::span<const Fixed> fixedChoices(Item item)
 {
@@ -295,6 +300,8 @@ Kept keptIn(Item item)
     case Item::HomeBottom:
     case Item::HomeUpDown:
     case Item::MenuHelp:
+    case Item::DmrMicGain:
+    case Item::FmMicGain:
         return Kept::Preferences;
     case Item::Squelch:
     case Item::Roaming:
@@ -352,6 +359,10 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return s.backlight;
     case Item::BacklightTime:
         return s.backlightS;
+    case Item::DmrMicGain:
+        return s.dmrMicGainDb ? *s.dmrMicGainDb : FromCodeplug + s.plugDmrMicGainDb;
+    case Item::FmMicGain:
+        return s.fmMicGainDb ? *s.fmMicGainDb : FromCodeplug + s.plugFmMicGainDb;
     case Item::KeyLock:
         return k.knob ? 0 : k.keypad && k.side ? 1
             : k.keypad                         ? 2
@@ -420,6 +431,12 @@ void setChoice(Item item, std::int32_t value, Settings &s)
         break;
     case Item::BacklightTime:
         s.backlightS = static_cast<std::uint16_t>(value);
+        break;
+    case Item::DmrMicGain:
+        s.dmrMicGainDb = value < FromCodeplug ? std::optional(byte) : std::nullopt;
+        break;
+    case Item::FmMicGain:
+        s.fmMicGainDb = value < FromCodeplug ? std::optional(byte) : std::nullopt;
         break;
     case Item::KeyLock:
         s.keyLock.keypad = value != 3;
@@ -491,6 +508,14 @@ ValueText valueText(Item item, std::int32_t value)
         return t;
     case Item::BacklightTime:
         return durationText(value);
+    case Item::DmrMicGain:
+    case Item::FmMicGain:
+        if (value >= FromCodeplug) {
+            t << "Plug ";
+            value -= FromCodeplug;
+        }
+        t << '+' << value << " dB";
+        return t;
     case Item::AutoLock:
         if (value == 0) {
             t << "Off";
@@ -551,7 +576,7 @@ std::size_t Choices::find(std::int32_t value) const
     return m_count;
 }
 
-bool listChoices(Item item, Choices &out)
+bool listChoices(Item item, Choices &out, const Settings &s)
 {
     out.clear();
     switch (item) {
@@ -568,8 +593,8 @@ bool listChoices(Item item, Choices &out)
         }
         return true;
     case Item::BacklightTime:
-        for (const std::uint16_t s : BacklightTimes) {
-            out.add(s, durationText(s).view());
+        for (const std::uint16_t seconds : BacklightTimes) {
+            out.add(seconds, durationText(seconds).view());
         }
         return true;
     case Item::TimeZone:
@@ -577,6 +602,18 @@ bool listChoices(Item item, Choices &out)
             out.add(m, zoneText(m).view());
         }
         return true;
+    case Item::DmrMicGain:
+    case Item::FmMicGain: {
+        const bool dmr = item == Item::DmrMicGain;
+        const std::int32_t plug = FromCodeplug + (dmr ? s.plugDmrMicGainDb : s.plugFmMicGainDb);
+        ValueText text;
+        text << "Codeplug " << valueText(item, plug - FromCodeplug).view();
+        out.add(plug, text.view());
+        for (std::int32_t db = mic::MinDb; db <= (dmr ? mic::MaxDigitalDb : mic::MaxFmDb); ++db) {
+            out.add(db, valueText(item, db).view());
+        }
+        return true;
+    }
     default:
         break;
     }

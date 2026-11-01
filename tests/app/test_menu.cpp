@@ -7,6 +7,7 @@
 
 #include <doctest/doctest.h>
 
+#include <optional>
 #include <string_view>
 
 using namespace dmm::app::ui::menu;
@@ -145,7 +146,7 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Settings);
     CHECK(nav.current().group == Group::Home);
-    CHECK(nav.press(Key::Down) == Step::Moved);
+    moveTo(nav, 2);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Keys);
     CHECK(nav.press(Key::Down) == Step::Moved);
@@ -527,4 +528,47 @@ TEST_CASE("the menu's help text can be hidden, kept with the preferences")
     setChoice(Item::MenuHelp, 0, s);
     CHECK(!s.menuHelp);
     CHECK(valueText(Item::MenuHelp, choiceOf(Item::MenuHelp, s)).view() == "Off");
+}
+
+TEST_CASE("the microphone gains follow the codeplug's level until set in dB, FM to a lower top")
+{
+    Settings s;
+    s.plugDmrMicGainDb = 8;
+    s.plugFmMicGainDb = 20;
+    CHECK(keptIn(Item::DmrMicGain) == Kept::Preferences);
+    CHECK(choiceOf(Item::DmrMicGain, s) == FromCodeplug + 8);
+    CHECK(valueText(Item::DmrMicGain, choiceOf(Item::DmrMicGain, s)).view() == "Plug +8 dB");
+
+    Choices c;
+    REQUIRE(listChoices(Item::DmrMicGain, c, s));
+    CHECK(c.size() == 32);
+    CHECK(c.value(0) == FromCodeplug + 8);
+    CHECK(c.text(0) == "Codeplug +8 dB");
+    CHECK(c.text(1) == "+0 dB");
+    CHECK(c.value(31) == 30);
+    CHECK(styleOf(c) == Style::Spinner);
+    REQUIRE(listChoices(Item::FmMicGain, c, s));
+    CHECK(c.size() == 26);
+    CHECK(c.text(0) == "Codeplug +20 dB");
+    CHECK(c.value(25) == 24);
+
+    setChoice(Item::FmMicGain, 12, s);
+    CHECK(s.fmMicGainDb == std::optional<std::uint8_t>(12));
+    CHECK(valueText(Item::FmMicGain, choiceOf(Item::FmMicGain, s)).view() == "+12 dB");
+    CHECK(!s.dmrMicGainDb.has_value());
+    setChoice(Item::FmMicGain, FromCodeplug + 20, s);
+    CHECK(!s.fmMicGainDb.has_value());
+}
+
+TEST_CASE("Settings opens Audio with the two microphone gains")
+{
+    Navigator nav;
+    nav.open(Group::Settings);
+    moveTo(nav, 1);
+    REQUIRE(nav.current().group == Group::Audio);
+    CHECK(nav.press(Key::Menu) == Step::Opened);
+    CHECK(groupTitle(Group::Audio).view() == "Settings > Audio");
+    CHECK(nav.current().item == Item::DmrMicGain);
+    CHECK(nav.press(Key::Down) == Step::Moved);
+    CHECK(nav.current().item == Item::FmMicGain);
 }

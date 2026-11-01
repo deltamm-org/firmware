@@ -4,9 +4,10 @@ The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (on or off, status, roaming zone), GPS
 (on or off, status, satellite systems) and Display (brightness, light
 time, help text). Settings holds the setup in groups of its own: Home
-screen (`home-screen.md`), Keys (what the lock covers, auto lock),
-Battery (battery save) and Clock (time zone). Tools opens the log and
-shows the version; a debug build also has the key test there.
+screen (`home-screen.md`), Audio (microphone gain, `mic-gain.md`), Keys
+(what the lock covers, auto lock), Battery (battery save) and Clock
+(time zone). Tools opens the log and shows the version; a debug build
+also has the key test there.
 
 A list shows a title band with where it is and the place in it (`2/5`),
 five rows, a scroll bar when there are more, a panel of two lines about
@@ -65,8 +66,8 @@ ended. Steps 31 and 32 need an FM channel and a roaming DMR channel.
 | 11 | Press Exit, Down; look; press Menu; look; press Down, Menu; look; press Exit | GPS chosen, the panel `On or off, the fix and` / `the satellite systems`; `Menu > GPS`: Enabled, Status, Satellites, on Enabled, the panel `The GPS receiver on or` / `off`; the GPS screen; Exit: `Menu > GPS` on Status |
 | 11b | Press Down; look; press Menu; turn the knob through every choice; press Exit | The panel `Satellite systems used:` / `GPS, GLONASS, BeiDou`; `GPS > Satellites`: every choice in the same font, the last `All types`; Exit leaves the systems as they were (no `gps:` line) |
 | 12 | Press Exit, Down, Menu; look; press Menu; look; press Up; look; press Exit | `Menu > Display`: Brightness, Light time and Help text with their values, the panel `Display brightness`; Menu: `Brightness`, the level large between arrows with `In use: <n>` under it; Up: the display changes brightness at once, `ui: brightness <n+1>` (1 after 5); Exit: as bright as before, `ui: brightness <n>`, back on Brightness, the level unchanged |
-| 13 | Press Exit, Down, Menu; look | `Menu > Settings`: Home screen, Keys, Battery, Clock; the panel `What each row of the home screen shows` |
-| 14 | Press Down, Menu; look; press Exit; look | `Settings > Keys`: Lock covers and Auto lock; Exit: `Menu > Settings` on Keys |
+| 13 | Press Exit, Down, Menu; look | `Menu > Settings`, `1/5`: Home screen, Audio, Keys, Battery, Clock; the panel `What each row of the home screen shows` |
+| 14 | Press Down twice, then Menu; look; press Exit; look | `Settings > Keys`: Lock covers and Auto lock; Exit: `Menu > Settings` on Keys |
 | 15 | Press Down, Menu, Menu; look; press Exit | `Settings > Battery`; Battery save as a list: Off, On `150 ms`, Fast wake `70 ms`, the one in use chosen; Exit leaves it |
 | 16 | Press Exit, Down, Menu, Menu; look; press Up; look; press Exit | `Clock > Time zone`: the zone large (`UTC+2:00`), a marker on a track, `In use:` under it, the place `n/53`; Up: the clock in the status bar half an hour on at once (when the clock is set), `ui: time zone ...`; Exit: the clock and the zone as before |
 | 17 | Press Exit twice, then Down, Menu, Up; look; press Menu | `Menu > Tools` on Version (the last row): the panel shows the version and `up <n> min`; hint `Exit: back`; Menu does nothing |
