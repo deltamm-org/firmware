@@ -3,7 +3,7 @@
 Open firmware for DMR and FM handheld radios, written from scratch in
 C++20.
 
-<img src="docs/images/standby.png" width="320" alt="DeltaMM standby screen: zone, channel name, frequency, mode, tone, power and offset">
+<img src="docs/images/standby.png" width="320" alt="DeltaMM home screen: channel name, frequency, power, voltage and tones">
 
 The first target is the AnyTone D878UVII. The radio features sit apart
 from the board support, so a new radio, or the desktop simulator, is a
@@ -46,8 +46,10 @@ be tested.
 on the radio. Pick zones from a list, step channels with the knob, or type
 a frequency on the keypad.
 
-**Interface.** A first version of the user interface: a standby screen
-with zone, channel, frequency, tones, power, volume and battery, and a
+**Interface.** A first version of the user interface: a home screen in
+rows that the menu sets (talkgroup or zone, the time, the channel or
+contact large, frequency or a signal meter, power with the voltage or
+volume, and details, the last caller or the GPS position), and a
 short grouped settings menu. Settings changed on the radio are kept in
 the codeplug (`docs/settings-storage.md`). Key lock covers the keypad,
 side keys and knob, with auto lock and forced lock.
@@ -65,7 +67,7 @@ the next one the clock or the GPS screen needs; the mark is amber while
 it sleeps.
 
 **Clock.** The radio's real-time clock keeps UTC while the radio is off; a
-GPS fix corrects it. The status bar shows the local time from the
+GPS fix corrects it. The home screen shows the local time from the
 codeplug's time zone.
 
 **Programming.** Codeplug tools that speak the radio's own programming
@@ -185,9 +187,9 @@ included. Each release has a hardware checklist in `docs/hw-tests/`.
 The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (status, on or off, roaming zone), GPS
 (status, receiver on or off) and Display (brightness, light time).
-Settings holds the setup in groups: Keys & battery (what the lock
-covers, auto lock, battery save), Clock (time zone) and GPS (satellite
-systems).
+Settings holds the setup in groups: Home screen (a preset, or what each
+row shows), Keys & battery (what the lock covers, auto lock, battery
+save), Clock (time zone) and GPS (satellite systems).
 Tools opens the log and the key test and shows the version. The panel
 under the list says what the chosen row does. Menu opens a group or a
 row's value screen, where Menu sets the value and Exit leaves it as it
