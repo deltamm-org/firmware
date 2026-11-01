@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        preset: [fw-d878uv2-release, fw-d878uv2-debug]
+        preset: [fw-d878uv2-release, fw-d878uv2-debug, fw-d878uv2-loader]
     steps:
       - uses: actions/checkout@v5
       - name: Install Ninja
