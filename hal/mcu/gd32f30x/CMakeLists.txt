@@ -6,6 +6,7 @@ add_library(dmm_hal_gd32f30x STATIC
     src/bitbang_spi_nand_bus.cpp
     src/clock.cpp
     src/exti.cpp
+    src/flash.cpp
     src/usart.cpp
     src/rtc.cpp
     src/gpio.cpp
