@@ -5,6 +5,7 @@
 
 #include "d878uv2_layout.h"
 #include "dmm/services/d878uv2_preferences.h"
+#include "dmm/services/microphone_gain.h"
 
 #include <algorithm>
 #include <iterator>
@@ -174,6 +175,8 @@ CodeplugSettings decodeSettings(std::span<const std::uint8_t> b)
     s.backlightS = b[0x27] < std::size(BacklightTimes) ? BacklightTimes[b[0x27]] : 0;
     s.backlightLevel = static_cast<std::uint8_t>((b[0x26] > 4 ? 3 : b[0x26]) + 1);
     s.voiceEnhancement = b[0x57] == 1;
+    // Microphone gain level 1..5, stored one less.
+    s.dmrMicGainDb = static_cast<std::uint8_t>(microphone_gain::fromLevel(b[0x0F] + 1));
     s.gps = b[0x28] != 0;
     // The time zone in half hours from UTC-12:00 (0) through UTC (24).
     s.timeZoneMinutes = b[0x30] <= 52 ? static_cast<std::int16_t>((b[0x30] - 24) * 30) : 0;
@@ -263,6 +266,10 @@ void decodeSettingsExtension(std::span<const std::uint8_t> b, CodeplugSettings &
 {
     // The GPS mode 0..6 is one less than the systems' bits.
     s.gpsSystems = b[0x35] <= 6 ? static_cast<std::uint8_t>(b[0x35] + 1) : 3;
+    // FM microphone gain level 1..5, stored one less.
+    if (b.size() > 0x43) {
+        s.fmMicGainDb = static_cast<std::uint8_t>(microphone_gain::fromLevel(b[0x43] + 1));
+    }
 }
 
 std::optional<CodeplugSettings> D878Uv2Codeplug::settings()

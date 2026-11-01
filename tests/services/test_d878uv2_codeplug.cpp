@@ -119,6 +119,37 @@ TEST_CASE("the extended settings give the GPS satellite systems")
     e[0x35] = 9; // out of range: GPS and BeiDou
     dmm::services::decodeSettingsExtension(e, s);
     CHECK(s.gpsSystems == 3);
+    // A block too short for the FM microphone gain keeps the standard.
+    CHECK(s.fmMicGainDb == 16);
+    e.resize(0x44, 0);
+    e[0x43] = 4; // level 5
+    dmm::services::decodeSettingsExtension(e, s);
+    CHECK(s.fmMicGainDb == 24);
+    e[0x43] = 0; // level 1
+    dmm::services::decodeSettingsExtension(e, s);
+    CHECK(s.fmMicGainDb == 8);
+}
+
+TEST_CASE("microphone gain levels 1 to 5 are 8 to 24 dB around the standard 16 dB")
+{
+    namespace gain = dmm::services::microphone_gain;
+    CHECK(gain::fromLevel(1) == 8);
+    CHECK(gain::fromLevel(2) == 12);
+    CHECK(gain::fromLevel(3) == gain::StandardDb);
+    CHECK(gain::fromLevel(4) == 20);
+    CHECK(gain::fromLevel(5) == 24);
+    CHECK(gain::fromLevel(0) == gain::StandardDb);
+    CHECK(gain::fromLevel(9) == gain::StandardDb);
+    CHECK(gain::clampDigital(-1) == 0);
+    CHECK(gain::clampDigital(31) == 30);
+    CHECK(gain::clampFm(25) == 24);
+    std::vector<std::uint8_t> b(0x100, 0);
+    b[0x0F] = 0; // level 1
+    CHECK(dmm::services::decodeSettings(b).dmrMicGainDb == 8);
+    b[0x0F] = 3; // level 4
+    CHECK(dmm::services::decodeSettings(b).dmrMicGainDb == 20);
+    b[0x0F] = 0xFF; // erased: the standard
+    CHECK(dmm::services::decodeSettings(b).dmrMicGainDb == 16);
 }
 
 TEST_CASE("settings: squelch, zones, timeout, key lock, battery save and backlight")

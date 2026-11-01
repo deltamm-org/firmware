@@ -777,6 +777,8 @@ void uiMain(void *)
             if (selector.settings().voiceEnhancement) {
                 radio::post(radio::VoiceEnhancement{true});
             }
+            radio::post(radio::MicrophoneGain{static_cast<std::int8_t>(selector.settings().dmrMicGainDb),
+                static_cast<std::int8_t>(selector.settings().fmMicGainDb)});
             gpsAtStart = selector.settings().gps;
             gpsSystems = selector.settings().gpsSystems;
             timeZoneMinutes = selector.settings().timeZoneMinutes;

@@ -16,6 +16,7 @@
 #include "dmm/services/clock.h"
 #include "dmm/services/data_link.h"
 #include "dmm/services/log.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/version.h"
 
 #include <optional>
@@ -344,6 +345,12 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::FmStatus{});
     } else if (numbersAfter(command, "fm sq ", 10, n, 1) && n[0] <= 5) {
         posted = radio::post(radio::FmSquelch{static_cast<std::uint8_t>(n[0])});
+    } else if (command == "mic gain") {
+        posted = radio::post(radio::MicrophoneGain{-1, -1});
+    } else if (numbersAfter(command, "mic gain dmr ", 10, n, 1) && n[0] <= services::microphone_gain::MaxDigitalDb) {
+        posted = radio::post(radio::MicrophoneGain{static_cast<std::int8_t>(n[0]), -1});
+    } else if (numbersAfter(command, "mic gain fm ", 10, n, 1) && n[0] <= services::microphone_gain::MaxFmDb) {
+        posted = radio::post(radio::MicrophoneGain{-1, static_cast<std::int8_t>(n[0])});
     } else if (command == "mic on" || command == "mic off") {
         posted = radio::post(radio::Microphone{command == "mic on"});
     } else if (numbersAfter(command, "beep ", 10, n, 2) && n[0] > 0 && n[0] <= 8000 && n[1] > 0 && n[1] <= 10000) {
@@ -437,7 +444,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, "
-                                "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>, settings";
+                                "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, mic gain [dmr 0-30|fm 0-24] (dB, until restart), lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>, settings";
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
         log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>; clock: time, time set YYYY-MM-DD HH:MM:SS (UTC)";

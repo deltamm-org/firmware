@@ -456,8 +456,7 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
     const std::uint8_t slot[] = {Sct3258::DmrCallSlot,
         static_cast<std::uint8_t>(
             Sct3258::SlotTransmit | (timed ? Sct3258::SlotFollowReceive | settings.slot : Sct3258::SlotAny))};
-    if (!leaveReceive() || m_chip.control(Sct3258::TypeDmr, slot, SwitchMs) != 0 || !write(m_audio.transmit) ||
-        !enterTransmit()) {
+    if (!leaveReceive() || m_chip.control(Sct3258::TypeDmr, slot, SwitchMs) != 0 || !writeTransmit() || !enterTransmit()) {
         warn("digital transmit set-up not taken");
         return false;
     }
@@ -624,7 +623,22 @@ bool Sct3258Baseband::setMicrophone(bool on)
     if (!m_info.running) {
         return false;
     }
-    return write(on ? m_audio.transmit : receiveWrites());
+    return on ? writeTransmit() : write(receiveWrites());
+}
+
+void Sct3258Baseband::setMicrophoneGain(int digitalDb, int analogDb)
+{
+    m_digitalMicGainDb = microphone_gain::clampDigital(digitalDb);
+    m_analogMicGainDb = microphone_gain::clampFm(analogDb);
+}
+
+bool Sct3258Baseband::writeTransmit()
+{
+    if (m_audio.microphoneGain != nullptr &&
+        !write(m_audio.microphoneGain(m_vocoder == Sct3258::VocoderDigital ? m_digitalMicGainDb : m_analogMicGainDb))) {
+        return false;
+    }
+    return write(m_audio.transmit);
 }
 
 std::span<const Sct3258Baseband::CodecWrite> Sct3258Baseband::receiveWrites() const

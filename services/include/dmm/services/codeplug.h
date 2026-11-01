@@ -6,6 +6,7 @@
 #include "dmm/services/dmr.h"
 #include "dmm/services/home_screen.h"
 #include "dmm/services/key_lock.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/services/power_level.h"
 #include "dmm/services/tone.h"
 
@@ -118,6 +119,9 @@ struct CodeplugSettings
     bool gps = false;                 // GPS receiver on
     std::uint8_t gpsSystems = 3;      // satellite systems, gps_systems bits
     std::int16_t timeZoneMinutes = 0; // local time minus UTC
+    /// Microphone gain in dB (microphone_gain) on DMR and on FM channels.
+    std::uint8_t dmrMicGainDb = microphone_gain::StandardDb;
+    std::uint8_t fmMicGainDb = microphone_gain::StandardDb;
     RoamingSettings roaming;
     /// The side keys' functions on a short and a long press.
     KeyFunction sideShort[SideKeys] = {};

@@ -12,6 +12,7 @@
 #include "dmm/os/os.h"
 #include "dmm/services/battery_saver.h"
 #include "dmm/services/log.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/services/power.h"
 #include "dmm/services/roaming.h"
 #include "dmm/services/squelch_gate.h"
@@ -187,6 +188,8 @@ bool transmitting = false;
 // FM transmit audio takes the transceiver's own microphone input; adding
 // the route through the baseband gives a delayed second copy.
 FmTransmitAudio::Route transmitAudio = FmTransmitAudio::Route::Direct;
+int dmrMicGainDb = services::microphone_gain::StandardDb;
+int fmMicGainDb = services::microphone_gain::StandardDb;
 os::Ticks transmitStarted = 0;
 
 // Transmit only inside the 2 m and 70 cm amateur bands.
@@ -1755,6 +1758,14 @@ void handle(Message &message)
                    [](const Microphone &m) {
                        fm->setMicrophoneMuted(!m.on);
                        log::info("fm") << "microphone " << (m.on ? "on" : "muted");
+                   },
+                   [](const MicrophoneGain &g) {
+                       using namespace services::microphone_gain;
+                       dmrMicGainDb = g.dmrDb >= 0 ? clampDigital(g.dmrDb) : dmrMicGainDb;
+                       fmMicGainDb = g.fmDb >= 0 ? clampFm(g.fmDb) : fmMicGainDb;
+                       fm->setMicrophoneGain(fmMicGainDb);
+                       withBaseband([](auto &b) { b.setMicrophoneGain(dmrMicGainDb, fmMicGainDb); });
+                       log::info("radio") << "microphone gain: DMR +" << dmrMicGainDb << " dB, FM +" << fmMicGainDb << " dB";
                    },
                    [](const ChipCommand &c) {
                        bool known = false;
