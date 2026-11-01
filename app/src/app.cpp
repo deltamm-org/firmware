@@ -461,7 +461,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, "
-                                "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, dmr level on|off, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, log debug on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+                                "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, dmr level on|off, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, log debug on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>, settings";
         if constexpr (DebugCommands) {
             log::info("console") << "debug: channel [n], zone <n> [channel], roam use <n>, roam forget";
         }
@@ -502,6 +502,8 @@ void runCommand(std::string_view command)
         if (!ui::post(ui::Backlight{static_cast<std::uint8_t>(level)})) {
             log::info("console") << "no display";
         }
+    } else if (command == "settings") {
+        ui::post(ui::SettingsReport{});
     } else if (command == "pattern") {
         ui::post(ui::ShowTestPattern{});
     } else if (command == "logview") {
@@ -671,7 +673,7 @@ void start(Platform &p)
 {
     platform = &p;
     if (p.display != nullptr) {
-        ui::start(*p.display, p.codeplug, p.input);
+        ui::start(*p.display, p.codeplug, p.input, p.settingsStore);
     }
     if (p.input != nullptr) {
         input::start(*p.input);

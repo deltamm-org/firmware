@@ -36,6 +36,13 @@ public:
     /// 1-based position in the zone and the zone's size.
     std::size_t position() const { return m_position + 1; }
     std::size_t zoneSize() const { return m_count; }
+    /// The side in use is side B.
+    bool sideB() const { return m_sideB; }
+    /// The codeplug index of the channel in use, or NoChannel in VFO mode.
+    std::uint16_t channelIndex() const
+    {
+        return m_vfo || m_position >= m_count ? CodeplugSource::NoChannel : m_channels[m_position];
+    }
 
     /// Moves @p steps channels on in the zone, wrapping; skips channels
     /// the codeplug cannot read. False when the zone is empty.
