@@ -1727,7 +1727,6 @@ void uiMain(void *)
                                keyLock.setSettings(s.settings);
                                refreshLockMark();
                                logLockSettings();
-                               keepSettings();
                            },
                            [&](const KeyLockReport &) { logLockSettings(); },
                            [&](const SelectChannel &s) {
