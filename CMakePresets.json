@@ -29,12 +29,22 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "MinSizeRel"
       }
+    },
+    {
+      "name": "fw-d878uv2-loader",
+      "displayName": "Firmware: AnyTone D878UVII, release, with DeltaMM's loader",
+      "inherits": "fw-d878uv2-release",
+      "binaryDir": "${sourceDir}/build/fw-d878uv2-loader",
+      "cacheVariables": {
+        "DMM_LOADER": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "host", "configurePreset": "host" },
     { "name": "fw-d878uv2-debug", "configurePreset": "fw-d878uv2-debug" },
-    { "name": "fw-d878uv2-release", "configurePreset": "fw-d878uv2-release" }
+    { "name": "fw-d878uv2-release", "configurePreset": "fw-d878uv2-release" },
+    { "name": "fw-d878uv2-loader", "configurePreset": "fw-d878uv2-loader" }
   ],
   "testPresets": [
     {

@@ -98,6 +98,11 @@ inline constexpr Pin PowerAmplifierEnable{Port::E, 6};
 inline constexpr Pin SpeakerAmplifier{Port::A, 7};  // high = on
 inline constexpr Pin ReceiveAudioRoute{Port::E, 0}; // high = codec output to the amplifier
 inline constexpr Pin BluetoothPower{Port::A, 1};
+// Driven low first thing by every image: the stub, the loader and the app.
+inline constexpr Pin StartLowPins[] = {TransmitEnable, PowerAmplifierEnable, SpeakerAmplifier, ReceiveAudioRoute, BluetoothPower,
+    PowerHold, RedLed, GreenLed, BlueLed, UsbPullUp};
+inline constexpr Port StartPorts[] = {Port::A, Port::B, Port::C, Port::D, Port::E};
+
 // The baseband's transmit slot timing: high while its slot is on air.
 inline constexpr Pin TransmitSlot{Port::D, 0};
 inline constexpr unsigned TransmitSlotIrqPriority = 1;
