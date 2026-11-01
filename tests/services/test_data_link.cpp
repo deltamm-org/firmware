@@ -146,3 +146,82 @@ TEST_CASE("an unfinished request is dropped after a second")
     s.send({0xDD, 'i'});
     CHECK(s.reply('i').second == 0);
 }
+
+namespace {
+
+class LoaderSystem final : public SystemControl
+{
+public:
+    bool present = true;
+    bool confirmed = false;
+
+    bool powerSwitchOff() override { return false; }
+    void holdPower() override {}
+    void releasePower() override {}
+    void feedWatchdog() override {}
+    void restart() override {}
+    ResetReport lastReset() override { return {}; }
+    void testFault() override {}
+    bool confirmImage() override
+    {
+        confirmed = present;
+        return present;
+    }
+    LoaderStatus loaderStatus() override
+    {
+        LoaderStatus s;
+        s.present = present;
+        s.trial = !confirmed;
+        s.manual = true;
+        s.attempts = 2;
+        s.maxAttempts = 3;
+        s.previousKept = true;
+        s.fallback = boot::Fallback::Requested;
+        return s;
+    }
+};
+
+} // namespace
+
+TEST_CASE("loader requests: status in the information, restart and confirm")
+{
+    Session s;
+    LoaderSystem system;
+    DataLink link{&s.storage, "0.9.0", &system};
+    auto send = [&](std::vector<std::uint8_t> r) {
+        link.feed(r, 0, [&](std::span<const std::uint8_t> b) { s.out.insert(s.out.end(), b.begin(), b.end()); });
+    };
+    send({0xDD, 'i'});
+    auto [payload, status] = s.reply('i');
+    REQUIRE(payload.size() == 15 + 7);
+    CHECK(std::vector<std::uint8_t>(payload.begin() + 15, payload.end()) == std::vector<std::uint8_t>{1, 1, 1, 2, 3, 1, 3});
+
+    send({0xDD, 'B', 2});
+    CHECK(s.reply('B').second == 0);
+    CHECK(link.takeLoaderRequest() == LoaderRequest::Rollback);
+    CHECK_FALSE(link.takeLoaderRequest());
+    link.setBusy(true);
+    send({0xDD, 'B', 1});
+    CHECK(s.reply('B').second == DataLink::Refused);
+    CHECK_FALSE(link.takeLoaderRequest());
+    link.setBusy(false);
+    send({0xDD, 'B', 9});
+    CHECK(s.reply('B').second == DataLink::BadRequest);
+
+    send({0xDD, 'K'});
+    CHECK(s.reply('K').second == 0);
+    CHECK(system.confirmed);
+
+    system.present = false;
+    send({0xDD, 'B', 1});
+    CHECK(s.reply('B').second == DataLink::Refused);
+    send({0xDD, 'K'});
+    CHECK(s.reply('K').second == DataLink::Refused);
+
+    // Without a SystemControl both are refused.
+    send({0xDD, 'i'});
+    s.reply('i');
+    DataLink plain{&s.storage, "0.9.0"};
+    plain.feed(std::vector<std::uint8_t>{0xDD, 'K'}, 0, [&](std::span<const std::uint8_t> b) { s.out.insert(s.out.end(), b.begin(), b.end()); });
+    CHECK(s.reply('K').second == DataLink::Refused);
+}

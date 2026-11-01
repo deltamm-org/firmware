@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "dmm/services/boot_record.h"
+
 #include <cstdint>
 #include <string_view>
 
@@ -36,6 +38,31 @@ struct ResetReport
     CrashReport crash;
 };
 
+/// The loader as the running image sees it.
+struct LoaderStatus
+{
+    /// The image runs under DeltaMM's loader.
+    bool present = false;
+    /// On trial: it has not confirmed itself yet.
+    bool trial = false;
+    /// Only the PC confirms it.
+    bool manual = false;
+    std::uint8_t attempts = 0;
+    std::uint8_t maxAttempts = 0;
+    /// The previous image is kept and can be brought back.
+    bool previousKept = false;
+    /// Why the previous image came back last time.
+    boot::Fallback fallback = boot::Fallback::None;
+};
+
+enum class LoaderRequest : std::uint8_t
+{
+    /// Wait in the loader for the PC.
+    Stay,
+    /// Bring the previous image back.
+    Rollback,
+};
+
 /// Board-level power and supervision: the power switch, the power hold
 /// line, the hardware watchdog and restart.
 class SystemControl
@@ -55,6 +82,17 @@ public:
     virtual ResetReport lastReset() = 0;
     /// Crashes on purpose, to test crash capture. Does not return on a radio.
     virtual void testFault() = 0;
+    /// Restarts into the loader with @p request. Returns false (and does
+    /// not restart) when there is no loader.
+    virtual bool enterLoader(LoaderRequest request)
+    {
+        static_cast<void>(request);
+        return false;
+    }
+    /// Confirms the running image, so it stays after the next restart.
+    /// True when it is confirmed (also when it already was).
+    virtual bool confirmImage() { return false; }
+    virtual LoaderStatus loaderStatus() { return {}; }
     /// Runs one of the board's own console commands and returns its reply
     /// line, or nothing when @p command is none of them.
     virtual std::string_view boardCommand(std::string_view command)
