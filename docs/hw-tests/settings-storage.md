@@ -31,10 +31,10 @@ screen.
 | 4 | `light time 5`, `light time 10`, `light time 15` within 2 s | One `settings kept in the codeplug`, 3 s after the last; `settings` shows light `15 s` |
 | 5 | `save 1` again | No `settings kept` line; `settings` shows `last write unchanged` |
 | 6 | `restart`; then `save` and `settings` | `power: battery save on, 150 ms sleep; ...`; the `codeplug:` line as in step 4; the backlight goes off 15 s after the last key |
-| 7 | Menu > Channel: Squelch 4, Sq type the other one, Power the other one, Roaming Off, Roam zone another one | Each takes effect at once; 3 s after the last one `settings kept in the codeplug` |
-| 8 | Menu > Display: Backlight 2, Light time 30 s; Menu > GPS and time: GPS on, Systems GPS, Zone one step on | One `settings kept` line after the last |
+| 7 | Menu > Channel: Squelch 4, Squelch type the other one, Power the other one; Menu > Roaming: Roaming Off, Roam zone another one | Each takes effect at once; 3 s after the last one `settings kept in the codeplug` |
+| 8 | Menu > Settings > Display: Brightness 2, Light time 30 s; Menu > GPS: Receiver On; Menu > Settings > GPS: Satellites GPS; Menu > Settings > Clock: Time zone one step on | One `settings kept` line after the last |
 | 9 | Zone key: pick another zone; knob two channels on; wait 3 s; `settings` | `settings kept`; `codeplug:` shows the new zone, squelch 4, light 2 30 s, GPS on systems 1, the new time zone and roaming zone; `preferences record: roaming off` |
-| 10 | `restart`; `settings`; look at the screen | Starts in the zone and on the channel of step 9, dimmer (level 2); the channel of step 7 has its new power and squelch type; `roam: roaming off` in the log and Menu > Channel > Roaming shows Off |
+| 10 | `restart`; `settings`; look at the screen | Starts in the zone and on the channel of step 9, dimmer (level 2); the channel of step 7 has its new power and squelch type; `roam: roaming off` in the log and Menu > Roaming > Roaming shows Off |
 | 11 | `light time 20`; about 2 s later start `dmrconf read -D <data> -R d878uv2 during.yaml`; when it has ended, `light time 30` | While it reads, `settings wait: the PC is programming`; the read completes without an error; right after it, `settings kept in the codeplug`; 3 s after `light time 30` (the light time of step 8 back) `settings kept` again |
 | 12 | Menu > Channel > Squelch type the other one; within 3 s `stty -F /dev/<data> raw -echo; printf PROGRAM > /dev/<data>` (program mode, left 10 s after its last command); within those 10 s: knob one channel on, Menu > Channel > Squelch type the other one, `settings` | `settings wait: the PC is programming`; `pending: channel <n> channel <n+1>`; about 10 s after `PROGRAM` one `settings kept in the codeplug`; knob back and forth: both channels show their new squelch type |
 | 13 | QDMR round trip: `settings`; `dmrconf read -D <data> -R d878uv2 a.yaml` | The `codeplug:` line noted |
@@ -70,7 +70,7 @@ write: 2026-11-01, on the same branches before the review changes.
 
 ## Undo
 
-- Menu > Channel > Roaming On (the only value kept in the preferences
+- Menu > Roaming > Roaming On (the only value kept in the preferences
   record), and wait for `settings kept`.
 - `dmrconf write -D <data> -R d878uv2 before.yaml` puts the codeplug's
   channels and settings back. Battery save and the zones' last channels

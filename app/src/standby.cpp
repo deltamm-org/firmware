@@ -3,6 +3,8 @@
 
 #include "standby.h"
 
+#include "menu_screen.h"
+
 #include "dmm/lib/format.h"
 #include "dmm/services/font.h"
 
@@ -476,34 +478,15 @@ void ListPicker::move(int steps)
     m_cursor = static_cast<std::size_t>(((static_cast<int>(m_cursor) + steps) % n + n) % n);
 }
 
-void ListPicker::draw(Display &d, int top)
+void ListPicker::draw(Display &d, std::string_view hint)
 {
-    const int w = d.width();
-    const int rowH = Body.height + 2;
-    d.fillRect(0, top, w, rowH - 1, p::Ground);
-    drawText(d, Body, 4, top + 1, m_title, p::Dim, p::Ground);
-    d.fillRect(0, top + rowH - 1, w, 1, p::Rule);
-    const int first = m_cursor < static_cast<std::size_t>(Rows) ? 0 : static_cast<int>(m_cursor) - Rows + 1;
-    for (int r = 0; r < Rows; ++r) {
-        const int y = top + rowH * (r + 1);
-        const int i = first + r;
-        if (i >= static_cast<int>(m_count)) {
-            d.fillRect(0, y, w, rowH, p::Ground);
-            continue;
-        }
-        const bool on = static_cast<std::size_t>(i) == m_cursor;
-        const Color fill = on ? p::Text : p::Ground;
-        d.fillRect(0, y, w, rowH, fill);
-        drawText(d, Body, 6, y + 1, m_text[i], on ? p::Ground : p::Text, fill);
-        const std::string_view value(m_value[i]);
-        if (!value.empty()) {
-            drawText(d, Body, w - 6 - textWidth(Body, value), y + 1, value, on ? p::Ground : p::Dim, fill);
-        }
+    ListRow rows[ListRows];
+    const std::size_t first = firstShown(m_cursor, m_count, ListRows);
+    std::size_t n = 0;
+    for (; n < std::size(rows) && first + n < m_count; ++n) {
+        rows[n] = {m_text[first + n], m_value[first + n]};
     }
-    const int end = top + rowH * (Rows + 1);
-    if (end < d.height()) {
-        d.fillRect(0, end, w, d.height() - end, p::Ground);
-    }
+    drawListScreen(d, m_title, std::span(rows, n), first, m_count, m_cursor, hint);
 }
 
 } // namespace dmm::app::ui

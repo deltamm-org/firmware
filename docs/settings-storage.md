@@ -24,7 +24,7 @@ The code: `services/settings_store.h` (the interface the app uses),
 | Place in each zone's channel list | Zone channel selections | `ZoneSelections` |
 | GPS satellite systems | Extended general settings | `SettingsExtension` |
 | A channel's power and squelch mode | The channel's record | `ChannelBanks` |
-| Roaming on or off (Menu > Channel > Roaming) | Preferences record | `Preferences` |
+| Roaming on or off (Menu > Roaming > Roaming) | Preferences record | `Preferences` |
 
 The auto lock time shares its field with the menu exit time, in 5 s
 steps up to 60 s.
@@ -141,7 +141,8 @@ meaning, which a new field never needs.
    range (`f.flag(...)` does both for on/off values).
 4. In `app/src/ui.cpp`, set it in `keepPreferences()`, call that where
    the value changes, and read it at start from
-   `codeplug->preferences()`.
+   `codeplug->preferences()`. A value set in the menu is kept by its
+   item's `keptIn` (`app/src/menu.cpp`), which `applyMenuValue` follows.
 5. Tests in `tests/services/test_d878uv2_settings_store.cpp`: the round
    trip, and a record whose field bytes end before the new field gives
    the default.
@@ -153,7 +154,8 @@ meaning, which a new field never needs.
 2. Encode it in `encodeSettings` (`d878uv2_settings_store.cpp`), changing
    only the field's own bits, and name it in `keepSettings`'s list.
 3. In `app/src/ui.cpp`, set it in `keepSettings()` from the radio's
-   current value and call that where the value changes.
+   current value and call that where the value changes; for a menu row,
+   `keptIn` returns `Kept::Settings` for its item.
 
 A value in a part the store does not read yet needs its own piece in
 `D878Uv2SettingsStore::collect` and room for it in `MaxPieces`.
