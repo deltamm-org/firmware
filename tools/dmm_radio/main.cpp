@@ -7,10 +7,13 @@
 #include "backup.h"
 #include "cps_client.h"
 #include "deltamm_client.h"
+#include "loader_client.h"
+#include "loader_images.h"
 #include "serial_transport.h"
 #include "stock_layout.h"
 #include "update_client.h"
 #include "update_files.h"
+#include "zlib_crc.h"
 
 #include "dmm/version.h"
 
@@ -257,10 +260,37 @@ bool readUpdateFiles(const QString &cddPath, UpdateFiles &files)
         readFile(sibling(cddPath, QStringLiteral(".CDI")), files.cdi);
 }
 
-int commandPrepare(const QStringList &args, const QString &radioId, const QString &root, const QString &name)
+// The first-install image from a DMM_LOADER build folder: stub, app and
+// loader in one image for the radio's update mode.
+bool readLoaderInstallImage(const QString &folder, QByteArray &image)
+{
+    const QDir dir(folder);
+    QByteArray stub;
+    QByteArray app;
+    QByteArray loader;
+    if (!readFile(dir.filePath(QStringLiteral("dmm_stub.bin")), stub) || !readFile(dir.filePath(QStringLiteral("deltamm_loader_slot.bin")), app) ||
+        !readFile(dir.filePath(QStringLiteral("dmm_loader.bin")), loader)) {
+        err() << "The folder must hold dmm_stub.bin, deltamm_loader_slot.bin and dmm_loader.bin (a DMM_LOADER build)." << Qt::endl;
+        return false;
+    }
+    for (const QString &problem : {checkStubImage(stub), checkSlotImage(app), checkLoaderImage(loader)}) {
+        if (!problem.isEmpty()) {
+            err() << "Error: " << problem << "." << Qt::endl;
+            return false;
+        }
+    }
+    image = makeLoaderInstallImage(stub, app, loader);
+    out() << "Stub:     " << stub.size() << " bytes" << Qt::endl;
+    out() << "App:      " << app.size() << " bytes, version " << readImageInfo(app)->version << Qt::endl;
+    out() << "Loader:   " << loader.size() << " bytes, version " << readImageInfo(loader)->version << Qt::endl;
+    return true;
+}
+
+int commandPrepare(const QStringList &args, const QString &radioId, const QString &root, const QString &name, bool withLoader)
 {
     if (args.size() != 3) {
-        err() << "Usage: dmm-radio prepare <image.bin> <factory .CDD> <output folder>" << Qt::endl;
+        err() << "Usage: dmm-radio prepare <image.bin> <factory .CDD> <output folder>" << Qt::endl
+              << "       dmm-radio prepare --loader <build folder> <factory .CDD> <output folder>" << Qt::endl;
         return 2;
     }
     const QString &imagePath = args.at(0);
@@ -273,7 +303,7 @@ int commandPrepare(const QStringList &args, const QString &radioId, const QStrin
 
     UpdateFiles stock;
     QByteArray image;
-    if (!readUpdateFiles(stockPath, stock) || !readFile(imagePath, image)) {
+    if (!readUpdateFiles(stockPath, stock) || !(withLoader ? readLoaderInstallImage(imagePath, image) : readFile(imagePath, image))) {
         return 2;
     }
     QString problem = checkStockFiles(stock);
@@ -289,8 +319,8 @@ int commandPrepare(const QStringList &args, const QString &radioId, const QStrin
 
     const UpdateFiles files = makeUpdateFiles(stock, image);
     QDir().mkpath(outDir);
-    const QString base = QDir(outDir).filePath(
-        name.isEmpty() ? QStringLiteral("DeltaMM_%1").arg(QString::fromLatin1(dmm::Version)) : name);
+    const QString base = QDir(outDir).filePath(name.isEmpty() ? QString::fromLatin1(withLoader ? "DeltaMM_%1_loader" : "DeltaMM_%1").arg(QString::fromLatin1(dmm::Version))
+                                                              : name);
     for (const auto &[suffix, data] : {std::pair{QStringLiteral(".CDD"), &files.image}, std::pair{QStringLiteral(".spi"), &files.spi},
              std::pair{QStringLiteral(".CDI"), &files.cdi}}) {
         QFile f(base + suffix);
@@ -371,10 +401,95 @@ void printReadReport(const DeltaMmClient::ReadReport &report)
     }
 }
 
+void printLoaderState(const DeltaMmLoaderState &l)
+{
+    if (!l.present) {
+        return;
+    }
+    out() << "Loader:   image " << (l.trial ? "on trial" : "confirmed");
+    if (l.trial) {
+        out() << " (" << (l.manual ? "confirm with dmm-radio confirm" : "confirms itself after 60 s") << "), start " << l.attempts
+              << " of " << l.maxAttempts;
+    }
+    out() << "; previous image " << (l.previousKept ? "kept (dmm-radio rollback)" : "not kept") << Qt::endl;
+    if (l.fallback != 0) {
+        out() << "Fallback: " << fallbackName(l.fallback) << Qt::endl;
+    }
+}
+
+void printLoaderInfo(const LoaderInfo &i, const QString &port)
+{
+    out() << "Port:     " << port << " (DeltaMM loader " << i.version << ", protocol " << i.protocol << ", " << i.model << ")" << Qt::endl;
+    out() << "Waiting:  " << stayReasonName(i.stayReason) << Qt::endl;
+    for (const auto &[name, slot] : {std::pair{"Run slot", &i.a}, std::pair{"Spare:  ", &i.b}}) {
+        out() << name << "  " << slotStateName(slot->state);
+        if (slot->state != 0) {
+            out() << ", " << slot->length << " bytes, CRC " << QString::number(slot->crc, 16)
+                  << (slot->version.isEmpty() ? QString() : QStringLiteral(", version ") + slot->version)
+                  << (slot->state == 2 || slot->state == 4 ? (slot->manual ? ", confirmed by the PC" : ", confirms itself") : "");
+        }
+        out() << Qt::endl;
+    }
+    if (i.a.state == 2) {
+        out() << "Trial:    start " << i.attempts << " of " << i.maxAttempts << Qt::endl;
+    }
+    if (i.fallback != 0) {
+        out() << "Fallback: " << fallbackName(i.fallback) << Qt::endl;
+    }
+}
+
+// Opens @p requested, or the first port of the right kind, that answers
+// as @p want, waiting up to @p seconds for one to appear.
+bool waitForPort(DmmPortKind want, const QString &requested, int seconds, SerialTransport &transport, QString &portName)
+{
+    QDeadlineTimer deadline{std::chrono::seconds(seconds)};
+    for (;;) {
+        QStringList names;
+        if (!requested.isEmpty()) {
+            names.append(requested);
+        } else {
+            for (const QSerialPortInfo &info : want == DmmPortKind::Loader ? SerialTransport::findLoaderPorts() : SerialTransport::findDeltaMmPorts()) {
+                names.append(info.portName());
+            }
+        }
+        for (const QString &name : names) {
+            QString error;
+            if (!transport.open(name, &error)) {
+                continue;
+            }
+            const DmmPortKind kind = probeDmmPort(transport);
+            if (kind == want) {
+                portName = name;
+                return true;
+            }
+            if (kind == DmmPortKind::None && requested.isEmpty()) {
+                // The log port's console: end the line the probe left behind.
+                transport.write(QByteArray("\n"));
+            }
+            transport.close();
+        }
+        if (deadline.hasExpired()) {
+            return false;
+        }
+        QThread::msleep(300);
+    }
+}
+
 int commandInfo(const QString &portRequest)
 {
     SerialTransport transport;
     QString port;
+    if (waitForPort(DmmPortKind::Loader, portRequest, 0, transport, port)) {
+        LoaderClient loader(transport);
+        QString error;
+        const auto i = loader.info(&error);
+        if (!i) {
+            err() << "Error: " << error << Qt::endl;
+            return 2;
+        }
+        printLoaderInfo(*i, port);
+        return 0;
+    }
     if (!openDeltaMm(portRequest, transport, port)) {
         return 2;
     }
@@ -387,6 +502,7 @@ int commandInfo(const QString &portRequest)
     }
     out() << "Port:     " << port << Qt::endl;
     out() << "DeltaMM:  " << info->version << Qt::endl;
+    printLoaderState(info->loader);
     if (!info->storagePresent) {
         out() << "Storage:  none found (id " << QString::number(info->maker, 16) << " " << QString::number(info->device, 16) << ")" << Qt::endl;
         return 0;
@@ -395,6 +511,246 @@ int commandInfo(const QString &portRequest)
           << info->storageBytes / (1024 * 1024) << " MB, "
           << (info->remappedBlocks < 0 ? QStringLiteral("no bad-block table") : QStringLiteral("%1 blocks remapped").arg(info->remappedBlocks))
           << Qt::endl;
+    return 0;
+}
+
+// Waits up to @p seconds for the app to answer and prints its version and
+// loader state. Returns the version, or an empty string.
+QString waitForApp(const QString &portRequest, int seconds)
+{
+    SerialTransport transport;
+    QString port;
+    if (!waitForPort(DmmPortKind::App, portRequest, seconds, transport, port)) {
+        err() << "No DeltaMM answered within " << seconds << " s. 'dmm-radio info' shows what the radio does now." << Qt::endl;
+        return {};
+    }
+    DeltaMmClient client(transport);
+    QString error;
+    const auto info = client.info(&error);
+    if (!info) {
+        err() << "Error: " << error << Qt::endl;
+        return {};
+    }
+    out() << "Running:  DeltaMM " << info->version << " on " << port << Qt::endl;
+    printLoaderState(info->loader);
+    return info->version;
+}
+
+// Gets the radio into loader mode: it is there already, or the app is
+// asked to restart into it. Leaves @p transport open on the loader.
+bool reachLoader(const QString &portRequest, SerialTransport &transport, QString &port)
+{
+    if (waitForPort(DmmPortKind::Loader, portRequest, 0, transport, port)) {
+        return true;
+    }
+    if (!waitForPort(DmmPortKind::App, portRequest, 0, transport, port)) {
+        err() << "No radio running DeltaMM or its loader found. Name the port with --port." << Qt::endl;
+        return false;
+    }
+    DeltaMmClient client(transport);
+    QString error;
+    if (!client.enterLoader(false, &error)) {
+        err() << "Error: " << error << Qt::endl;
+        return false;
+    }
+    transport.close();
+    out() << "Restarting into the loader" << Qt::endl;
+    if (!waitForPort(DmmPortKind::Loader, portRequest, 30, transport, port)) {
+        err() << "The loader did not answer within 30 s." << Qt::endl;
+        return false;
+    }
+    return true;
+}
+
+struct UpdateOptions
+{
+    bool manual = false;
+    int waitSeconds = 240;
+    bool testRefusals = false;
+    /// Test: the loader restarts after this many swap steps (0 = never).
+    int swapCut = 0;
+};
+
+// Test of the refusals: a chunk with a wrong CRC, a commit with a wrong
+// image CRC, then a restart without a commit: the running image stays.
+int updateRefusalTest(LoaderClient &loader, const QByteArray &image)
+{
+    QString error;
+    int status = 0;
+    if (!loader.erase(static_cast<quint32>(image.size()), &error)) {
+        err() << "Error: erase: " << error << Qt::endl;
+        return 2;
+    }
+    const bool refused = !loader.write(0, image.left(LoaderClient::ChunkBytes), &error, &status, true) && status == 1;
+    out() << "Bad chunk:      " << (refused ? "refused (good)" : "NOT refused") << Qt::endl;
+    for (qsizetype at = 0; at < image.size(); at += LoaderClient::ChunkBytes) {
+        if (!loader.write(static_cast<quint32>(at), image.mid(at, LoaderClient::ChunkBytes), &error)) {
+            err() << "Error: write at " << at << ": " << error << Qt::endl;
+            return 2;
+        }
+    }
+    int problem = 0;
+    const bool rejected = !loader.commit(static_cast<quint32>(image.size()), dmmCrc32(image) ^ 0x1u, false, &error, &problem) && problem == 7;
+    out() << "Wrong CRC:      " << (rejected ? "commit refused (good)" : "commit NOT refused: " + error) << Qt::endl;
+    if (!loader.restart(0, 0, &error)) {
+        err() << "Error: " << error << Qt::endl;
+        return 2;
+    }
+    out() << "Restarted without a commit: the previous image should start." << Qt::endl;
+    return refused && rejected ? 0 : 1;
+}
+
+int commandUpdate(const QStringList &args, const QString &portRequest, const QString &radioId, const QString &root,
+    const UpdateOptions &options)
+{
+    if (args.size() != 1) {
+        err() << "Usage: dmm-radio update <deltamm_loader_slot.bin> [--try] [--wait <s>]" << Qt::endl;
+        return 2;
+    }
+    QByteArray image;
+    if (!readFile(args.at(0), image)) {
+        return 2;
+    }
+    if (const QString problem = checkSlotImage(image); !problem.isEmpty()) {
+        err() << "Error: " << problem << "." << Qt::endl;
+        return 2;
+    }
+    if (!backupCheckPasses(radioId, root)) {
+        return 1;
+    }
+    const QString newVersion = readImageInfo(image)->version;
+    SerialTransport transport;
+    QString port;
+    if (!reachLoader(portRequest, transport, port)) {
+        return 2;
+    }
+    LoaderClient loader(transport);
+    QString error;
+    auto before = loader.info(&error);
+    if (before && before->a.state == 2 && before->b.state == 1) {
+        // The spare slot holds the only confirmed image: the trial image
+        // goes, the confirmed one comes back, then the update goes on.
+        out() << "The running image is on trial; bringing the confirmed one back first." << Qt::endl;
+        if (!loader.restart(1, 0, &error)) {
+            err() << "Error: " << error << Qt::endl;
+            return 2;
+        }
+        transport.close();
+        if (waitForApp(portRequest, options.waitSeconds).isEmpty() || !reachLoader(portRequest, transport, port)) {
+            return 2;
+        }
+        before = loader.info(&error);
+    }
+    if (!before) {
+        err() << "Error: " << error << Qt::endl;
+        return 2;
+    }
+    printLoaderInfo(*before, port);
+    out() << "Image:    " << image.size() << " bytes, version " << newVersion << ", CRC " << QString::number(dmmCrc32(image), 16)
+          << (options.manual ? ", trial confirmed by the PC" : ", confirms itself after 60 s") << Qt::endl;
+    if (options.testRefusals) {
+        const int result = updateRefusalTest(loader, image);
+        transport.close();
+        waitForApp(portRequest, options.waitSeconds);
+        return result;
+    }
+    LoaderClient::UploadReport report;
+    if (!loader.upload(image, options.manual, report, &error, printProgress)) {
+        err() << Qt::endl
+              << "Error: " << error << "." << Qt::endl
+              << "Nothing was committed; the running image stays. Run update again." << Qt::endl;
+        return 2;
+    }
+    out() << "Written:  " << report.writtenChunks << " chunks" << (report.skippedChunks ? QStringLiteral(", %1 already there").arg(report.skippedChunks) : QString())
+          << (report.retries ? QStringLiteral(", %1 retries").arg(report.retries) : QString()) << "; committed" << Qt::endl;
+    if (!loader.restart(options.swapCut > 0 ? 2 : 0, static_cast<quint16>(options.swapCut), &error)) {
+        err() << "Error: " << error << Qt::endl;
+        return 2;
+    }
+    transport.close();
+    if (options.swapCut > 0) {
+        out() << "Test: the loader restarts after " << options.swapCut << " swap steps and goes on from the record." << Qt::endl;
+    }
+    out() << "Swapping the new image in; the radio restarts by itself (about a minute)." << Qt::endl;
+    const QString running = waitForApp(portRequest, options.waitSeconds);
+    if (running.isEmpty()) {
+        return 2;
+    }
+    if (running != newVersion) {
+        err() << "Note: the radio runs " << running << ", not " << newVersion << "." << Qt::endl;
+        return 1;
+    }
+    return 0;
+}
+
+int commandConfirm(const QString &portRequest)
+{
+    SerialTransport transport;
+    QString port;
+    if (!waitForPort(DmmPortKind::App, portRequest, 0, transport, port)) {
+        err() << "No radio running DeltaMM found." << Qt::endl;
+        return 2;
+    }
+    DeltaMmClient client(transport);
+    QString error;
+    if (!client.confirm(&error)) {
+        err() << "Error: " << error << Qt::endl;
+        return 2;
+    }
+    out() << "Confirmed." << Qt::endl;
+    if (const auto info = client.info(&error)) {
+        printLoaderState(info->loader);
+    }
+    return 0;
+}
+
+int commandRollback(const QString &portRequest, int waitSeconds)
+{
+    SerialTransport transport;
+    QString port;
+    QString error;
+    if (waitForPort(DmmPortKind::Loader, portRequest, 0, transport, port)) {
+        LoaderClient loader(transport);
+        if (!loader.restart(1, 0, &error)) {
+            err() << "Error: " << error << Qt::endl;
+            return 2;
+        }
+    } else if (waitForPort(DmmPortKind::App, portRequest, 0, transport, port)) {
+        DeltaMmClient client(transport);
+        const auto info = client.info(&error);
+        if (info && info->loader.present && !info->loader.previousKept) {
+            err() << "Refused: the radio keeps no previous confirmed image." << Qt::endl;
+            return 2;
+        }
+        if (!client.enterLoader(true, &error)) {
+            err() << "Error: " << error << Qt::endl;
+            return 2;
+        }
+    } else {
+        err() << "No radio running DeltaMM or its loader found." << Qt::endl;
+        return 2;
+    }
+    transport.close();
+    out() << "Bringing the previous image back; the radio restarts by itself (about a minute)." << Qt::endl;
+    return waitForApp(portRequest, waitSeconds).isEmpty() ? 2 : 0;
+}
+
+int commandLoader(const QString &portRequest)
+{
+    SerialTransport transport;
+    QString port;
+    if (!reachLoader(portRequest, transport, port)) {
+        return 2;
+    }
+    LoaderClient loader(transport);
+    QString error;
+    const auto i = loader.info(&error);
+    if (!i) {
+        err() << "Error: " << error << Qt::endl;
+        return 2;
+    }
+    printLoaderInfo(*i, port);
+    out() << "The loader restarts the radio by itself after 60 s without the PC." << Qt::endl;
     return 0;
 }
 
@@ -596,7 +952,8 @@ QString waitAndStartUpdate(int seconds, SerialTransport &transport, UpdateClient
 
 // Sends a firmware set to a radio in update mode, optionally waiting for
 // the radio to be switched on in it.
-int commandFlash(const QStringList &args, const QString &portRequest, const QString &radioId, const QString &root, int waitSeconds)
+int commandFlash(const QStringList &args, const QString &portRequest, const QString &radioId, const QString &root, int waitSeconds,
+    bool replaceLoader)
 {
     if (args.size() != 1) {
         err() << "Usage: dmm-radio flash <.CDD file> (with its .spi and .CDI next to it)" << Qt::endl;
@@ -616,6 +973,13 @@ int commandFlash(const QStringList &args, const QString &portRequest, const QStr
     if (!problem.isEmpty()) {
         err() << "Error: " << problem << "." << Qt::endl;
         return 2;
+    }
+    const bool installsLoader = isLoaderInstallImage(files.image);
+    if (!installsLoader && settings().value(QStringLiteral("loaderInstalled"), false).toBool() && !replaceLoader) {
+        err() << "Refused: this tool installed DeltaMM's loader on a radio, and this image replaces its stub: the loader would" << Qt::endl
+              << "no longer start and dmm-radio update would stop working until a loader set is flashed again." << Qt::endl
+              << "Use dmm-radio update for DeltaMM images, or add --replace-loader to flash this one anyway." << Qt::endl;
+        return 1;
     }
 
     const bool wait = waitSeconds > 0 && portRequest.isEmpty();
@@ -654,7 +1018,11 @@ int commandFlash(const QStringList &args, const QString &portRequest, const QStr
               << "The radio stays in update mode: run flash again, with these files or the factory ones." << Qt::endl;
         return 2;
     }
+    settings().setValue(QStringLiteral("loaderInstalled"), installsLoader);
     out() << "Done. The radio starts the new firmware." << Qt::endl;
+    if (installsLoader) {
+        out() << "The loader adopts the installed image at its first start; dmm-radio update works from now on." << Qt::endl;
+    }
     reportStartedFirmware();
     return 0;
 }
@@ -675,12 +1043,21 @@ int main(int argc, char *argv[])
         "  list                  list saved backups\n"
         "  prepare <image.bin> <factory .CDD> <folder>\n"
         "                        make update files; needs a verified backup\n"
+        "  prepare --loader <build folder> <factory .CDD> <folder>\n"
+        "                        make the set that installs DeltaMM's loader\n"
         "On a radio in update mode (red LED blinking):\n"
         "  flash <.CDD file> [--wait <s>]\n"
         "                        send a firmware set (.CDD, .spi, .CDI); --wait\n"
         "                        waits for the radio to enter update mode\n"
         "On a radio running DeltaMM:\n"
-        "  info                  version and storage\n"
+        "  info                  version and storage (or the loader's state)\n"
+        "With DeltaMM's loader installed:\n"
+        "  update <deltamm_loader_slot.bin> [--try] [--wait <s>]\n"
+        "                        send a new image; the previous one is kept.\n"
+        "                        --try: only dmm-radio confirm keeps it\n"
+        "  confirm               keep the image on trial\n"
+        "  rollback              bring the previous image back\n"
+        "  loader                restart into loader mode\n"
         "  dump <addr> <len> <file> [--physical]\n"
         "                        save storage bytes (remapped)\n"
         "  check-backup [folder] compare the radio with a backup\n"
@@ -696,8 +1073,16 @@ int main(int argc, char *argv[])
         QStringLiteral("prepare: file name without extension (default: DeltaMM_ and this tool's version)."), QStringLiteral("base"));
     const QCommandLineOption waitOption(QStringLiteral("wait"),
         QStringLiteral("flash: wait up to this many seconds for the radio to be switched on in update mode."), QStringLiteral("seconds"));
-    parser.addOptions({portOption, quickOption, dirOption, radioOption, physicalOption, nameOption, waitOption});
-    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("ports, backup, verify, list, prepare, flash, info, dump, check-backup or config"));
+    const QCommandLineOption loaderOption(QStringLiteral("loader"), QStringLiteral("prepare: the set that installs DeltaMM's loader, from a build folder."));
+    const QCommandLineOption tryOption(QStringLiteral("try"), QStringLiteral("update: keep the new image only once dmm-radio confirm says so."));
+    const QCommandLineOption replaceLoaderOption(QStringLiteral("replace-loader"), QStringLiteral("flash: flash an image that replaces the loader's stub."));
+    const QCommandLineOption testRefusalsOption(QStringLiteral("test-refusals"),
+        QStringLiteral("update (test): send a bad chunk and a wrong commit, then restart without a commit."));
+    const QCommandLineOption swapCutOption(QStringLiteral("swap-cut"),
+        QStringLiteral("update (test): the loader restarts after this many swap steps."), QStringLiteral("steps"));
+    parser.addOptions({portOption, quickOption, dirOption, radioOption, physicalOption, nameOption, waitOption, loaderOption, tryOption,
+        replaceLoaderOption, testRefusalsOption, swapCutOption});
+    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("ports, backup, verify, list, prepare, flash, info, dump, check-backup, config, update, confirm, rollback or loader"));
     parser.process(app);
 
     const QStringList args = parser.positionalArguments();
@@ -719,10 +1104,11 @@ int main(int argc, char *argv[])
         return commandList(root);
     }
     if (command == QStringLiteral("prepare")) {
-        return commandPrepare(args.mid(1), parser.value(radioOption), root, parser.value(nameOption));
+        return commandPrepare(args.mid(1), parser.value(radioOption), root, parser.value(nameOption), parser.isSet(loaderOption));
     }
     if (command == QStringLiteral("flash")) {
-        return commandFlash(args.mid(1), parser.value(portOption), parser.value(radioOption), root, parser.value(waitOption).toInt());
+        return commandFlash(args.mid(1), parser.value(portOption), parser.value(radioOption), root, parser.value(waitOption).toInt(),
+            parser.isSet(replaceLoaderOption));
     }
     if (command == QStringLiteral("info")) {
         return commandInfo(parser.value(portOption));
@@ -735,6 +1121,25 @@ int main(int argc, char *argv[])
     }
     if (command == QStringLiteral("config")) {
         return commandConfig(args.mid(1));
+    }
+    if (command == QStringLiteral("update")) {
+        UpdateOptions options;
+        options.manual = parser.isSet(tryOption);
+        options.testRefusals = parser.isSet(testRefusalsOption);
+        options.swapCut = parser.value(swapCutOption).toInt();
+        if (parser.isSet(waitOption)) {
+            options.waitSeconds = parser.value(waitOption).toInt();
+        }
+        return commandUpdate(args.mid(1), parser.value(portOption), parser.value(radioOption), root, options);
+    }
+    if (command == QStringLiteral("confirm")) {
+        return commandConfirm(parser.value(portOption));
+    }
+    if (command == QStringLiteral("rollback")) {
+        return commandRollback(parser.value(portOption), parser.isSet(waitOption) ? parser.value(waitOption).toInt() : 240);
+    }
+    if (command == QStringLiteral("loader")) {
+        return commandLoader(parser.value(portOption));
     }
     parser.showHelp(2);
 }
