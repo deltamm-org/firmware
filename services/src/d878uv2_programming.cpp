@@ -40,6 +40,16 @@ bool D878Uv2Programming::active(os::Ticks now)
     return m_program;
 }
 
+bool D878Uv2Programming::beginLocalWrite()
+{
+    m_localWrite.store(true);
+    if (m_program.load()) {
+        m_localWrite.store(false);
+        return false;
+    }
+    return true;
+}
+
 void D878Uv2Programming::leave()
 {
     m_program = false;
@@ -57,7 +67,18 @@ void D878Uv2Programming::feed(std::span<const std::uint8_t> bytes, os::Ticks now
                                                                                                     : 0;
             if (m_matched == Enter.size()) {
                 m_matched = 0;
-                m_program = true;
+                // Program mode is claimed first, then a write of the radio's
+                // own is let finish; beginLocalWrite() checks in the other
+                // order, so the two never write at once.
+                m_program.store(true);
+                for (os::Ticks waited = 0; m_localWrite.load() && waited < LocalWriteWaitMs; waited += 5) {
+                    os::sleepMs(5);
+                }
+                if (m_localWrite.load()) {
+                    // Still writing: no answer, and the PC asks again.
+                    m_program.store(false);
+                    continue;
+                }
                 m_have = 0;
                 m_lastAt = now;
                 constexpr std::uint8_t Answer[] = {'Q', 'X', Ack};
