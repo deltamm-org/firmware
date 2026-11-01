@@ -5,6 +5,7 @@
 
 #include "dmm/lib/format.h"
 #include "dmm/services/codeplug.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/input.h"
 #include "dmm/services/key_lock.h"
 #include "dmm/services/power_level.h"
@@ -42,6 +43,13 @@ enum class Item : std::uint8_t
     BatterySave,
     TimeZone,
     GpsSystems,
+    HomePreset, // a whole home screen layout at once
+    HomeTop,
+    HomeClock,
+    HomeBig,
+    HomeMiddle,
+    HomeBeside,
+    HomeBottom,
     Log,     // opens the log
     KeyTest, // opens the key test
     Version,
@@ -59,6 +67,7 @@ enum class Group : std::uint8_t
     Display,
     Settings,
     Tools,
+    Home,
     Keys,
     Clock,
     GpsSettings,
@@ -152,13 +161,15 @@ struct Settings
     bool gps = false;
     std::uint8_t gpsSystems = 3;
     std::int16_t timeZoneMinutes = 0;
+    services::HomeLayout home;
 };
 
-/// Where a setting is kept: the general settings, the channel in use, or
-/// nowhere.
+/// Where a setting is kept: the general settings, the radio's own
+/// preferences, the channel in use, or nowhere.
 enum class Kept : std::uint8_t
 {
     Settings,
+    Preferences,
     Channel,
     No,
 };
