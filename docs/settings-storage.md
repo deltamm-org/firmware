@@ -25,6 +25,7 @@ The code: `services/settings_store.h` (the interface the app uses),
 | GPS satellite systems | Extended general settings | `SettingsExtension` |
 | A channel's power and squelch mode | The channel's record | `ChannelBanks` |
 | Roaming on or off (Menu > Roaming > Roaming) | Preferences record | `Preferences` |
+| Home screen layout (Menu > Settings > Home screen) | Preferences record | `Preferences` |
 
 The auto lock time shares its field with the menu exit time, in 5 s
 steps up to 60 s.

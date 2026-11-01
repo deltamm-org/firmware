@@ -17,9 +17,11 @@ constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Di
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::RoamStatus, Item::Roaming, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::GpsStatus, Item::Gps};
-constexpr Row SettingsRows[] = {Group::Keys, Group::Clock, Group::GpsSettings};
+constexpr Row SettingsRows[] = {Group::Home, Group::Keys, Group::Clock, Group::GpsSettings};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime};
 constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
+constexpr Row HomeRows[] = {Item::HomePreset, Item::HomeTop, Item::HomeClock, Item::HomeBig, Item::HomeMiddle,
+    Item::HomeBeside, Item::HomeBottom};
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock, Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
 constexpr Row GpsSettingsRows[] = {Item::GpsSystems};
@@ -30,8 +32,9 @@ constexpr GroupInfo Groups[] = {
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "The position and the GPS receiver", GpsRows},
     {"Display", "Brightness and how long the light stays on", DisplayRows},
-    {"Settings", "How the radio is set up: keys, clock, GPS", SettingsRows},
+    {"Settings", "Home screen, keys, clock and GPS", SettingsRows},
     {"Tools", "The log, the key test and the version", ToolsRows},
+    {"Home screen", "What each row of the home screen shows", HomeRows},
     {"Keys & battery", "The key lock and battery save", KeysRows},
     {"Clock", "The time zone", ClockRows},
     {"GPS", "The satellite systems the receiver uses", GpsSettingsRows},
@@ -54,6 +57,13 @@ constexpr ItemInfo Items[] = {
     {"Battery save", "Sleep between checks for a signal while quiet", Kind::Value},
     {"Time zone", "Local time's offset from UTC", Kind::Value},
     {"Satellites", "Satellite systems the receiver uses", Kind::Value},
+    {"Preset", "A whole layout at once; rows can then change", Kind::Value},
+    {"Top line", "Small line at the top: talkgroup, zone, place", Kind::Value},
+    {"Clock", "The time at the top right", Kind::Value},
+    {"Large name", "The large name: channel, contact or zone", Kind::Value},
+    {"Middle row", "Frequency, contact or signal under the name", Kind::Value},
+    {"Next to power", "Voltage, volume or signal next to the power", Kind::Value},
+    {"Bottom row", "Details, last caller or GPS position", Kind::Value},
     {"Log", "The radio's log; hold Exit for the next screen", Kind::Screen},
     {"Key test", "Shows each key pressed; hold Exit for the next", Kind::Screen},
     {"Version", "The firmware's version and time since start", Kind::Info},
@@ -78,6 +88,20 @@ namespace g = services::gps_systems;
 constexpr Fixed GpsSystems[] = {{g::Gps | g::Beidou, "GPS + BeiDou"}, {g::Gps, "GPS"}, {g::Beidou, "BeiDou"},
     {g::Gps | g::Glonass, "GPS + GLONASS"}, {g::Glonass, "GLONASS"}, {g::Beidou | g::Glonass, "BeiDou + GLONASS"},
     {g::All, "All three"}};
+// The home screen's choices, numbered as services::HomeLayout's.
+constexpr Fixed HomePresets[] = {{static_cast<std::int32_t>(services::HomePreset::Detailed), "Detailed"},
+    {static_cast<std::int32_t>(services::HomePreset::Simple), "Simple"},
+    {static_cast<std::int32_t>(services::HomePreset::Roaming), "Roaming"}};
+constexpr Fixed HomeTops[] = {{0, "Talkgroup"}, {1, "Zone"}, {2, "Number"}, {3, "None"}};
+constexpr Fixed HomeBigs[] = {{0, "Channel"}, {1, "Contact"}, {2, "Zone"}};
+constexpr Fixed HomeMiddles[] = {{0, "Frequency"}, {1, "Talkgroup"}, {2, "Signal"}};
+constexpr Fixed HomeBesides[] = {{0, "Voltage"}, {1, "Volume"}, {2, "Signal"}};
+constexpr Fixed HomeBottoms[] = {{0, "Details"}, {1, "Last caller"}, {2, "Position"}, {3, "None"}};
+static_assert(std::size(HomeTops) == static_cast<std::size_t>(services::HomeLayout::Top::Count));
+static_assert(std::size(HomeBigs) == static_cast<std::size_t>(services::HomeLayout::Big::Count));
+static_assert(std::size(HomeMiddles) == static_cast<std::size_t>(services::HomeLayout::Middle::Count));
+static_assert(std::size(HomeBesides) == static_cast<std::size_t>(services::HomeLayout::Beside::Count));
+static_assert(std::size(HomeBottoms) == static_cast<std::size_t>(services::HomeLayout::Bottom::Count));
 // Light time choices, in seconds.
 constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
 // Time zones: UTC-12:00 to UTC+14:00 in half hours.
@@ -95,7 +119,20 @@ std::span<const Fixed> fixedChoices(Item item)
         return Powers;
     case Item::Roaming:
     case Item::Gps:
+    case Item::HomeClock:
         return OffOn;
+    case Item::HomePreset:
+        return HomePresets;
+    case Item::HomeTop:
+        return HomeTops;
+    case Item::HomeBig:
+        return HomeBigs;
+    case Item::HomeMiddle:
+        return HomeMiddles;
+    case Item::HomeBeside:
+        return HomeBesides;
+    case Item::HomeBottom:
+        return HomeBottoms;
     case Item::KeyLock:
         return LockCovers;
     case Item::AutoLock:
@@ -236,6 +273,13 @@ Kept keptIn(Item item)
     case Item::Power:
         return Kept::Channel;
     case Item::Roaming:
+    case Item::HomePreset:
+    case Item::HomeTop:
+    case Item::HomeClock:
+    case Item::HomeBig:
+    case Item::HomeMiddle:
+    case Item::HomeBeside:
+    case Item::HomeBottom:
         return Kept::Preferences;
     case Item::Squelch:
     case Item::RoamZone:
@@ -291,6 +335,20 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return s.timeZoneMinutes;
     case Item::GpsSystems:
         return s.gpsSystems;
+    case Item::HomePreset:
+        return static_cast<std::int32_t>(services::presetOf(s.home));
+    case Item::HomeTop:
+        return static_cast<std::int32_t>(s.home.top);
+    case Item::HomeClock:
+        return s.home.clock ? 1 : 0;
+    case Item::HomeBig:
+        return static_cast<std::int32_t>(s.home.big);
+    case Item::HomeMiddle:
+        return static_cast<std::int32_t>(s.home.middle);
+    case Item::HomeBeside:
+        return static_cast<std::int32_t>(s.home.beside);
+    case Item::HomeBottom:
+        return static_cast<std::int32_t>(s.home.bottom);
     case Item::RoamStatus:
     case Item::GpsStatus:
     case Item::Log:
@@ -347,6 +405,27 @@ void setChoice(Item item, std::int32_t value, Settings &s)
     case Item::GpsSystems:
         s.gpsSystems = byte;
         break;
+    case Item::HomePreset:
+        s.home = services::presetLayout(static_cast<services::HomePreset>(byte));
+        break;
+    case Item::HomeTop:
+        s.home.top = static_cast<services::HomeLayout::Top>(byte);
+        break;
+    case Item::HomeClock:
+        s.home.clock = value != 0;
+        break;
+    case Item::HomeBig:
+        s.home.big = static_cast<services::HomeLayout::Big>(byte);
+        break;
+    case Item::HomeMiddle:
+        s.home.middle = static_cast<services::HomeLayout::Middle>(byte);
+        break;
+    case Item::HomeBeside:
+        s.home.beside = static_cast<services::HomeLayout::Beside>(byte);
+        break;
+    case Item::HomeBottom:
+        s.home.bottom = static_cast<services::HomeLayout::Bottom>(byte);
+        break;
     case Item::RoamStatus:
     case Item::GpsStatus:
     case Item::Log:
@@ -385,6 +464,12 @@ ValueText valueText(Item item, std::int32_t value)
     case Item::GpsSystems:
         t << services::gps_systems::name(static_cast<std::uint8_t>(value));
         return t;
+    case Item::HomePreset:
+        if (value == static_cast<std::int32_t>(services::HomePreset::Own)) {
+            t << "Own";
+            return t;
+        }
+        break;
     default:
         break;
     }

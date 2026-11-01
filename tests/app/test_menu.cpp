@@ -136,6 +136,8 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     CHECK(nav.current().group == Group::Settings);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Settings);
+    CHECK(nav.current().group == Group::Home);
+    CHECK(nav.press(Key::Down) == Step::Moved);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Keys);
     CHECK(nav.press(Key::Down) == Step::Moved);
@@ -326,4 +328,29 @@ TEST_CASE("an about text too long for two lines does not fit")
     CHECK(first == "Open, or 1 to 5: higher");
     CHECK(second == "needs a stronger signal");
     CHECK(!splitAbout("This sentence is much too long to fit in the two lines of the panel", first, second));
+}
+
+TEST_CASE("the home screen group sets a preset or each row, kept with the preferences")
+{
+    using dmm::services::HomeLayout;
+    using dmm::services::HomePreset;
+    CHECK(parentOf(Group::Home).group == Group::Settings);
+    CHECK(parentOf(Group::Home).row == 0);
+    CHECK(keptIn(Item::HomeBottom) == Kept::Preferences);
+
+    Settings s;
+    CHECK(valueText(Item::HomePreset, choiceOf(Item::HomePreset, s)).view() == "Detailed");
+    setChoice(Item::HomePreset, static_cast<std::int32_t>(HomePreset::Simple), s);
+    CHECK(s.home == dmm::services::presetLayout(HomePreset::Simple));
+    CHECK(valueText(Item::HomeMiddle, choiceOf(Item::HomeMiddle, s)).view() == "Talkgroup");
+
+    // A row changed on its own makes the layout the user's own.
+    setChoice(Item::HomeBeside, static_cast<std::int32_t>(HomeLayout::Beside::Signal), s);
+    CHECK(s.home.beside == HomeLayout::Beside::Signal);
+    CHECK(valueText(Item::HomePreset, choiceOf(Item::HomePreset, s)).view() == "Own");
+    // Own is shown but not offered: the value screen opens on the first preset.
+    Choices c;
+    REQUIRE(listChoices(Item::HomePreset, c));
+    CHECK(c.size() == 3);
+    CHECK(c.find(choiceOf(Item::HomePreset, s)) == c.size());
 }
