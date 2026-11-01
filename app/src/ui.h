@@ -100,6 +100,16 @@ struct SetAutoRoaming
 {
     bool on;
 };
+/// Sets the microphone gain as Menu > Settings > Audio does, kept with
+/// the preferences, and logs both (console): dB, FromCodeplug, or
+/// Unchanged.
+struct MicrophoneGain
+{
+    static constexpr std::int8_t Unchanged = -1;
+    static constexpr std::int8_t FromCodeplug = -2;
+    std::int8_t dmrDb;
+    std::int8_t fmDb;
+};
 /// What the key lock covers.
 struct KeyLockSettings
 {
@@ -161,7 +171,7 @@ struct Gps
 };
 
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, SetAutoRoaming, KeyLockSettings, KeyLockReport, SelectChannel, SettingsReport, Notice, Gps>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, SetAutoRoaming, MicrophoneGain, KeyLockSettings, KeyLockReport, SelectChannel, SettingsReport, Notice, Gps>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels; @p settingsStore (may

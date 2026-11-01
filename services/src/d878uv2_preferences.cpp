@@ -4,6 +4,7 @@
 #include "dmm/services/d878uv2_preferences.h"
 
 #include "dmm/lib/crc32.h"
+#include "dmm/services/microphone_gain.h"
 
 #include <algorithm>
 
@@ -31,7 +32,10 @@ constexpr std::size_t HomeBigAt = FieldsAt + 2;
 constexpr std::size_t HomeMiddleAt = FieldsAt + 3;
 constexpr std::size_t HomeBesideAt = FieldsAt + 4;
 constexpr std::size_t HomeBottomAt = FieldsAt + 5;
-constexpr std::size_t FieldsEnd = FieldsAt + 6;
+// Microphone gain on DMR and on FM, in dB; 0xFF follows the codeplug.
+constexpr std::size_t DmrMicGainAt = FieldsAt + 6;
+constexpr std::size_t FmMicGainAt = FieldsAt + 7;
+constexpr std::size_t FieldsEnd = FieldsAt + 8;
 static_assert(FieldsEnd <= CrcAt);
 
 // The field bytes a record holds; a field past them reads as its default.
@@ -59,6 +63,12 @@ public:
     {
         const auto b = byte(at);
         return b && *b < static_cast<std::uint8_t>(E::Count) ? static_cast<E>(*b) : fallback;
+    }
+    /// 0 to @p max; anything else gives none.
+    std::optional<std::uint8_t> upTo(std::size_t at, int max) const
+    {
+        const auto b = byte(at);
+        return b && *b <= max ? b : std::nullopt;
     }
 
 private:
@@ -89,6 +99,8 @@ std::optional<RadioPreferences> decodePreferences(std::span<const std::uint8_t, 
     p.home.middle = f.choice(HomeMiddleAt, d.home.middle);
     p.home.beside = f.choice(HomeBesideAt, d.home.beside);
     p.home.bottom = f.choice(HomeBottomAt, d.home.bottom);
+    p.dmrMicGainDb = f.upTo(DmrMicGainAt, microphone_gain::MaxDigitalDb);
+    p.fmMicGainDb = f.upTo(FmMicGainAt, microphone_gain::MaxFmDb);
     return p;
 }
 
@@ -104,6 +116,8 @@ void encodePreferences(const RadioPreferences &p, std::span<std::uint8_t, Prefer
     record[HomeMiddleAt] = static_cast<std::uint8_t>(p.home.middle);
     record[HomeBesideAt] = static_cast<std::uint8_t>(p.home.beside);
     record[HomeBottomAt] = static_cast<std::uint8_t>(p.home.bottom);
+    record[DmrMicGainAt] = p.dmrMicGainDb.value_or(0xFF);
+    record[FmMicGainAt] = p.fmMicGainDb.value_or(0xFF);
     const std::uint32_t crc = lib::crc32(record.data(), CrcAt);
     for (std::size_t i = 0; i < 4; ++i) {
         record[CrcAt + i] = static_cast<std::uint8_t>(crc >> (8 * i));

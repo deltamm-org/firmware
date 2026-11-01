@@ -188,8 +188,9 @@ The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (status, on or off, roaming zone), GPS
 (status, receiver on or off) and Display (brightness, light time).
 Settings holds the setup in groups: Home screen (a preset, or what each
-row shows), Keys & battery (what the lock covers, auto lock, battery
-save), Clock (time zone) and GPS (satellite systems).
+row shows), Audio (DMR and FM microphone gain), Keys & battery (what the
+lock covers, auto lock, battery save), Clock (time zone) and GPS
+(satellite systems).
 Tools opens the log and the key test and shows the version. The panel
 under the list says what the chosen row does. Menu opens a group or a
 row's value screen, where Menu sets the value and Exit leaves it as it

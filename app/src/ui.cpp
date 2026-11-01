@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <optional>
 #include <string_view>
 
 namespace dmm::app::ui {
@@ -467,6 +468,38 @@ std::uint8_t roamingZone = services::RoamingSettings::NoZone;
 std::size_t roamingSites = 0;
 // Auto roaming: the codeplug's choice at start, then the menu's.
 bool autoRoaming = false;
+// Microphone gain on DMR and FM: the codeplug's levels in dB, and the dB
+// set on the radio, which wins.
+std::uint8_t plugDmrMicGainDb = services::microphone_gain::StandardDb;
+std::uint8_t plugFmMicGainDb = services::microphone_gain::StandardDb;
+std::optional<std::uint8_t> dmrMicGainDb;
+std::optional<std::uint8_t> fmMicGainDb;
+
+void postMicrophoneGain()
+{
+    radio::post(radio::MicrophoneGain{static_cast<std::int8_t>(dmrMicGainDb.value_or(plugDmrMicGainDb)),
+        static_cast<std::int8_t>(fmMicGainDb.value_or(plugFmMicGainDb))});
+}
+
+// "+20 dB", or "codeplug" for none.
+lib::StaticString<10> keptGainText(std::optional<std::uint8_t> db)
+{
+    lib::StaticString<10> t;
+    if (db) {
+        t << '+' << *db << " dB";
+    } else {
+        t << "codeplug";
+    }
+    return t;
+}
+
+// "microphone gain: DMR +8 dB (codeplug), FM +20 dB".
+void logMicrophoneGain()
+{
+    log::info("ui") << "microphone gain: DMR +" << dmrMicGainDb.value_or(plugDmrMicGainDb) << " dB"
+                    << (dmrMicGainDb ? "" : " (codeplug)") << ", FM +" << fmMicGainDb.value_or(plugFmMicGainDb) << " dB"
+                    << (fmMicGainDb ? "" : " (codeplug)");
+}
 struct RoamState
 {
     bool searching = false;
@@ -781,9 +814,10 @@ void uiMain(void *)
             if (selector.settings().voiceEnhancement) {
                 radio::post(radio::VoiceEnhancement{true});
             }
-            radio::post(radio::MicrophoneGain{
-                static_cast<std::int8_t>(services::microphone_gain::fromLevel(selector.settings().dmrMicrophoneLevel)),
-                static_cast<std::int8_t>(services::microphone_gain::fromLevel(selector.settings().fmMicrophoneLevel))});
+            plugDmrMicGainDb =
+                static_cast<std::uint8_t>(services::microphone_gain::fromLevel(selector.settings().dmrMicrophoneLevel));
+            plugFmMicGainDb =
+                static_cast<std::uint8_t>(services::microphone_gain::fromLevel(selector.settings().fmMicrophoneLevel));
             gpsAtStart = selector.settings().gps;
             gpsSystems = selector.settings().gpsSystems;
             timeZoneMinutes = selector.settings().timeZoneMinutes;
@@ -802,7 +836,10 @@ void uiMain(void *)
         }
         if (const auto p = codeplug->preferences()) {
             homeLayout = p->home;
+            dmrMicGainDb = p->dmrMicGainDb;
+            fmMicGainDb = p->fmMicGainDb;
         }
+        postMicrophoneGain();
     }
 
     View view = View::Start;
@@ -969,6 +1006,10 @@ void uiMain(void *)
         s.gpsSystems = gpsSystems;
         s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
         s.home = homeLayout;
+        s.dmrMicGainDb = dmrMicGainDb;
+        s.fmMicGainDb = fmMicGainDb;
+        s.plugDmrMicGainDb = plugDmrMicGainDb;
+        s.plugFmMicGainDb = plugFmMicGainDb;
         return s;
     };
     // A row's value: the setting's, or the state of what the row opens.
@@ -1119,6 +1160,8 @@ void uiMain(void *)
         if (settingsStore != nullptr) {
             services::RadioPreferences p;
             p.home = homeLayout;
+            p.dmrMicGainDb = dmrMicGainDb;
+            p.fmMicGainDb = fmMicGainDb;
             settingsStore->keepPreferences(p, os::nowMs());
         }
     };
@@ -1238,6 +1281,11 @@ void uiMain(void *)
             log::info("ui") << "home screen "
                             << menu::valueText(menu::Item::HomePreset, menu::choiceOf(menu::Item::HomePreset, s)).view();
         }
+        if (s.dmrMicGainDb != was.dmrMicGainDb || s.fmMicGainDb != was.fmMicGainDb) {
+            dmrMicGainDb = s.dmrMicGainDb;
+            fmMicGainDb = s.fmMicGainDb;
+            postMicrophoneGain();
+        }
         if (channel) {
             useChannel();
         }
@@ -1317,7 +1365,7 @@ void uiMain(void *)
             break;
         case Step::Choose: {
             const menu::Item item = menuNav.current().item;
-            if (!menu::listChoices(item, menuNav.choices())) {
+            if (!menu::listChoices(item, menuNav.choices(), menuSettings())) {
                 listCodeplugChoices(item, menuNav.choices());
             }
             menuNav.choose(menu::choiceOf(item, menuSettings()));
@@ -1651,6 +1699,22 @@ void uiMain(void *)
                                radio::post(radio::RoamAutomatic{autoRoaming});
                                keepSettings();
                            },
+                           [&](const MicrophoneGain &g) {
+                               auto set = [](std::int8_t db, std::optional<std::uint8_t> &kept) {
+                                   if (db == MicrophoneGain::Unchanged) {
+                                       return false;
+                                   }
+                                   kept = db == MicrophoneGain::FromCodeplug ? std::nullopt
+                                                                             : std::optional(static_cast<std::uint8_t>(db));
+                                   return true;
+                               };
+                               const bool dmr = set(g.dmrDb, dmrMicGainDb);
+                               if (set(g.fmDb, fmMicGainDb) || dmr) {
+                                   postMicrophoneGain();
+                                   keepPreferences();
+                               }
+                               logMicrophoneGain();
+                           },
                            [&](const KeyLockSettings &s) {
                                keyLock.setSettings(s.settings);
                                refreshLockMark();
@@ -1705,7 +1769,9 @@ void uiMain(void *)
                                    log::info("ui") << "preferences record: home screen " << static_cast<int>(h.top) << ' '
                                                    << (h.clock ? 1 : 0) << ' ' << static_cast<int>(h.big) << ' '
                                                    << static_cast<int>(h.middle) << ' ' << static_cast<int>(h.beside) << ' '
-                                                   << static_cast<int>(h.bottom);
+                                                   << static_cast<int>(h.bottom) << ", mic gain DMR "
+                                                   << keptGainText(p->dmrMicGainDb).view() << ", FM "
+                                                   << keptGainText(p->fmMicGainDb).view();
                                } else {
                                    log::info("ui") << "no preferences record";
                                }

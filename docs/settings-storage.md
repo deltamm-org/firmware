@@ -25,14 +25,15 @@ The code: `services/settings_store.h` (the interface the app uses),
 | GPS satellite systems | Extended general settings | `SettingsExtension` |
 | A channel's power and squelch mode | The channel's record | `ChannelBanks` |
 | Home screen layout (Menu > Settings > Home screen) | Preferences record | `Preferences` |
+| Microphone gain on DMR and FM (Menu > Settings > Audio) | Preferences record | `Preferences` |
 
 The auto lock time shares its field with the menu exit time, in 5 s
 steps up to 60 s.
 
 The app hands over values as they change: the menu, the zone list, the
-channel knob, and the console's `save`, `light time` and `roam auto`. The
-VFO and the console's other commands (`lock ...`, `light`, `fm ...`,
-`gps ...`) are not kept.
+channel knob, and the console's `save`, `light time`, `roam auto` and
+`mic gain`. The VFO and the console's other commands (`lock ...`,
+`light`, `fm ...`, `gps ...`) are not kept.
 
 ## When it is written
 
