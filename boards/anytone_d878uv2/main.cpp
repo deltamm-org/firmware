@@ -40,6 +40,7 @@
 #include "dmm/services/log.h"
 #include "dmm/services/rda1846_transceiver.h"
 #include "dmm/services/sct3258_baseband.h"
+#include "dmm/services/stall_watch.h"
 #include "dmm/services/usb_channel.h"
 #include "dmm/services/usb_log.h"
 
@@ -132,6 +133,8 @@ const char *crashKindName(cm::CrashKind kind)
         return "kernel check failed";
     case cm::CrashKind::TestFault:
         return "test fault";
+    case cm::CrashKind::Stall:
+        return "watchdog stall";
     case cm::CrashKind::None:
         break;
     }
@@ -164,6 +167,17 @@ dmm::services::ResetReport takeResetReport()
     return report;
 }
 
+// Feeds of the watchdog, checked on every tick: a stall is recorded with
+// the task the tick interrupted, which is the one keeping the CPU.
+constinit dmm::services::StallWatch stallWatch{StallLimitMs};
+
+void onTick()
+{
+    if (stallWatch.tick()) {
+        cm::crashInterruptedTask(cm::CrashKind::Stall, stallWatch.sinceFeedMs(), dmm::os::currentTaskName());
+    }
+}
+
 void onKernelFatal(const char *what, const char *task)
 {
     const std::string_view w(what);
@@ -192,6 +206,7 @@ public:
     }
     void feedWatchdog() override
     {
+        stallWatch.fed();
         hal::feedWatchdog();
     }
     void restart() override
@@ -288,6 +303,7 @@ void hal::boardMain()
     static const dmm::services::ResetReport resetReport = takeResetReport();
     cm::setTaskNameSource(dmm::os::currentTaskName);
     dmm::os::setFatalHandler(onKernelFatal);
+    dmm::os::setTickHook(onTick);
     const ClockSource clock = startSystemClock(CrystalHz);
     cm::enableCycleCounter();
 

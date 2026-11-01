@@ -22,6 +22,9 @@ using dmm::hal::gd32f30x::Port;
 
 inline constexpr std::uint32_t CrystalHz = 12'000'000;
 inline constexpr std::uint32_t WatchdogTimeoutMs = 2500;
+// A stall is recorded after this long without a feed: before the watchdog
+// restarts the radio, whose RC clock can make 2500 ms as short as 1750 ms.
+inline constexpr std::uint32_t StallLimitMs = 1500;
 
 // Front-panel LEDs, high = on.
 inline constexpr Pin RedLed{Port::E, 5};

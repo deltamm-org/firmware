@@ -19,13 +19,16 @@ enum class CrashKind : std::uint8_t
     StackOverflow,
     KernelCheck,
     TestFault,
+    /// The watchdog went unfed: a task kept the CPU from the one that
+    /// feeds it, or that task stopped.
+    Stall,
 };
 
 struct CrashRecord
 {
     CrashKind kind = CrashKind::None;
     /// For UnexpectedInterrupt: the exception number. For KernelCheck: the
-    /// source line.
+    /// source line. For Stall: the milliseconds since the last feed.
     std::uint32_t detail = 0;
     /// Where it happened: the faulting instruction, or the caller.
     std::uint32_t pc = 0;
@@ -46,6 +49,11 @@ void setTaskNameSource(TaskNameSource source);
 /// Records a crash that has no exception frame, then restarts. @p detail as
 /// in CrashRecord.
 [[noreturn]] void crash(CrashKind kind, std::uint32_t detail, const char *task = nullptr);
+
+/// From an interrupt that preempted a task: records a crash where that
+/// task was interrupted (the pc, lr and psr it stacked on its process
+/// stack), then restarts.
+[[noreturn]] void crashInterruptedTask(CrashKind kind, std::uint32_t detail, const char *task);
 
 /// The record left by the previous run, if any; clears it.
 bool takeCrashRecord(CrashRecord &record);

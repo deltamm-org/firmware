@@ -135,13 +135,22 @@ void waitForSwitchOffThenPowerDown()
     }
 }
 
+// Waits @p ms with the watchdog fed.
+void sleepFed(os::Ticks ms)
+{
+    for (os::Ticks t = 0; t < ms && !os::stopRequested(); t += StepMs) {
+        feedWatchdog();
+        os::sleepMs(StepMs);
+    }
+}
+
 // Auto power-off and an empty battery: with the switch still on the power
 // cannot be cut, so the radio goes dark and waits for the switch.
 void softOff(const char *reason)
 {
     log::info("system") << "switching off: " << reason << "; turn the power knob off and on to restart";
     ui::post(ui::SwitchingOff{});
-    os::sleepMs(2000);
+    sleepFed(2000);
     ui::post(ui::Backlight{0});
     ui::post(ui::PanelPower{false});
     platform->leds.set(Leds::Led::Green, false);

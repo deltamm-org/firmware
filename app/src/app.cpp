@@ -447,7 +447,7 @@ void runCommand(std::string_view command)
         flushLog();
         platform->system.testFault();
     } else if (command == "hang") {
-        log::info("console") << "watchdog no longer fed; expect a watchdog restart within about 3 s";
+        log::info("console") << "watchdog no longer fed; expect a restart within about 3 s";
         system::stopFeedingWatchdog();
     } else if (command == "restart") {
         log::info("console") << "restarting";

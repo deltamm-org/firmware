@@ -21,6 +21,7 @@ namespace dmm::os {
 namespace {
 
 FatalHandler fatalHandler = nullptr;
+TickHook tickHook = nullptr;
 
 constexpr std::size_t MaxTasks = 16;
 detail::TaskControl *startedTasks[MaxTasks]{};
@@ -96,6 +97,11 @@ void setFatalHandler(FatalHandler handler)
     fatalHandler = handler;
 }
 
+void setTickHook(TickHook hook)
+{
+    tickHook = hook;
+}
+
 [[noreturn]] void fatalError(const char *what, const char *task)
 {
     if (fatalHandler != nullptr) {
@@ -164,6 +170,13 @@ extern "C" {
 void vApplicationIdleHook()
 {
     asm volatile("dsb\n\twfi\n\tisb" ::: "memory");
+}
+
+void vApplicationTickHook()
+{
+    if (dmm::os::tickHook != nullptr) {
+        dmm::os::tickHook();
+    }
 }
 
 void dmmKernelCheckFailed()
