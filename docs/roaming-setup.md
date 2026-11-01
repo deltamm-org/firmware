@@ -178,9 +178,9 @@ settings:
 - **Automatic roaming** searches by itself as set in the codeplug, and
   never during a call.
 - **Menu > Channel > Roaming:** off makes every channel use its own
-  frequency again, until the radio restarts or roaming is turned back
-  on. **Roam zone** picks another of the codeplug's roaming zones for the
-  session.
+  frequency again, until roaming is turned back on. **Roam zone** picks
+  another of the codeplug's roaming zones. Both are kept across restarts
+  (`docs/settings-storage.md`).
 - On an FM channel the key says `Not roaming`.
 
 ## Repeater beacons and the range check
