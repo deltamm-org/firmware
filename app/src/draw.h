@@ -23,6 +23,8 @@ inline constexpr services::Color Rule = services::rgb(70, 70, 70);
 inline constexpr services::Color Transmit = services::rgb(210, 40, 30);
 inline constexpr services::Color Receive = services::rgb(40, 170, 60);
 inline constexpr services::Color Warn = services::rgb(230, 160, 0);
+/// A band set off from the ground: titles, panels, buttons.
+inline constexpr services::Color Panel = services::rgb(28, 28, 32);
 } // namespace palette
 
 inline int textWidth(const services::Font &f, std::string_view s)
