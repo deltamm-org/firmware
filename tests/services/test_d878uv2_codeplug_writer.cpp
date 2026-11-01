@@ -172,3 +172,33 @@ TEST_CASE("codeplug writer: the contact ID table is written like the rest")
     CHECK(r.read(0x04800010, 16) == filled(16, 0x77));
     CHECK(r.read(0x04800000, 16) == oldBytes(0x04800000, 16));
 }
+
+TEST_CASE("codeplug writer: a block's copy pauses every few pages")
+{
+    Radio r;
+    // Pages programmed (program executes) at each pause.
+    std::vector<std::size_t> at;
+    const auto programs = [&r] {
+        std::size_t n = 0;
+        for (const std::uint8_t op : r.chip.opcodes) {
+            n += op == 0x10 ? 1 : 0;
+        }
+        return n;
+    };
+    const auto pause = [&] { at.push_back(programs()); };
+    D878Uv2CodeplugWriter writer{r.storage, r.codeplug, pause};
+
+    // A write near the end: the pages before it are copied on the way.
+    CHECK(writer.write(Block + 0x1F000, filled(16, 0x11)));
+    CHECK(at.size() == 62 / D878Uv2CodeplugWriter::PagesPerPause);
+    CHECK(writer.finish());
+    // 64 pages, then the old copy marked superseded.
+    CHECK(programs() == 65);
+    CHECK(at.size() == 64 / D878Uv2CodeplugWriter::PagesPerPause);
+    std::size_t before = 0;
+    for (const std::size_t n : at) {
+        CHECK(n - before == D878Uv2CodeplugWriter::PagesPerPause);
+        before = n;
+    }
+    CHECK(r.read(Block + 0x1F000, 16) == filled(16, 0x11));
+}

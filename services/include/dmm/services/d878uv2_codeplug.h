@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "dmm/lib/fn_ref.h"
 #include "dmm/services/codeplug.h"
 #include "dmm/services/d878uv2_storage.h"
 #include "dmm/services/storage.h"
@@ -111,8 +112,14 @@ public:
     };
     static constexpr Range Ranges[] = {{0x00800000, 0x02F00000}, {0x04800000, 0x04880000}};
 
-    D878Uv2CodeplugWriter(D878Uv2Storage &storage, D878Uv2Codeplug &codeplug)
-        : m_storage(storage), m_codeplug(codeplug)
+    /// Every this many pages programmed, the writer calls its pause, which
+    /// by default sleeps for a tick: a block takes many pages, and tasks of
+    /// lower priority than the writer's must still run meanwhile.
+    static constexpr unsigned PagesPerPause = 4;
+    using Pause = lib::FnRef<void()>;
+
+    D878Uv2CodeplugWriter(D878Uv2Storage &storage, D878Uv2Codeplug &codeplug, Pause pause = sleepOneTick)
+        : m_storage(storage), m_codeplug(codeplug), m_pause(pause)
     {
     }
 
@@ -148,9 +155,12 @@ private:
     bool loadPage(std::uint32_t page);
     bool programPage();
     bool finishBlock();
+    static void sleepOneTick();
 
     D878Uv2Storage &m_storage;
     D878Uv2Codeplug &m_codeplug;
+    Pause m_pause;
+    unsigned m_sincePause = 0; // pages programmed
     bool m_open = false;
     bool m_failed = false;
     bool m_wrote = false;
