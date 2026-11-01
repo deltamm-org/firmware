@@ -101,6 +101,24 @@ void crash(CrashKind kind, std::uint32_t detail, const char *task)
     store(r, task);
 }
 
+void crashInterruptedTask(CrashKind kind, std::uint32_t detail, const char *task)
+{
+    disableInterrupts();
+    CrashRecord r;
+    r.kind = kind;
+    r.detail = detail;
+    std::uint32_t psp = 0;
+    asm volatile("mrs %0, psp" : "=r"(psp));
+    if (insideRam(psp)) {
+        // The exception frame: r0-r3, r12, lr, pc, psr.
+        const auto *frame = reinterpret_cast<const std::uint32_t *>(psp);
+        r.lr = frame[5];
+        r.pc = frame[6];
+        r.psr = frame[7];
+    }
+    store(r, task);
+}
+
 bool takeCrashRecord(CrashRecord &record)
 {
     StoredRecord &s = stored();

@@ -47,6 +47,12 @@ const char *currentTaskName();
 using FatalHandler = void (*)(const char *what, const char *task);
 void setFatalHandler(FatalHandler handler);
 
+/// Called from the kernel's tick interrupt every millisecond, in whatever
+/// task that interrupt preempted. Must be short and must not block. Never
+/// called on the PC.
+using TickHook = void (*)();
+void setTickHook(TickHook hook);
+
 /// A started task's name and the stack words it has never used.
 struct TaskStack
 {

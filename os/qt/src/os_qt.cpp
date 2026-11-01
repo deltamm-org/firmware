@@ -102,6 +102,8 @@ const char *currentTaskName()
 
 void setFatalHandler(FatalHandler) {}
 
+void setTickHook(TickHook) {}
+
 TaskStack taskStack(std::size_t)
 {
     return {};
