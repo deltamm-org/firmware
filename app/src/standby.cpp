@@ -41,14 +41,6 @@ int tag(Display &d, int x, std::string_view text, Color fill, Color ink)
     return x + w;
 }
 
-// The status bar's volume field: a fixed width, right-aligned against the
-// battery, so a new step overwrites the old in place.
-constexpr int VolumeChars = 6; // "VOL 15"
-int volumeX(const Display &d, const StandbyScreen &s)
-{
-    return s.batteryX(d) - VolumeChars * Small.width - 4;
-}
-
 // Frequency as MHz with four decimals and no trailing zero past three.
 lib::StaticString<12> mhz(std::uint32_t hz)
 {
@@ -145,41 +137,282 @@ void StandbyScreen::drawStatus(Display &d, const StandbyState &s)
             cursor = tag(d, cursor, "GPS", p::Transmit, p::Text);
         }
     }
-    // The local time, left of the volume.
-    if (!s.clock.empty()) {
-        const int w = textWidth(Small, s.clock);
-        const int x = volumeX(d, *this) - w - 6;
-        gapTo(x);
-        drawText(d, Small, x, 2, s.clock, p::Text, p::Ground);
-        fillArea(d, x, 0, w, 2, p::Ground);
-        fillArea(d, x, 2 + Small.height, w, rowH - 2 - Small.height, p::Ground);
-        cursor = x + w;
-    }
-    gapTo(volumeX(d, *this));
-    drawVolume(d, s);
-    cursor = volumeX(d, *this) + VolumeChars * Small.width;
     gapTo(batteryX(d));
     d.fillRect(0, StatusH - 1, d.width(), 1, p::Rule);
 }
 
-void StandbyScreen::drawVolume(Display &d, const StandbyState &s)
+namespace {
+
+using Layout = services::HomeLayout;
+
+// The home screen's rows, top to bottom.
+constexpr int LabelY = StandbyScreen::StatusH; // the top line and the clock
+constexpr int NameY = LabelY + 19;             // the large name
+constexpr int PanelY = NameY + 28;             // the middle row, on a panel
+constexpr int SettingsY = PanelY + 22;         // the power and the reading beside it
+constexpr int InfoY = SettingsY + 18;          // the bottom row
+// Where the right part of the top line and of the power row starts.
+constexpr int RightX = 96;
+// The signal meter's bars.
+constexpr int MeterX = 26;
+constexpr int MeterStep = 7;
+
+// The channel is a DMR channel with a contact, not tuned freely.
+bool hasTalkgroup(const ChannelSelector &sel, const StandbyState &s)
 {
-    // Right-aligned in its fixed field, blank when the step is not known.
-    lib::StaticString<VolumeChars + 1> v;
-    if (s.volume >= 0) {
-        v << "VOL " << s.volume;
+    const auto &c = sel.current();
+    return c && c->digital() && !s.talkgroup.empty() && s.entry.empty() && !sel.vfoMode();
+}
+
+// What the large name is.
+enum class Big
+{
+    Entry,
+    None, // no channel
+    Zone,
+    ContactName,
+    Contact, // "TG 9": a contact without a name on a channel without one
+    Frequency,
+    Channel,
+};
+
+Big bigShows(const ChannelSelector &sel, const StandbyState &s)
+{
+    const auto &c = sel.current();
+    if (!s.entry.empty()) {
+        return Big::Entry;
     }
-    lib::StaticString<VolumeChars + 1> field;
-    for (std::size_t i = v.view().size(); i < VolumeChars; ++i) {
-        field << ' ';
+    if (!c) {
+        return Big::None;
     }
-    field << v.view();
-    const int x = volumeX(d, *this);
-    const int w = VolumeChars * Small.width;
-    drawText(d, Small, x, 2, field.view(), s.volume == 0 ? p::Warn : p::Dim, p::Ground);
-    fillArea(d, x, 0, w, 2, p::Ground);
-    fillArea(d, x, 2 + Small.height, w, StatusH - 1 - 2 - Small.height, p::Ground);
-    fillArea(d, x + w, 0, batteryX(d) - x - w, StatusH - 1, p::Ground);
+    const bool talkgroup = hasTalkgroup(sel, s);
+    const bool unnamed = c->name[0] == '\0';
+    if (s.layout.big == Layout::Big::Zone && !sel.vfoMode() && sel.zoneName()[0] != '\0') {
+        return Big::Zone;
+    }
+    if (talkgroup && (s.layout.big == Layout::Big::Contact || unnamed) && !s.talkgroupName.empty()) {
+        return Big::ContactName;
+    }
+    if (talkgroup && unnamed) {
+        return Big::Contact;
+    }
+    return sel.vfoMode() || unnamed ? Big::Frequency : Big::Channel;
+}
+
+// "Last: NAME  3 min ago" in at most @p chars characters, the name cut
+// to make room for the age.
+lib::StaticString<48> lastCallText(const StandbyState &s, int chars)
+{
+    lib::StaticString<48> t;
+    if (s.readings.lastCallAt == 0) {
+        t << "No call heard yet";
+        return t;
+    }
+    lib::StaticString<16> age;
+    const services::Age &a = s.readings.lastCallAge;
+    switch (a.unit) {
+    case services::Age::Unit::Now:
+        age << "now";
+        break;
+    case services::Age::Unit::Minutes:
+        age << a.value << " min ago";
+        break;
+    case services::Age::Unit::Hours:
+        age << a.value << " h ago";
+        break;
+    }
+    constexpr std::string_view Head = "Last: ";
+    constexpr int Gap = 2;
+    const int room = chars - static_cast<int>(Head.size() + age.view().size()) - Gap;
+    t << Head << cut(s.lastCaller, room) << "  " << age.view();
+    return t;
+}
+
+} // namespace
+
+void StandbyScreen::drawClock(Display &d, const StandbyState &s)
+{
+    const std::string_view clock = s.layout.clock ? s.clock : std::string_view{};
+    band(d, LabelY, NameY - LabelY, {{d.width() - 4 - textWidth(Medium, clock), LabelY + 2, clock, &Medium, p::Text}},
+        p::Ground, RightX);
+}
+
+void StandbyScreen::drawMiddle(Display &d, const ChannelSelector &sel, const StandbyState &s)
+{
+    const auto &c = sel.current();
+    const int w = d.width();
+    const int hh = SettingsY - PanelY;
+    const bool talkgroup = hasTalkgroup(sel, s);
+    Layout::Middle middle = s.layout.middle;
+    if (!s.entry.empty() || !c || (middle == Layout::Middle::Talkgroup && !talkgroup)) {
+        middle = Layout::Middle::Frequency;
+    }
+
+    switch (middle) {
+    case Layout::Middle::Frequency:
+    case Layout::Middle::Count: {
+        // Frequency, slot and colour code; on FM the bandwidth.
+        lib::StaticString<24> freq;
+        lib::StaticString<8> slot;
+        lib::StaticString<16> slotNote;
+        if (s.entry.empty() && c && s.roaming && s.roamSearching) {
+            freq << "Searching";
+        } else if (s.entry.empty() && c) {
+            freq << mhz(s.roaming && s.roamHz != 0 ? s.roamHz : c->receiveHz).view();
+            if (c->digital()) {
+                slot << "TS" << c->dmr.slot;
+                slotNote << "CC" << (s.roaming ? s.roamColourCode : c->dmr.colourCode);
+            } else {
+                slot << "FM";
+                slotNote << (c->wide ? "25k" : "12.5k");
+            }
+        }
+        const bool unit = !slot.view().empty();
+        band(d, PanelY, hh,
+            {{4, PanelY + 7, unit ? "MHz" : "", &Small, p::Dim}, {unit ? 26 : 4, PanelY + 5, freq.view(), &Body, p::Text},
+                {RightX, PanelY + 5, slot.view(), &Body, p::Text},
+                {RightX + 24, PanelY + 8, slotNote.view(), &Small, p::Dim}},
+            p::Panel);
+        return;
+    }
+    case Layout::Middle::Talkgroup: {
+        // The contact, with its name small after it; the channel's name
+        // instead when the contact's name is already large.
+        const std::string_view name = bigShows(sel, s) == Big::ContactName ? std::string_view(c->name) : s.talkgroupName;
+        const int nameX = 8 + textWidth(Body, s.talkgroup);
+        band(d, PanelY, hh,
+            {{4, PanelY + 5, s.talkgroup, &Body, p::Text},
+                {nameX, PanelY + 8, cut(name, (w - 4 - nameX) / Small.width), &Small, p::Dim}},
+            p::Panel);
+        return;
+    }
+    case Layout::Middle::Signal:
+        break;
+    }
+
+    // The signal meter, each pixel painted once: label, bars, then the
+    // level in dBm.
+    const services::HomeReadings &r = s.readings;
+    band(d, PanelY, hh, {{4, PanelY + 7, "SIG", &Small, p::Dim}}, p::Panel, 0, MeterX);
+    const int barY = PanelY + 6;
+    const int barH = hh - 12;
+    const int lit = r.signalKnown ? services::signalBars(r.signalDbm) : 0;
+    const int barsEnd = MeterX + services::SignalBars * MeterStep;
+    fillArea(d, MeterX, PanelY, RightX - MeterX, barY - PanelY, p::Panel);
+    for (int i = 0; i < services::SignalBars; ++i) {
+        const int x = MeterX + i * MeterStep;
+        d.fillRect(x, barY, MeterStep - 1, barH, i < lit ? p::Text : p::Rule);
+        d.fillRect(x + MeterStep - 1, barY, 1, barH, p::Panel);
+    }
+    fillArea(d, barsEnd, barY, RightX - barsEnd, barH, p::Panel);
+    fillArea(d, MeterX, barY + barH, RightX - MeterX, PanelY + hh - barY - barH, p::Panel);
+    lib::StaticString<8> level;
+    if (r.signalKnown) {
+        level << r.signalDbm;
+    } else {
+        level << '-';
+    }
+    band(d, PanelY, hh,
+        {{RightX + 4, PanelY + 5, level.view(), &Body, p::Text}, {RightX + 36, PanelY + 8, "dBm", &Small, p::Dim}},
+        p::Panel, RightX);
+}
+
+void StandbyScreen::drawBeside(Display &d, const StandbyState &s)
+{
+    const services::HomeReadings &r = s.readings;
+    lib::StaticString<8> v;
+    std::string_view label = "BAT";
+    Color ink = p::Text;
+    switch (s.layout.beside) {
+    case Layout::Beside::Volume:
+        label = "VOL";
+        if (r.volume >= 0) {
+            v << r.volume;
+        }
+        ink = r.volume == 0 ? p::Warn : p::Text;
+        break;
+    case Layout::Beside::Signal:
+        label = "SIG";
+        if (r.signalKnown) {
+            v << r.signalDbm;
+        } else {
+            v << '-';
+        }
+        break;
+    case Layout::Beside::Voltage:
+    case Layout::Beside::Count:
+        if (r.centivolts > 0) {
+            v << r.centivolts / 100 << '.' << lib::zeroPadded(static_cast<std::uint32_t>(r.centivolts % 100), 2) << 'V';
+            ink = r.batteryLow ? p::Transmit : p::Text;
+        }
+        break;
+    }
+    band(d, SettingsY, InfoY - SettingsY - 1,
+        {{RightX, SettingsY + 5, label, &Small, p::Dim}, {RightX + 22, SettingsY + 3, v.view(), &Body, ink}}, p::Ground,
+        RightX);
+}
+
+lib::StaticString<48> bottomText(const ChannelSelector &sel, const StandbyState &s, int chars)
+{
+    const auto &c = sel.current();
+    lib::StaticString<48> info;
+    if (!s.entry.empty()) {
+        info << "Menu: tune  Exit: cancel";
+    } else if (s.layout.bottom == Layout::Bottom::LastCaller) {
+        info << lastCallText(s, chars).view();
+    } else if (s.layout.bottom == Layout::Bottom::Position) {
+        if (s.gps.on && s.gps.fix.valid) {
+            info << latitudeText(s.gps.fix.latitudeE7).view() << "  " << longitudeText(s.gps.fix.longitudeE7).view();
+        } else {
+            info << "No GPS position";
+        }
+    } else if (s.layout.bottom == Layout::Bottom::None) {
+    } else if (c && s.roaming) {
+        // The repeater a roaming channel works through, counted from 1.
+        if (s.roamSearching) {
+            info << "Looking for a repeater";
+        } else if (s.roamPosition > 0) {
+            info << "via " << (s.roamSite.empty() ? "repeater " : "") << s.roamPosition;
+            if (!s.roamSite.empty()) {
+                info << ' ' << s.roamSite;
+            }
+        } else {
+            info << "via the channel's repeater";
+        }
+    } else if (c) {
+        if (c->analog()) {
+            // Tones and offset on FM.
+            if (c->transmitTone.kind != Tone::Kind::None) {
+                info << 'T' << toneText(c->transmitTone).view() << "  ";
+            }
+            if (c->receiveTone.kind != Tone::Kind::None) {
+                info << 'R' << toneText(c->receiveTone).view() << "  ";
+            }
+            if (c->transmitHz != c->receiveHz) {
+                const bool up = c->transmitHz > c->receiveHz;
+                const std::uint32_t off = up ? c->transmitHz - c->receiveHz : c->receiveHz - c->transmitHz;
+                info << (up ? '+' : '-') << mhz(off).view();
+            }
+        }
+        if (info.size() == 0 && !sel.vfoMode()) {
+            // The channel's name when something else is large; else the zone.
+            const bool channelLarge = bigShows(sel, s) == Big::Channel;
+            info << cut(channelLarge ? sel.zoneName() : std::string_view(c->name), 16) << "  " << sel.position() << '/'
+                 << sel.zoneSize();
+        }
+    }
+    if (c && c->receiveOnly && s.entry.empty()) {
+        info << "  RX ONLY";
+    }
+    lib::StaticString<48> text;
+    text << cut(info.view(), chars);
+    return text;
+}
+
+void StandbyScreen::drawBottom(Display &d, const ChannelSelector &sel, const StandbyState &s)
+{
+    const auto text = bottomText(sel, s, (d.width() - 8) / Small.width);
+    band(d, InfoY, d.height() - HintH - InfoY, {{4, InfoY + 5, text.view(), &Small, p::Dim}});
 }
 
 void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbyState &s)
@@ -187,101 +420,106 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
     const int w = d.width();
     const int h = d.height();
     drawStatus(d, s);
-
-    // The body in bands, top to bottom, each drawn in place.
-    const int zoneY = StatusH + 3;
-    const int nameY = zoneY + Body.height + 4;
-    const int freqY = nameY + Large.height + 2;
-    const int detY = freqY + Medium.height + 6;
-    const int det2Y = detY + Body.height + 1;
-    const int bodyEnd = h - HintH;
-
-    // Zone line: zone name, or VFO, and the position.
-    lib::StaticString<24> right;
-    if (sel.vfoMode()) {
-        band(d, StatusH, nameY - StatusH, {{4, zoneY, "VFO", &Body, p::Dim}});
-    } else {
-        right << sel.position() << '/' << sel.zoneSize();
-        band(d, StatusH, nameY - StatusH,
-            {{4, zoneY, sel.zoneName(), &Body, p::Dim},
-                {w - 4 - textWidth(Body, right.view()), zoneY, right.view(), &Body, p::Dim}});
-    }
-
     const auto &c = sel.current();
-    if (!s.entry.empty()) {
-        const auto e = entryText(s.entry);
-        band(d, nameY, freqY - nameY, {{(w - textWidth(Large, e.view())) / 2, nameY, e.view(), &Large, p::Text}});
-        band(d, freqY, detY - freqY, {{4, freqY + 4, "MHz  Menu: tune  Exit: cancel", &Body, p::Dim}});
-        band(d, detY, bodyEnd - detY, {});
-    } else if (!c) {
-        band(d, nameY, freqY - nameY, {{4, nameY, "No channel", &Medium, p::Dim}});
-        band(d, freqY, bodyEnd - freqY, {});
-    } else {
-        const auto f = mhz(c->receiveHz);
-        lib::StaticString<16> fl;
-        if (sel.vfoMode() || c->name[0] == '\0') {
-            band(d, nameY, freqY - nameY, {{(w - textWidth(Large, f.view())) / 2, nameY, f.view(), &Large, p::Text}});
-        } else {
-            // A long name takes the smaller font, centred in the same band.
-            const std::string_view name(c->name);
-            const Font &nf = textWidth(Large, name) <= w - 8 ? Large : Medium;
-            band(d, nameY, freqY - nameY,
-                {{(w - textWidth(nf, name)) / 2, nameY + (Large.height - nf.height) / 2, name, &nf, p::Text}});
-            fl << f.view() << " MHz";
-        }
-        if (s.roaming) {
-            // The repeater in use changes as the radio roams: small, under
-            // the name.
-            lib::StaticString<40> rl;
-            if (s.roamSearching) {
-                rl << "Searching...";
-            } else {
-                rl << mhz(s.roamHz != 0 ? s.roamHz : c->receiveHz).view() << "  TS" << c->dmr.slot << "  CC"
-                   << s.roamColourCode;
-                if (!s.roamSite.empty()) {
-                    rl << "  " << s.roamSite;
-                }
-            }
-            band(d, freqY, detY - freqY,
-                {{(w - textWidth(Body, rl.view())) / 2, freqY + (Medium.height - Body.height) / 2, rl.view(), &Body,
-                    p::Dim}});
-        } else {
-            band(d, freqY, detY - freqY, {{(w - textWidth(Medium, fl.view())) / 2, freqY, fl.view(), &Medium, p::Text}});
-        }
 
-        // Details: mode and width, tones, power, offset.
-        lib::StaticString<40> det;
-        if (s.roaming) {
-            det << "DMR ROAMING";
-        } else if (!c->analog()) {
-            det << "DMR CC" << c->dmr.colourCode << " TS" << c->dmr.slot;
-        } else {
-            det << "FM " << (c->wide ? "25k" : "12.5k");
-            if (c->transmitTone.kind != Tone::Kind::None) {
-                det << "  T" << toneText(c->transmitTone).view();
+    // The top line, left of the clock.
+    lib::StaticString<24> top;
+    if (!s.entry.empty()) {
+        top << "ENTER MHz";
+    } else if (sel.vfoMode()) {
+        top << "VFO";
+    } else {
+        switch (s.layout.top) {
+        case Layout::Top::Talkgroup:
+            top << (hasTalkgroup(sel, s) ? s.talkgroup : std::string_view("CHANNEL"));
+            break;
+        case Layout::Top::Zone:
+            top << sel.zoneName();
+            break;
+        case Layout::Top::Number:
+            if (c) {
+                top << "CH " << sel.position() << '/' << sel.zoneSize();
             }
-            if (c->receiveTone.kind != Tone::Kind::None) {
-                det << "  R" << toneText(c->receiveTone).view();
-            }
+            break;
+        case Layout::Top::None:
+        case Layout::Top::Count:
+            break;
         }
-        band(d, detY, det2Y - detY, {{4, detY, det.view(), &Body, p::Dim}});
-        lib::StaticString<40> det2;
-        det2 << powerText(c->power);
-        if (c->transmitHz != c->receiveHz && !s.roaming) {
-            const bool up = c->transmitHz > c->receiveHz;
-            const std::uint32_t off = up ? c->transmitHz - c->receiveHz : c->receiveHz - c->transmitHz;
-            det2 << "  " << (up ? '+' : '-') << mhz(off).view();
-        }
-        if (c->receiveOnly) {
-            det2 << "  RX ONLY";
-        }
-        band(d, det2Y, bodyEnd - det2Y, {{4, det2Y, det2.view(), &Body, p::Dim}});
     }
+    band(d, LabelY, NameY - LabelY, {{4, LabelY + 4, cut(top.view(), (RightX - 8) / Small.width), &Small, p::Dim}},
+        p::Ground, 0, RightX);
+    drawClock(d, s);
+
+    // The large name; a long one takes the smaller font.
+    std::string_view primary;
+    lib::StaticString<12> f;
+    switch (bigShows(sel, s)) {
+    case Big::Entry:
+        f = entryText(s.entry);
+        primary = f.view();
+        break;
+    case Big::None:
+        primary = "No channel";
+        break;
+    case Big::Zone:
+        primary = sel.zoneName();
+        break;
+    case Big::ContactName:
+        primary = s.talkgroupName;
+        break;
+    case Big::Contact:
+        primary = s.talkgroup;
+        break;
+    case Big::Frequency:
+        f = mhz(c->receiveHz);
+        primary = f.view();
+        break;
+    case Big::Channel:
+        primary = c->name;
+        break;
+    }
+    const Font &pf = textWidth(Large, primary) <= w - 8 ? Large : Medium;
+    const int py = NameY + (Large.height - pf.height) / 2 + 1;
+    band(d, NameY, PanelY - NameY - 1, {{4, py, cut(primary, (w - 8) / pf.width), &pf, p::Text}});
+    d.fillRect(0, PanelY - 1, w, 1, p::Rule);
+
+    drawMiddle(d, sel, s);
+
+    // The power, and the reading beside it.
+    band(d, SettingsY, InfoY - SettingsY - 1,
+        {{4, SettingsY + 5, c ? "PWR" : "", &Small, p::Dim},
+            {26, SettingsY + 3, c ? std::string_view(powerText(c->power)) : std::string_view{}, &Body, p::Text}},
+        p::Ground, 0, RightX);
+    drawBeside(d, s);
+    d.fillRect(0, InfoY - 1, w, 1, p::Rule);
+
+    drawBottom(d, sel, s);
 
     // Bottom bar: the quick keys, or a short note.
     d.fillRect(0, h - HintH, w, 1, p::Rule);
     const std::string_view hints = s.note.empty() ? s.keys : s.note;
     band(d, h - HintH + 1, HintH - 1, {{3, h - HintH + 2, hints, &Small, p::Dim}});
+    m_shown = s.readings;
+}
+
+std::uint8_t StandbyScreen::refresh(Display &d, const ChannelSelector &sel, const StandbyState &s)
+{
+    namespace rows = services::home_rows;
+    const std::uint8_t changed = services::changedRows(s.layout, m_shown, s.readings);
+    if ((changed & rows::Clock) != 0) {
+        drawClock(d, s);
+    }
+    if ((changed & rows::Middle) != 0) {
+        drawMiddle(d, sel, s);
+    }
+    if ((changed & rows::Beside) != 0) {
+        drawBeside(d, s);
+    }
+    if ((changed & rows::Bottom) != 0) {
+        drawBottom(d, sel, s);
+    }
+    m_shown = s.readings;
+    return changed;
 }
 
 void StandbyScreen::drawCall(Display &d, const StandbyState &s, const CallInfo &c)
