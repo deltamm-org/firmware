@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 namespace dmm::app::system {
 
@@ -38,6 +39,9 @@ void setClock(std::uint32_t utc, const char *source);
 
 /// Logs the clock's state now.
 void reportClock();
+
+/// Logs how the loader sees the running image, under @p module.
+void logLoaderStatus(std::string_view module);
 
 /// The radio's calibration once it has been read and looks valid, else
 /// nullptr. Read-only after that, from any task.
