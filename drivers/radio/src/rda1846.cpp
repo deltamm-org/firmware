@@ -3,6 +3,8 @@
 
 #include "dmm/drivers/radio/rda1846.h"
 
+#include <algorithm>
+#include <cmath>
 #include <span>
 
 namespace dmm::drivers::radio {
@@ -112,6 +114,11 @@ constexpr std::uint16_t DetectCtcss = 1u << 0;
 constexpr std::uint16_t DetectDcsClock = 1u << 3 | 1u << 5;
 constexpr std::uint16_t DetectDcs = 1u << 1 | DetectDcsClock;
 constexpr std::uint16_t DetectDcsInverted = 1u << 2 | DetectDcsClock;
+// The transmit voice digital gain: the low seven bits of this register.
+// The programming guide gives the field no unit; it is scaled as an
+// amplitude.
+constexpr std::uint8_t VoiceGainRegister = 0x41;
+constexpr std::uint16_t VoiceGainBits = 0x7F;
 
 // Control register: reference 26 MHz, chip powered, and for wide channels
 // both the analog and the DSP filters at 25 kHz.
@@ -148,10 +155,33 @@ Rda1846::Rda1846(hal::RegisterBus &bus, const Tuning &tuning)
 {
 }
 
+std::uint16_t Rda1846::scaledVoiceGain(std::uint16_t value, int db)
+{
+    const unsigned gain = value & VoiceGainBits;
+    if (db == 0 || gain == 0) {
+        return value;
+    }
+    const long scaled = std::lround(static_cast<float>(gain) * std::pow(10.0F, static_cast<float>(db) / 20.0F));
+    const auto field = static_cast<std::uint16_t>(std::clamp<long>(scaled, 1, VoiceGainBits));
+    return static_cast<std::uint16_t>((value & ~VoiceGainBits) | field);
+}
+
+std::uint16_t Rda1846::adjusted(std::uint8_t reg, std::uint16_t value)
+{
+    if (reg == DetectRegister) {
+        return static_cast<std::uint16_t>((value & ~DetectBits) | m_detect);
+    }
+    if (reg == VoiceGainRegister) {
+        m_voiceWord = value;
+        return m_bandwidth == Bandwidth::Digital ? value : scaledVoiceGain(value, m_voiceGainDb);
+    }
+    return value;
+}
+
 void Rda1846::write(std::span<const Setting> settings, void (*sleepMs)(unsigned))
 {
     for (const Setting &s : settings) {
-        m_bus.write(s.reg, s.value);
+        m_bus.write(s.reg, adjusted(s.reg, s.value));
         if (s.sleepMs != 0) {
             sleepMs(s.sleepMs);
         }
@@ -166,15 +196,12 @@ void Rda1846::write(std::span<const WidthSetting> settings)
         if (value == Keep) {
             continue;
         }
-        if (s.reg == DetectRegister) {
-            value = static_cast<std::uint16_t>((value & ~DetectBits) | m_detect);
-        }
         if (s.reg == VolumeRegister && m_bandwidth != Bandwidth::Digital &&
             m_microphoneLevel < m_tuning->microphoneGains.size()) {
             value = static_cast<std::uint16_t>((value & ~TransmitGainBits) |
                 (m_tuning->microphoneGains[m_microphoneLevel] & 0x0F) << 8);
         }
-        m_bus.write(s.reg, value);
+        m_bus.write(s.reg, adjusted(s.reg, value));
     }
 }
 
@@ -283,6 +310,10 @@ void Rda1846::setMode(Mode mode)
     }
     const bool transmit = mode == Mode::Transmit;
     write(transmit ? m_tuning->transmit : m_tuning->receive);
+    // Also for a tuning that writes the voice gain only at start.
+    if (transmit && m_voiceWord != 0 && m_bandwidth != Bandwidth::Digital) {
+        m_bus.write(VoiceGainRegister, scaledVoiceGain(m_voiceWord, m_voiceGainDb));
+    }
     m_bus.write(ControlRegister, static_cast<std::uint16_t>(idle | (transmit ? TransmitOn : ReceiveOn)));
 }
 

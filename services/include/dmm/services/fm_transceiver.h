@@ -63,8 +63,9 @@ struct FmReceiveStatus
 /// - logStatus(what): logs @p what, then what the receiver hears in the
 ///   chip's own figures.
 /// - setMicrophoneMuted(muted).
-/// - setMicrophoneLevel(level): the microphone gain on FM channels, from
-///   the next tuning: level 0..4 of five, 2 the middle one.
+/// - setMicrophoneGain(db): the microphone gain in dB (microphone_gain)
+///   on FM channels, from the next transmit(), for the microphone that
+///   reaches the transceiver directly.
 /// - setGpsPower(on): switches the GPS receiver's supply where it runs
 ///   through the transceiver's part of the board, else does nothing; kept
 ///   across start().
@@ -72,7 +73,7 @@ struct FmReceiveStatus
 ///   experiments; results go to the log. False if @p text is none of them.
 template <class T>
 concept FmTransceiver = requires(T &fm, const T &state, const FmChannel &channel, int squelchLevel, PowerLevel level,
-    bool on, unsigned microphoneLevel, std::string_view text) {
+    bool on, std::string_view text, int db) {
     { fm.present() } -> std::same_as<bool>;
     { fm.start() } -> std::same_as<bool>;
     { fm.receive(channel, squelchLevel) } -> std::same_as<const char *>;
@@ -88,7 +89,7 @@ concept FmTransceiver = requires(T &fm, const T &state, const FmChannel &channel
     fm.keepLocked();
     fm.logStatus(text);
     fm.setMicrophoneMuted(on);
-    fm.setMicrophoneLevel(microphoneLevel);
+    fm.setMicrophoneGain(db);
     fm.setGpsPower(on);
     { fm.debugCommand(text) } -> std::same_as<bool>;
     { state.debugHelp() } -> std::same_as<const char *>;

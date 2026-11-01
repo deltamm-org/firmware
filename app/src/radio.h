@@ -52,6 +52,14 @@ struct Microphone
 {
     bool on;
 };
+/// Microphone gain in dB (services::microphone_gain) on DMR and on FM
+/// channels, from the next transmission; a negative value keeps that one.
+/// Logs both.
+struct MicrophoneGain
+{
+    std::int8_t dmrDb;
+    std::int8_t fmDb;
+};
 /// Receive FM at @c receiveHz; the squelch opens the speaker.
 struct FmReceive
 {
@@ -77,12 +85,6 @@ struct BatterySave
 struct VoiceEnhancement
 {
     bool on;
-};
-/// The microphone gain on FM channels, level 0..4 (2 the middle one), from
-/// the next tuning.
-struct FmMicrophoneLevel
-{
-    std::uint8_t level;
 };
 /// Logs battery save's state and what keeps the radio awake.
 struct BatterySaveStatus
@@ -200,7 +202,7 @@ struct GpsPower
     bool on;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, MicrophoneGain, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, GpsPower>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.
