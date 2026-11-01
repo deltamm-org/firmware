@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "draw.h"
+
 #include "dmm/services/channel_selector.h"
 #include "dmm/services/display.h"
 #include "dmm/services/nmea.h"
@@ -11,19 +13,6 @@
 #include <string_view>
 
 namespace dmm::app::ui {
-
-/// The palette of the radio's own screens: black ground, white primary
-/// text, grey secondary text, thin grey rules between areas, and colour
-/// only for state.
-namespace palette {
-inline constexpr services::Color Ground = services::rgb(0, 0, 0);
-inline constexpr services::Color Text = services::rgb(255, 255, 255);
-inline constexpr services::Color Dim = services::rgb(150, 150, 150);
-inline constexpr services::Color Rule = services::rgb(70, 70, 70);
-inline constexpr services::Color Transmit = services::rgb(210, 40, 30);
-inline constexpr services::Color Receive = services::rgb(40, 170, 60);
-inline constexpr services::Color Warn = services::rgb(230, 160, 0);
-} // namespace palette
 
 /// The GPS receiver as the screens show it.
 struct GpsState

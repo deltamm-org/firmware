@@ -191,13 +191,6 @@ BatteryState batteryState;
 int headerHeight = 8;
 int headerTop = 0;
 
-void fillArea(Display &d, int x, int y, int w, int h, Color c)
-{
-    if (w > 0 && h > 0) {
-        d.fillRect(x, y, w, h, c);
-    }
-}
-
 // The battery at the header's right end, in its own field from 48 pixels
 // before the edge: the voltage, then four bars. Everything is drawn in
 // place with only the gaps painted, so an update does not flicker.
