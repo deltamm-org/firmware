@@ -35,7 +35,7 @@ target_link_options(deltamm PRIVATE
 set_target_properties(deltamm PROPERTIES SUFFIX ".elf" LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/gd32f303_app.ld)
 
 # The core libraries must not pull in the heap, exceptions or printf.
-set(_core_libs dmm_lib dmm_os dmm_drivers_usb dmm_drivers_display dmm_drivers_storage dmm_drivers_baseband dmm_drivers_radio dmm_services dmm_app dmm_hal_gd32f30x)
+set(_core_libs dmm_lib dmm_boot dmm_os dmm_drivers_usb dmm_drivers_display dmm_drivers_storage dmm_drivers_baseband dmm_drivers_radio dmm_services dmm_app dmm_hal_gd32f30x)
 set(_core_files)
 foreach(lib IN LISTS _core_libs)
     list(APPEND _core_files $<TARGET_FILE:${lib}>)

@@ -1,6 +1,21 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Tommi Tauriainen
 
+# The loader's logic (boot record, swap, boot decision, PC protocol): no
+# kernel, so the loader image and the host tools build it on its own.
+add_library(dmm_boot STATIC
+    src/boot_image.cpp
+    src/boot_loader.cpp
+    src/boot_record.cpp
+    src/loader_protocol.cpp)
+target_include_directories(dmm_boot PUBLIC include)
+target_link_libraries(dmm_boot PUBLIC dmm_lib)
+dmm_core_options(dmm_boot)
+
+if(NOT TARGET dmm_os)
+    return()
+endif()
+
 add_library(dmm_services STATIC
     src/battery.cpp
     src/channel_selector.cpp
@@ -29,5 +44,5 @@ add_library(dmm_services STATIC
     src/fonts/spleen_8x16.cpp
     src/fonts/spleen_12x24.cpp)
 target_include_directories(dmm_services PUBLIC include)
-target_link_libraries(dmm_services PUBLIC dmm_lib dmm_os dmm_drivers_usb dmm_drivers_storage dmm_drivers_baseband dmm_drivers_radio)
+target_link_libraries(dmm_services PUBLIC dmm_boot dmm_lib dmm_os dmm_drivers_usb dmm_drivers_storage dmm_drivers_baseband dmm_drivers_radio)
 dmm_core_options(dmm_services)
