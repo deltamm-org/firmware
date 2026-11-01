@@ -276,7 +276,7 @@ frequencies, as at the start. A pass starts afresh in the new order.
 - Menu > Channel > Roam status: the repeater in use and its state, then
   each repeater heard with its level and age.
 - Menu > Channel > Roaming off and on, and Roam zone, take effect at
-  once.
+  once; Roam zone is kept across restarts.
 - The console: `roam` logs the state and the heard list; each check
   (with the level read, also on an empty channel), search and move is
   logged.
