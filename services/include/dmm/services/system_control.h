@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace dmm::services {
 
@@ -54,6 +55,13 @@ public:
     virtual ResetReport lastReset() = 0;
     /// Crashes on purpose, to test crash capture. Does not return on a radio.
     virtual void testFault() = 0;
+    /// Runs one of the board's own console commands and returns its reply
+    /// line, or nothing when @p command is none of them.
+    virtual std::string_view boardCommand(std::string_view command)
+    {
+        static_cast<void>(command);
+        return {};
+    }
 
 protected:
     ~SystemControl() = default;

@@ -9,6 +9,9 @@
 #include "board_display.h"
 #include "board_fm_tuning.h"
 #include "board_rf.h"
+#ifdef DMM_FLASH_PROBE
+#include "flash_probe.h"
+#endif
 #include "dmm/board/board_battery.h"
 #include "dmm/board/board_gps.h"
 #include "dmm/board/board_input.h"
@@ -205,6 +208,16 @@ public:
     void testFault() override
     {
         cm::triggerTestFault();
+    }
+    std::string_view boardCommand(std::string_view command) override
+    {
+#ifdef DMM_FLASH_PROBE
+        if (command == "flashprobe") {
+            return flashProbeReport();
+        }
+#endif
+        static_cast<void>(command);
+        return {};
     }
 
 private:

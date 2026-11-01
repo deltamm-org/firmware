@@ -511,6 +511,8 @@ void runCommand(std::string_view command)
             log::info("console") << "no GPS receiver";
         }
     } else if (radioCommand(command)) {
+    } else if (const std::string_view reply = platform->system.boardCommand(command); !reply.empty()) {
+        log::info("console") << reply;
     } else if (!command.empty()) {
         log::info("console") << "unknown command, try help";
     }

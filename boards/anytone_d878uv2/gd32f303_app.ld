@@ -29,7 +29,12 @@ SECTIONS
 
     .text :
     {
+        /* Time-critical code first, so it stays in the flash executed
+           without wait states. */
+        *(.text.hot .text.hot.*)
+        KEEP(*(.probe_near.*))
         *(.text .text.*)
+        __code_end = .;
         *(.rodata .rodata.*)
         . = ALIGN(4);
     } > FLASH
@@ -84,4 +89,15 @@ SECTIONS
     } > NOINIT
 
     __image_end = LOADADDR(.data) + SIZEOF(.data);
+
+    /* The flash speed probe's copies at fixed addresses (DMM_FLASH_PROBE
+       builds; otherwise empty and dropped). */
+    .probe_far0 0x08040000 :
+    {
+        KEEP(*(.probe_far0.*))
+    } > FLASH
+    .probe_far1 0x08080000 :
+    {
+        KEEP(*(.probe_far1.*))
+    } > FLASH
 }
