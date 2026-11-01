@@ -4,6 +4,7 @@
 #include "dmm/services/d878uv2_codeplug.h"
 
 #include "d878uv2_layout.h"
+#include "dmm/services/d878uv2_preferences.h"
 
 #include <algorithm>
 #include <iterator>
@@ -171,6 +172,7 @@ CodeplugSettings decodeSettings(std::span<const std::uint8_t> b)
     s.batterySave = b[0x0B] <= 2 ? b[0x0B] : 1;
     constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
     s.backlightS = b[0x27] < std::size(BacklightTimes) ? BacklightTimes[b[0x27]] : 0;
+    s.backlightLevel = static_cast<std::uint8_t>((b[0x26] > 4 ? 3 : b[0x26]) + 1);
     s.voiceEnhancement = b[0x57] == 1;
     s.gps = b[0x28] != 0;
     // The time zone in half hours from UTC-12:00 (0) through UTC (24).
@@ -275,6 +277,25 @@ std::optional<CodeplugSettings> D878Uv2Codeplug::settings()
         decodeSettingsExtension(e, s);
     }
     return s;
+}
+
+std::optional<RadioPreferences> D878Uv2Codeplug::preferences()
+{
+    std::array<std::uint8_t, PreferencesRecordBytes> r{};
+    if (!readable(read(Preferences, r))) {
+        return std::nullopt;
+    }
+    return decodePreferences(r);
+}
+
+std::optional<std::uint32_t> D878Uv2Codeplug::storageAddress(std::uint32_t address)
+{
+    const std::uint32_t block = address - address % BlockBytes;
+    bool firstValid = false;
+    if (!copyValid(block, firstValid)) {
+        return std::nullopt;
+    }
+    return firstValid ? address : address + BlockBytes;
 }
 
 bool D878Uv2Codeplug::bitSet(std::uint32_t bitmap, unsigned index)

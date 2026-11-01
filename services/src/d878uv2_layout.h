@@ -15,6 +15,12 @@ constexpr std::uint32_t ChannelBanks = 0x00800000;
 constexpr std::uint32_t ChannelBankStride = 0x00040000;
 constexpr unsigned ChannelsPerBank = 128;
 constexpr std::uint32_t ChannelBytes = 0x40;
+// Each channel's extension record, this far after the channel's own.
+constexpr std::uint32_t ChannelExtensionOffset = 0x2000;
+// DeltaMM's preferences record (d878uv2_preferences.h): in the first
+// channel bank's block, past the most its channels and their extensions
+// take and before the block's copy markers, where codeplugs hold nothing.
+constexpr std::uint32_t Preferences = 0x0081E000;
 constexpr std::uint32_t ZoneChannels = 0x01000000;
 constexpr std::uint32_t ZoneChannelStride = 0x200;
 constexpr std::uint32_t Settings = 0x02500000;
