@@ -16,11 +16,14 @@
 #include "dmm/services/channel_selector.h"
 #include "dmm/services/clock.h"
 #include "dmm/services/codeplug.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/input.h"
 #include "dmm/services/log.h"
 #include "dmm/services/power.h"
 #include "dmm/version.h"
 
+#include <algorithm>
+#include <array>
 #include <iterator>
 #include <string_view>
 
@@ -426,16 +429,16 @@ std::uint8_t gpsSystems = services::gps_systems::Gps | services::gps_systems::Be
 // Local time minus UTC, from the codeplug, in half-hour steps.
 int timeZoneMinutes = 0;
 
-// The local time as "HH:MM", or empty while the clock does not know it.
-lib::StaticString<6> localClockText()
+// The local time at UTC @p utc as "HH:MM".
+lib::StaticString<6> localClockText(std::uint32_t utc)
 {
     lib::StaticString<6> s;
-    if (const auto utc = system::utcNow()) {
-        const services::DateTime t = services::dateTime(static_cast<std::uint32_t>(static_cast<std::int64_t>(*utc) + timeZoneMinutes * 60));
-        s << lib::zeroPadded(t.hour, 2) << ':' << lib::zeroPadded(t.minute, 2);
-    }
+    const services::DateTime t = services::dateTime(static_cast<std::uint32_t>(static_cast<std::int64_t>(utc) + timeZoneMinutes * 60));
+    s << lib::zeroPadded(t.hour, 2) << ':' << lib::zeroPadded(t.minute, 2);
     return s;
 }
+// What each row of the home screen shows.
+services::HomeLayout homeLayout;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
@@ -457,6 +460,11 @@ struct HeardCall
 };
 HeardCall heard;
 char callChannel[Channel::NameBytes + 1] = {};
+// The last call heard, for the home screen: the caller's name (empty when
+// not known), ID, and when the call ended (0 for none).
+char lastCaller[CodeplugSource::ContactNameBytes + 1] = {};
+std::uint32_t lastCallerId = 0;
+os::Ticks lastCallAt = 0;
 // Roaming: the roaming zone, how many repeaters it has, and the repeater
 // the radio task last reported.
 std::uint8_t roamingZone = services::RoamingSettings::NoZone;
@@ -554,6 +562,8 @@ services::KeyFunction sideShort[CodeplugSettings::SideKeys] = {};
 services::KeyFunction sideLong[CodeplugSettings::SideKeys] = {};
 bool sideLongDone[CodeplugSettings::SideKeys] = {};
 constexpr os::Ticks CallHoldMs = 5000;
+// How long the home screen shows a signal's level after it was last read.
+constexpr os::Ticks SignalHoldMs = 2000;
 constexpr std::uint32_t AllCallId = 0xFFFFFF;
 
 template <std::size_t N>
@@ -564,6 +574,41 @@ void copyName(char (&out)[N], const char *text)
         out[n] = text[n];
     }
     out[n] = '\0';
+}
+
+// The channel's contact as the home screen names it ("TG 9", and the
+// contact's name), looked up again only when the contact changes.
+char talkgroupText[16] = {};
+char talkgroupName[CodeplugSource::ContactNameBytes + 1] = {};
+services::dmr::Target talkgroupFor{services::dmr::CallType::All, 0xFFFFFFFF};
+
+// A DMR channel with a contact to call.
+bool hasTalkgroup(const Channel &c)
+{
+    return c.digital() && (c.dmr.contact.id != 0 || c.dmr.contact.type == services::dmr::CallType::All);
+}
+
+void nameTalkgroup(const services::dmr::Target &t)
+{
+    if (t == talkgroupFor) {
+        return;
+    }
+    talkgroupFor = t;
+    lib::StaticString<16> text;
+    if (t.type == services::dmr::CallType::All) {
+        text << "ALL CALL";
+    } else {
+        text << (t.type == services::dmr::CallType::Group ? "TG " : "PC ") << t.id;
+    }
+    const std::size_t n = std::min(text.view().size(), sizeof(talkgroupText) - 1);
+    std::copy_n(text.view().data(), n, talkgroupText);
+    talkgroupText[n] = '\0';
+    talkgroupName[0] = '\0';
+    std::array<char, CodeplugSource::ContactNameBytes + 1> name{};
+    if (t.type != services::dmr::CallType::All && codeplug != nullptr &&
+        codeplug->contactName(t.id, t.type == services::dmr::CallType::Group, name)) {
+        copyName(talkgroupName, name.data());
+    }
 }
 
 // Names for a call from the codeplug: the caller's own contact entry
@@ -795,7 +840,10 @@ void uiMain(void *)
         notice("Please wait...");
     };
     lib::StaticString<6> clockText;
-    os::Ticks lastClockMinute = 0;
+    lib::StaticString<12> lastCallerText;
+    // The home screen's live rows are checked this often.
+    constexpr os::Ticks HomeCheckMs = 250;
+    os::Ticks lastHomeCheck = 0;
     bool gpsScreenNeed = false;
     // Battery save also decides whether the GPS receiver sleeps between fixes.
     auto setBatterySave = [&](std::uint8_t mode) {
@@ -809,22 +857,71 @@ void uiMain(void *)
         s.receiving = receiving;
         s.locked = keyLock.locked() || keyLock.settings().forced;
         s.entry = std::string_view(entry, entryLength);
-        s.volume = volumeLevel;
         s.keys = quickKeys.view();
         s.gps = gpsState;
-        clockText = localClockText();
-        s.clock = clockText.view();
-        if (channels != nullptr) {
-            const std::optional<Channel> &ch = channels->current();
-            s.roaming = ch && ch->digital() && ch->roaming && roamingSites > 0;
+        s.layout = homeLayout;
+        services::HomeReadings &r = s.readings;
+        clockText.clear();
+        if (const auto utc = system::utcNow()) {
+            clockText = localClockText(*utc);
+            r.clockMinutes = (static_cast<std::int64_t>(*utc) + timeZoneMinutes * 60) / 60;
         }
+        s.clock = clockText.view();
+        r.volume = volumeLevel;
+        r.centivolts = (batteryState.millivolts + 5) / 10;
+        r.batteryLow = batteryState.low;
+        const Channel *ch = channels != nullptr && channels->current() ? &*channels->current() : nullptr;
+        s.roaming = ch != nullptr && ch->digital() && ch->roaming && roamingSites > 0;
         s.roamSearching = roam.searching;
         s.roamLost = roam.lost;
         s.roamHz = roam.receiveHz;
         s.roamColourCode = roam.colourCode;
+        s.roamPosition = roam.site + 1;
         s.roamSite = roam.name;
+        if (ch != nullptr && hasTalkgroup(*ch)) {
+            nameTalkgroup(ch->dmr.contact);
+            s.talkgroup = talkgroupText;
+            s.talkgroupName = talkgroupName;
+        }
+        // The signal: a quiet roaming repeater's last level while it is
+        // current, else the level heard in the last moments.
+        const os::Ticks now = os::nowMs();
+        if (homeLayout.showsSignal()) {
+            if (s.roaming && !receiving && roam.site >= 0) {
+                radio::roamingView(roamView);
+                for (std::size_t i = 0; i < roamView.count; ++i) {
+                    const auto &e = roamView.entries[i];
+                    if (e.position == roam.site && e.current(now)) {
+                        r.signalKnown = true;
+                        r.signalDbm = e.levelDbm;
+                    }
+                }
+            }
+            const radio::SignalLevel level = radio::signalLevel();
+            if (!r.signalKnown && level.known && now - level.atMs < SignalHoldMs) {
+                r.signalKnown = true;
+                r.signalDbm = level.dbm;
+            }
+        }
+        if (lastCallAt != 0) {
+            r.lastCallAt = lastCallAt;
+            r.lastCallAge = services::ageOf((now - lastCallAt) / 1000);
+            s.lastCaller = lastCaller;
+            if (lastCaller[0] == '\0') {
+                lastCallerText.clear();
+                lastCallerText << lastCallerId;
+                s.lastCaller = lastCallerText.view();
+            }
+        }
+        if (gpsState.on && gpsState.fix.valid) {
+            r.positionKnown = true;
+            r.latitudeE5 = gpsState.fix.latitudeE7 / 100;
+            r.longitudeE5 = gpsState.fix.longitudeE7 / 100;
+        }
         return s;
     };
+    // The home screen is up, not the call screen.
+    auto homeShown = [&] { return view == View::Standby && !heard.shown && channels != nullptr; };
     auto callInfo = [&] {
         CallInfo c;
         c.active = heard.active;
@@ -1483,6 +1580,9 @@ void uiMain(void *)
                                } else if (heard.active) {
                                    heard.active = false;
                                    heard.ended = os::nowMs();
+                                   copyName(lastCaller, heard.caller);
+                                   lastCallerId = heard.source;
+                                   lastCallAt = heard.ended;
                                }
                                if (view == View::Standby && !noticeShown) {
                                    redrawView();
@@ -1634,10 +1734,8 @@ void uiMain(void *)
                                }
                                volumeLevel = step;
                                if (changed && view == View::Standby) {
-                                   // Only what changes: the status bar's volume
-                                   // field, and the notice's number and bar once
-                                   // it is up.
-                                   standby.drawVolume(d, standbyState());
+                                   // Only what changes: the notice's number and
+                                   // bar once it is up.
                                    drawVolumeNotice(d, step, !(noticeShown && volumeNoticeUp));
                                    noticeShown = true;
                                    volumeNoticeUp = true;
@@ -1720,15 +1818,11 @@ void uiMain(void *)
             gpsScreenNeed = view == View::Gps;
             gps::post(gps::Need{services::GpsSchedule::Client::Screen, gpsScreenNeed ? 1000u : 0u});
         }
-        // The status bar's clock moves on each minute.
-        if (const auto utc = system::utcNow()) {
-            const os::Ticks minute = *utc / 60;
-            if (minute != lastClockMinute) {
-                lastClockMinute = minute;
-                if (!noticeShown) {
-                    refreshLockMark();
-                }
-            }
+        // The home screen's rows that change by themselves: only those whose
+        // values changed are drawn again.
+        if (homeShown() && !noticeShown && os::nowMs() - lastHomeCheck >= HomeCheckMs) {
+            lastHomeCheck = os::nowMs();
+            standby.refresh(d, *channels, standbyState());
         }
         // The call screen: its time each second, back to standby a moment
         // after the call.
