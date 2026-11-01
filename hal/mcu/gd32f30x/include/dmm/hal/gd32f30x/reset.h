@@ -28,4 +28,8 @@ struct ResetFlags
 /// Reads why the MCU last reset and clears the flags. Call once at start.
 ResetFlags takeResetFlags();
 
+/// Reads the reset flags and leaves them set. They gather over resets
+/// until cleared.
+ResetFlags readResetFlags();
+
 } // namespace dmm::hal::gd32f30x

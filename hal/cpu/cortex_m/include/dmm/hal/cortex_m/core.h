@@ -147,6 +147,21 @@ inline void disableIrq(unsigned irq)
     reg(nvic::Icer + 4 * (irq / 32)) = 1u << (irq % 32);
 }
 
+/// Starts the image whose vector table is at @p base: points the vector
+/// table there, loads its stack pointer and jumps to its reset handler.
+/// Interrupts should be masked.
+[[noreturn]] inline void startImageAt(std::uint32_t base)
+{
+    const auto *table = reinterpret_cast<const volatile std::uint32_t *>(base);
+    reg(scb::Vtor) = base;
+    dataSyncBarrier();
+    instructionSyncBarrier();
+    asm volatile("msr msp, %0\n\t"
+                 "bx %1" ::"r"(table[0]),
+        "r"(table[1]) : "memory");
+    __builtin_unreachable();
+}
+
 /// Restarts the whole MCU.
 [[noreturn]] inline void systemReset()
 {
