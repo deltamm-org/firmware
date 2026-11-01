@@ -99,7 +99,9 @@ void SimStorage::putSampleCodeplug()
     }
     put(0x02500000 + 0x09, 3); // squelch A
     put(0x02500000 + 0x0A, 3);
-    put(0x02500000 + 0x04, 1); // 30 s timeout
+    put(0x02500000 + 0x04, 1);  // 30 s timeout
+    put(0x02500000 + 0x26, 3);  // brightness 4 of 5
+    put(0x02500000 + 0x30, 24); // UTC
     put(0x02500000 + 0xBE, 0x0B);
     putBytes(0x02500100, {1, 0});
     put(0x02500000 + 0x12, 0x24); // PF3: roam

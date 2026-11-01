@@ -1740,12 +1740,23 @@ void uiMain(void *)
                                if (settingsStore != nullptr) {
                                    settingsStore->report();
                                }
-                               const auto p = codeplug != nullptr ? codeplug->preferences() : std::nullopt;
-                               auto line = log::info("ui");
-                               if (p) {
-                                   line << "preferences record: roaming " << (p->roaming ? "on" : "off");
+                               if (codeplug == nullptr) {
+                                   return;
+                               }
+                               // As the codeplug holds them now.
+                               if (const auto s = codeplug->settings()) {
+                                   log::info("ui") << "codeplug: squelch " << s->squelchA << '/' << s->squelchB << ", zone "
+                                                   << s->zoneA << '/' << s->zoneB << ", light " << s->backlightLevel << ' '
+                                                   << durationText(s->backlightS).view() << ", battery save "
+                                                   << s->batterySave << ", auto lock " << s->keyLock.autoLockMs / 1000
+                                                   << " s, GPS " << (s->gps ? "on" : "off") << " systems "
+                                                   << s->gpsSystems << ", " << zoneText(s->timeZoneMinutes).view()
+                                                   << ", roaming zone " << s->roaming.zone;
+                               }
+                               if (const auto p = codeplug->preferences()) {
+                                   log::info("ui") << "preferences record: roaming " << (p->roaming ? "on" : "off");
                                } else {
-                                   line << "no preferences record";
+                                   log::info("ui") << "no preferences record";
                                }
                            },
                            [&](const EncoderClicks &c) {
