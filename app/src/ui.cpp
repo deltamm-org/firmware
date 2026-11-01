@@ -32,7 +32,7 @@ using namespace services;
 using services::log::Level;
 namespace log = services::log;
 
-os::Task<896> uiTask;
+os::Task<1088> uiTask;
 os::Queue<Message, 16> inbox;
 Display *display = nullptr;
 CodeplugSource *codeplug = nullptr;
