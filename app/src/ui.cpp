@@ -191,50 +191,45 @@ struct BatteryState
 
 BatteryState batteryState;
 
-// Right-aligned in the header: four bars (red when low) and the voltage.
+// Right-aligned in the header: a battery icon.
 // The radio's own screens put it in their taller status bar.
 int headerHeight = 8;
 int headerTop = 0;
 
-// The battery at the header's right end, in its own field from 48 pixels
-// before the edge: the voltage, then four bars. Everything is drawn in
-// place with only the gaps painted, so an update does not flicker.
+// A battery at the header's right end, in its own field from 48 pixels
+// before the edge: filled from the left by its level, so the outline shows
+// as it drains, red when low. Every pixel is painted once, so an update
+// does not flicker.
 void drawBattery(Display &d)
 {
     const BatteryState &b = batteryState;
     const int w = d.width();
     const int fieldX = w - 48;
-    const int barsX = w - 13;
-    lib::StaticString<12> text;
+    constexpr int BodyW = 21;
+    constexpr int InnerW = BodyW - 2;
+    const int x = w - 5 - BodyW;
+    const int y = headerTop == 0 ? 0 : 1;
+    const int bodyH = std::min(9, headerHeight - y);
+    const Color ink = b.low ? colors::Red : colors::White;
+    int filled = 0;
     if (b.millivolts > 0) {
-        const int cv = (b.millivolts + 5) / 10;
-        text << cv / 100 << '.' << static_cast<char>('0' + cv / 10 % 10) << 'V';
+        // A low battery keeps a sliver.
+        filled = std::max(b.level * InnerW / 3, b.low ? 3 : 0);
     }
-    const int textW = static_cast<int>(text.view().size()) * HeaderFont.width;
-    const int tx = barsX - textW - 2;
-    const int below = headerTop + HeaderFont.height;
-    drawText(d, HeaderFont, tx, headerTop, text.view(), b.low ? colors::Red : colors::White, headerGround);
-    fillArea(d, fieldX, 0, tx - fieldX, headerHeight, headerGround);
-    fillArea(d, tx, 0, textW, headerTop, headerGround);
-    fillArea(d, tx, below, textW, headerHeight - below, headerGround);
-    fillArea(d, tx + textW, 0, barsX - tx - textW, headerHeight, headerGround);
-    if (b.millivolts <= 0) {
-        fillArea(d, barsX, 0, w - barsX, headerHeight, headerGround);
-        return;
-    }
-    const Color on = b.low ? colors::Red : colors::Green;
-    for (int i = 0; i < 4; ++i) {
-        // The first bar always shows, so an empty battery still has one red bar.
-        const bool lit = i == 0 || i <= b.level;
-        const int bx = barsX + i * 3;
-        const int by = headerTop + 7 - (i + 1) * 2 + 1;
-        const int bh = (i + 1) * 2 - 1;
-        d.fillRect(bx, by, 2, bh, lit ? on : rgb(60, 60, 60));
-        fillArea(d, bx, 0, 2, by, headerGround);
-        fillArea(d, bx, by + bh, 2, headerHeight - by - bh, headerGround);
-        fillArea(d, bx + 2, 0, 1, headerHeight, headerGround);
-    }
-    fillArea(d, barsX + 12, 0, w - barsX - 12, headerHeight, headerGround);
+    fillArea(d, fieldX, 0, x - fieldX, headerHeight, headerGround);
+    fillArea(d, x, 0, w - x, y, headerGround);
+    fillArea(d, x, y + bodyH, w - x, headerHeight - y - bodyH, headerGround);
+    d.fillRect(x, y, BodyW, 1, ink);
+    d.fillRect(x, y + bodyH - 1, BodyW, 1, ink);
+    d.fillRect(x, y + 1, 1, bodyH - 2, ink);
+    d.fillRect(x + BodyW - 1, y + 1, 1, bodyH - 2, ink);
+    fillArea(d, x + 1, y + 1, filled, bodyH - 2, ink);
+    fillArea(d, x + 1 + filled, y + 1, InnerW - filled, bodyH - 2, headerGround);
+    // The terminal.
+    d.fillRect(x + BodyW, y + 2, 2, bodyH - 4, ink);
+    fillArea(d, x + BodyW, y, 2, 2, headerGround);
+    fillArea(d, x + BodyW, y + bodyH - 2, 2, 2, headerGround);
+    fillArea(d, x + BodyW + 2, y, w - x - BodyW - 2, bodyH, headerGround);
 }
 
 services::KeyLock keyLock;
@@ -1743,8 +1738,13 @@ void uiMain(void *)
                                }
                            },
                            [&](const Battery &b) {
+                               // The icon only when its fill or colour changes.
+                               const BatteryState before = batteryState;
                                batteryState = {b.millivolts, b.level, b.low};
-                               if (view != View::Start && view != View::TestPattern && view != View::Message) {
+                               const bool iconChanged = b.level != before.level || b.low != before.low ||
+                                   (b.millivolts > 0) != (before.millivolts > 0);
+                               if (iconChanged && view != View::Start && view != View::TestPattern &&
+                                   view != View::Message) {
                                    drawBattery(d);
                                }
                            },
