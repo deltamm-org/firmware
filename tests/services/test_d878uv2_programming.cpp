@@ -6,8 +6,10 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <string>
+#include <thread>
 #include <vector>
 
 using dmm::drivers::storage::SpiNand;
@@ -158,4 +160,39 @@ TEST_CASE("programming: failed reads are not answered; a half command is dropped
     s.send(Bytes{'R', 0x02});
     s.now += D878Uv2Programming::CommandTimeoutMs;
     CHECK(s.send(Bytes{0x02}).size() == 16);
+}
+
+TEST_CASE("programming: a write of the radio's own and the PC's never overlap")
+{
+    Session s;
+    REQUIRE(s.p.beginLocalWrite());
+    // Still writing after the wait: no answer, and no program mode.
+    CHECK(s.send("PROGRAM").empty());
+    CHECK_FALSE(s.p.active(s.now));
+    s.p.endLocalWrite();
+
+    // A write that ends during the wait lets the PC in.
+    REQUIRE(s.p.beginLocalWrite());
+    std::thread local([&s] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        s.p.endLocalWrite();
+    });
+    CHECK(s.send("PROGRAM") == Bytes{'Q', 'X', 0x06});
+    local.join();
+    // Refused while the PC is in program mode, allowed once it left.
+    CHECK_FALSE(s.p.beginLocalWrite());
+    CHECK(s.send("END") == Bytes{0x06});
+    CHECK(s.p.beginLocalWrite());
+    s.p.endLocalWrite();
+}
+
+TEST_CASE("programming: a PC that went away without END lets local writes in after the idle time")
+{
+    Session s;
+    s.send("PROGRAM");
+    CHECK_FALSE(s.p.beginLocalWrite());
+    s.now += D878Uv2Programming::IdleMs;
+    CHECK_FALSE(s.p.active(s.now));
+    CHECK(s.p.beginLocalWrite());
+    s.p.endLocalWrite();
 }
