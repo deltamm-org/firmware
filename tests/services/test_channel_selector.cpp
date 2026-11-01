@@ -118,6 +118,19 @@ TEST_CASE("starts on the main side's zone and its last channel")
     CHECK(sel.zoneSize() == 3);
 }
 
+TEST_CASE("the channel in use has its codeplug index, none in VFO mode")
+{
+    FakeCodeplug cp = sample();
+    ChannelSelector sel(cp);
+    REQUIRE(sel.load());
+    CHECK_FALSE(sel.sideB());
+    CHECK(sel.channelIndex() == 11);
+    REQUIRE(sel.step(1));
+    CHECK(sel.channelIndex() == 12);
+    sel.tune(145'000'000);
+    CHECK(sel.channelIndex() == CodeplugSource::NoChannel);
+}
+
 TEST_CASE("the last selection is a position in the zone's list")
 {
     FakeCodeplug cp = sample();
