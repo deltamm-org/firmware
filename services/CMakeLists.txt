@@ -19,6 +19,7 @@ add_library(dmm_services STATIC
     src/casic_receiver.cpp
     src/clock.cpp
     src/gps_schedule.cpp
+    src/home_screen.cpp
     src/power.cpp
     src/roaming.cpp
     src/audio.cpp
