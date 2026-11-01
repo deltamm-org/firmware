@@ -15,6 +15,11 @@ using namespace d878uv2;
 
 namespace {
 
+// The preferences record stays clear of the first bank's channels and
+// their extensions, and of the block's copy markers.
+static_assert(Preferences >= ChannelBanks + ChannelExtensionOffset + ChannelsPerBank * ChannelBytes);
+static_assert(Preferences + PreferencesRecordBytes <= ChannelBanks + 0x20000 - 8);
+
 // Backlight times by their codeplug index, in seconds.
 constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
 // The GPS systems in the extended general settings.
