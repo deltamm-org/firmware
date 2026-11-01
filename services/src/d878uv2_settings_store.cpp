@@ -132,11 +132,11 @@ bool D878Uv2SettingsStore::collect()
 {
     m_pieceCount = 0;
     if (m_settings || m_zone[0] || m_zone[1]) {
-        std::uint8_t read[sizeof m_settingsBytes];
+        const std::span read(m_read, sizeof m_settingsBytes);
         if (!readable(m_codeplug.read(Settings, read))) {
             return false;
         }
-        std::copy(std::begin(read), std::end(read), std::begin(m_settingsBytes));
+        std::copy(read.begin(), read.end(), std::begin(m_settingsBytes));
         if (m_settings) {
             encodeSettings(*m_settings, m_settingsBytes);
         }
@@ -145,7 +145,7 @@ bool D878Uv2SettingsStore::collect()
                 m_settingsBytes[side == 0 ? 0x1F : 0x20] = m_zone[side]->zone;
             }
         }
-        if (!std::equal(std::begin(read), std::end(read), std::begin(m_settingsBytes))) {
+        if (!std::equal(read.begin(), read.end(), std::begin(m_settingsBytes))) {
             addPiece(Settings, m_settingsBytes);
         }
     }
@@ -176,29 +176,29 @@ bool D878Uv2SettingsStore::collect()
         }
     }
     if (m_preferences) {
-        std::uint8_t read[PreferencesRecordBytes];
+        const std::span read(m_read, sizeof m_preferenceBytes);
         if (!readable(m_codeplug.read(Preferences, read))) {
             return false;
         }
         encodePreferences(*m_preferences, m_preferenceBytes);
-        if (!std::equal(std::begin(read), std::end(read), std::begin(m_preferenceBytes))) {
+        if (!std::equal(read.begin(), read.end(), std::begin(m_preferenceBytes))) {
             addPiece(Preferences, m_preferenceBytes);
         }
     }
     if (m_channel) {
         const std::uint32_t at = channelAddress(m_channel->index);
-        std::uint8_t read[sizeof m_channelBytes];
+        const std::span read(m_read, sizeof m_channelBytes);
         if (!readable(m_codeplug.read(at, read))) {
             return false;
         }
-        std::copy(std::begin(read), std::end(read), std::begin(m_channelBytes));
+        std::copy(read.begin(), read.end(), std::begin(m_channelBytes));
         // Power at bits 2..3; squelch at bits 4..6: 0 carrier, 1 the
         // receive tone.
         m_channelBytes[0x08] =
             static_cast<std::uint8_t>((read[0x08] & ~0x0Cu) | (static_cast<unsigned>(m_channel->power) & 3u) << 2);
         m_channelBytes[0x19] = static_cast<std::uint8_t>(
             (read[0x19] & ~0x70u) | (m_channel->squelch == SquelchMode::Tone ? 0x10u : 0u));
-        if (!std::equal(std::begin(read), std::end(read), std::begin(m_channelBytes))) {
+        if (!std::equal(read.begin(), read.end(), std::begin(m_channelBytes))) {
             addPiece(at, m_channelBytes);
         }
     }

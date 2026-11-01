@@ -91,6 +91,8 @@ private:
     std::optional<Zone> m_zone[2];
     std::optional<ChannelValues> m_channel;
 
+    // The codeplug's bytes as read, one part at a time.
+    std::uint8_t m_read[0x100] = {};
     // The bytes being written; pieces point into them.
     std::uint8_t m_settingsBytes[0x100] = {};
     std::uint8_t m_extension[1] = {};
