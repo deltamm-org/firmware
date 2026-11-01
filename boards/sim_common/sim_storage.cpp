@@ -120,6 +120,16 @@ void SimStorage::putSampleCodeplug()
     }
     putBytes(0x01043000, {0, 1});
     putBytes(0x01043040, {'N', 'E', 'T', 0});
+    // Contact 0, talkgroup 244 "Finland", which the DMR channels call: the
+    // contact bitmap (a clear bit marks a contact), the record, and the
+    // sorted ID table entry.
+    markValid(0x02640000);
+    put(0x02640000, 0xFE);
+    markValid(0x02680000);
+    putBytes(0x02680000, {1, 'F', 'i', 'n', 'l', 'a', 'n', 'd', 0});
+    putBytes(0x02680000 + 0x23, {0x00, 0x00, 0x02, 0x44});
+    markValid(0x04800000);
+    putBytes(0x04800000, {0x89, 0x04, 0, 0, 0, 0, 0, 0});
     // VFOs.
     markValid(0x00FC0000);
     putChannel(0x00FC0800, 145'450'000, 0, true, 0xFF, 0, 0, "");
