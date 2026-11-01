@@ -95,7 +95,7 @@ struct BatterySave
 {
     std::uint8_t mode;
 };
-/// Turns auto roaming on or off as Menu > Channel > Roaming does (console).
+/// Turns auto roaming on or off as Menu > Roaming > Roaming does (console).
 struct SetAutoRoaming
 {
     bool on;

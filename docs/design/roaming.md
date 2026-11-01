@@ -227,7 +227,7 @@ read. An empty frequency costs about 0.1 s.
 
 ### 3.6 Moving by itself
 
-Only with auto roaming on (the codeplug's setting, which Menu > Channel >
+Only with auto roaming on (the codeplug's setting, which Menu > Roaming >
 Roaming and `roam auto on|off` change), and never while the repeater in
 use is busy:
 
@@ -275,9 +275,9 @@ frequencies, as at the start. A pass starts afresh in the new order.
 - Under the channel name: the repeater in use, or `Searching...`.
 - `No repeater` while the repeater in use is lost; `No repeater answered`
   when a search found none.
-- Menu > Channel > Roam status: the repeater in use and its state, then
-  each repeater heard with its level and age.
-- Menu > Channel > Roaming (auto roaming) and Roam zone take effect at
+- Menu > Roaming > Status: the repeater in use and its state, then each
+  repeater heard with its level and age.
+- Menu > Roaming > Roaming (auto roaming) and Roam zone take effect at
   once and are written to the codeplug. With auto roaming off the radio
   does nothing on its own: no listening and no moves. PTT, the roam key
   and Search now still search, in the order of what those searches heard
