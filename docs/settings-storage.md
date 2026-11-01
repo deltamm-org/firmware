@@ -24,6 +24,7 @@ The code: `services/settings_store.h` (the interface the app uses),
 | Place in each zone's channel list | Zone channel selections | `ZoneSelections` |
 | GPS satellite systems | Extended general settings | `SettingsExtension` |
 | A channel's power and squelch mode | The channel's record | `ChannelBanks` |
+| Home screen layout (Menu > Settings > Home screen) | Preferences record | `Preferences` |
 
 The auto lock time shares its field with the menu exit time, in 5 s
 steps up to 60 s.

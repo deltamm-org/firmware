@@ -989,6 +989,7 @@ void uiMain(void *)
         s.gps = gpsState.on;
         s.gpsSystems = gpsSystems;
         s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
+        s.home = homeLayout;
         return s;
     };
     // A row's value: the setting's, or the state of what the row opens.
@@ -1135,6 +1136,13 @@ void uiMain(void *)
         s.roaming.automatic = autoRoaming;
         settingsStore->keepSettings(s, os::nowMs());
     };
+    auto keepPreferences = [&] {
+        if (settingsStore != nullptr) {
+            services::RadioPreferences p;
+            p.home = homeLayout;
+            settingsStore->keepPreferences(p, os::nowMs());
+        }
+    };
     auto keepChannel = [&] {
         if (settingsStore != nullptr && channels != nullptr && channels->current() &&
             channels->channelIndex() != CodeplugSource::NoChannel) {
@@ -1249,6 +1257,11 @@ void uiMain(void *)
             timeZoneMinutes = s.timeZoneMinutes;
             log::info("ui") << "time zone " << menu::valueText(menu::Item::TimeZone, timeZoneMinutes).view();
         }
+        if (s.home != was.home) {
+            homeLayout = s.home;
+            log::info("ui") << "home screen "
+                            << menu::valueText(menu::Item::HomePreset, menu::choiceOf(menu::Item::HomePreset, s)).view();
+        }
         if (channel) {
             useChannel(false);
         }
@@ -1266,6 +1279,9 @@ void uiMain(void *)
         switch (menu::keptIn(item)) {
         case menu::Kept::Settings:
             keepSettings();
+            break;
+        case menu::Kept::Preferences:
+            keepPreferences();
             break;
         case menu::Kept::Channel:
             keepChannel();
