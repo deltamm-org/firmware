@@ -457,6 +457,12 @@ void endCall(const char *why)
     setSpeaker(false);
 }
 
+// The DMR channel's transmit frequency: its own, else the receive one.
+std::uint32_t dmrTransmitHz()
+{
+    return fmChannel.transmitHz != 0 ? fmChannel.transmitHz : fmChannel.receiveHz;
+}
+
 // Tunes to the DMR channel and lets the baseband listen.
 void dmrReceive()
 {
@@ -475,7 +481,7 @@ void dmrReceive()
         return;
     }
     bool ok = !HasBaseband;
-    withBaseband([&ok](auto &b) { ok = b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater); });
+    withBaseband([&ok](auto &b) { ok = b.setDigital(dmrSettings, fmChannel.receiveHz, dmrTransmitHz(), dmrRepeater); });
     logDmrReceiving(ok);
 }
 
@@ -846,7 +852,7 @@ struct Probe
                     b.wakeRepeater(dmrSettings, ownId) && awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs);
                 fm->endTransmit();
                 showTransmitting(false);
-                const bool listening = sent && b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater) &&
+                const bool listening = sent && b.setDigital(dmrSettings, fmChannel.receiveHz, dmrTransmitHz(), dmrRepeater) &&
                     fm->receive(fmChannel, 1) == nullptr;
                 p.answered = listening && awaitDmrEvent(services::dmr::Event::Kind::SlotFound, RepeaterWakeMs);
                 // A carrier without timing yet: a repeater that is slower to
@@ -1310,7 +1316,7 @@ CallStart startDigitalTransmit(services::FmChannel channel)
                 const bool sent = keyed && b.wakeRepeater(dmrSettings, ownId) &&
                     awaitDmrEvent(services::dmr::Event::Kind::AllSent, DmrEndMs);
                 fm->endTransmit();
-                ok = sent && b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater) &&
+                ok = sent && b.setDigital(dmrSettings, fmChannel.receiveHz, dmrTransmitHz(), dmrRepeater) &&
                     fm->receive(fmChannel, 1) == nullptr && awaitDmrEvent(services::dmr::Event::Kind::SlotFound, RepeaterWakeMs);
                 logWakeTry(t + 1, sent, ok);
             }
@@ -1470,7 +1476,7 @@ void bringUp()
         // A restart forgets the analog or digital set-up.
         if (fm->receiving() && system::calibration() != nullptr) {
             if (fmChannel.digital) {
-                b.setDigital(dmrSettings, fmChannel.receiveHz, dmrRepeater);
+                b.setDigital(dmrSettings, fmChannel.receiveHz, dmrTransmitHz(), dmrRepeater);
             } else {
                 basebandAnalogReceive();
             }

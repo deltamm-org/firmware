@@ -121,7 +121,7 @@ public:
     bool setMicrophone(bool on);
     /// Also switches the vocoder over (a few seconds the first time) and
     /// sets the DMR call options once after start().
-    bool setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, bool repeater);
+    bool setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, std::uint32_t transmitHz, bool repeater);
     bool nextEvent(dmr::Event &event);
     bool startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc, std::uint32_t transmitHz, bool timed,
         PowerLevel level);

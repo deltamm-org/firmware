@@ -165,28 +165,51 @@ TEST_CASE("an uncalibrated radio gives no RF values")
     CHECK_FALSE(cal.deviation().has_value());
 }
 
-TEST_CASE("baseband DC offset by band and frequency range, and the demodulator gain")
+TEST_CASE("baseband DC offset by band, its last word interpolated by frequency, and the demodulator gain")
 {
     auto d = sample();
-    for (std::uint8_t i = 0; i < 16; ++i) {
+    for (std::uint8_t i = 0; i < 10; ++i) {
         d[0x80 + i] = static_cast<std::uint8_t>(0x10 + i); // UHF block
         d[0xC0 + i] = static_cast<std::uint8_t>(0x40 + i); // VHF block
     }
+    auto put = [&d](std::size_t at, std::uint16_t v) {
+        d[at] = static_cast<std::uint8_t>(v >> 8);
+        d[at + 1] = static_cast<std::uint8_t>(v);
+    };
+    // UHF points: 2000 at 400 MHz, 1400 at 460 MHz, 1700 at 520 MHz.
+    put(0x80 + 10, 2000);
+    put(0x80 + 12, 1400);
+    put(0x80 + 14, 1700);
+    // VHF points: 4000 at 136, 3620 at 155, 3810 at 174 and 3300 at 225 MHz.
+    put(0xC0 + 10, 4000);
+    put(0xC0 + 12, 3620);
+    put(0xC0 + 14, 3810);
+    put(0xC0 + 0x25, 3300);
     d[0x97] = 0x08;
     d[0x98] = 0x20;
     const D878Uv2Calibration cal = loaded(d);
+    auto last = [&cal](std::uint32_t hz) {
+        const auto o = cal.basebandDcOffset(hz);
+        REQUIRE(o.has_value());
+        return (*o)[10] << 8 | (*o)[11];
+    };
     const auto u = cal.basebandDcOffset(438'075'000);
     REQUIRE(u.has_value());
     CHECK((*u)[0] == 0x10);
     CHECK((*u)[9] == 0x19);
-    CHECK((*u)[10] == 0x1A); // below 460 MHz: the word at +10
-    CHECK((*u)[11] == 0x1B);
-    CHECK((*cal.basebandDcOffset(470 * MHz))[10] == 0x1C);
+    CHECK(last(438'075'000) == 2000 - 38 * 10); // whole MHz above 400
+    CHECK(last(470 * MHz) == 1400 + 10 * 5);
     CHECK((*cal.basebandDcOffset(145 * MHz))[0] == 0x40);
-    CHECK((*cal.basebandDcOffset(145 * MHz))[10] == 0x4A);
-    CHECK((*cal.basebandDcOffset(160 * MHz))[10] == 0x4C);
+    CHECK(last(145'637'500) == 4000 - 9 * 20);
+    CHECK(last(160 * MHz) == 3620 + 5 * 10);
     CHECK_FALSE(cal.basebandDcOffset(300 * MHz).has_value());
     CHECK(*cal.basebandDemodGain() == std::array<std::uint8_t, 2>{0x08, 0x20});
+
+    // A step that is not whole is truncated: 7 over 19 MHz, 9 MHz in.
+    put(0xC0 + 12, 3993);
+    const D878Uv2Calibration odd = loaded(d);
+    const auto o = odd.basebandDcOffset(145'637'500);
+    CHECK(((*o)[10] << 8 | (*o)[11]) == 3996);
 }
 
 TEST_CASE("the digital voice gains come from the UHF block, nothing when erased")

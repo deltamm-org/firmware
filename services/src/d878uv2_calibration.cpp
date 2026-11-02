@@ -242,18 +242,38 @@ std::optional<std::array<std::uint8_t, 12>> D878Uv2Calibration::basebandDcOffset
     if (!present() || bandFor(hz) == nullptr) {
         return std::nullopt;
     }
-    // Last-word ranges: UHF below and from 460 MHz; VHF below 155 MHz,
-    // to 200 MHz and from 200 MHz.
+    // The last word's calibration points, each followed by the next one and
+    // the span to it in MHz: UHF at 400 and 460 MHz (+10, +12, then +14 at
+    // 520 MHz); VHF at 136, 155 and 174 MHz (+10, +12, +14, then +0x25 at
+    // 225 MHz). A frequency below 460 MHz, or below 155 MHz and 200 MHz,
+    // takes the point below it.
+    struct Point
+    {
+        std::uint32_t fromHz;
+        std::uint32_t at;
+        std::uint32_t nextAt;
+        unsigned spanMhz;
+    };
+    constexpr Point Uhf[] = {{400 * MHz, 10, 12, 60}, {460 * MHz, 12, 14, 60}};
+    constexpr Point Vhf[] = {{136 * MHz, 10, 12, 19}, {155 * MHz, 12, 14, 19}, {174 * MHz, 14, 0x25, 51}};
     const bool uhf = hz >= 300 * MHz;
     const std::uint32_t block = uhf ? UhfBasebandBlock : VhfBasebandBlock;
-    const unsigned range = uhf ? (hz >= 460 * MHz ? 1 : 0) : (hz >= 200 * MHz ? 2 : hz >= 155 * MHz ? 1
-                                                                                                    : 0);
+    const Point &p = uhf ? Uhf[hz >= 460 * MHz ? 1 : 0] : Vhf[hz >= 200 * MHz ? 2 : hz >= 155 * MHz ? 1
+                                                                                                    : 0];
+    auto word = [&](std::uint32_t at) { return m_data[block + at] << 8 | m_data[block + at + 1]; };
+    const int base = word(p.at);
+    const int next = word(p.nextAt);
+    const unsigned mhz = hz > p.fromHz ? (hz - p.fromHz) / MHz : 0;
+    // The step per MHz in doubles, the result truncated.
+    const double step = static_cast<double>(next > base ? next - base : base - next) / p.spanMhz;
+    const double value = next >= base ? base + step * mhz : base - step * mhz;
+    const auto last = static_cast<std::uint16_t>(value > 0 ? value : 0);
     std::array<std::uint8_t, 12> d{};
     for (std::size_t i = 0; i < 10; ++i) {
         d[i] = m_data[block + i];
     }
-    d[10] = m_data[block + 10 + 2 * range];
-    d[11] = m_data[block + 11 + 2 * range];
+    d[10] = static_cast<std::uint8_t>(last >> 8);
+    d[11] = static_cast<std::uint8_t>(last);
     return d;
 }
 

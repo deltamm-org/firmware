@@ -55,10 +55,10 @@ enum class BasebandWorkMode : std::uint8_t
 ///   only while told a carrier is present.
 /// - setMicrophone(on): connects the microphone for transmit, or
 ///   disconnects it and restores the receive levels.
-/// - setDigital(settings, receiveHz, repeater): DMR on the channel's
-///   colour code, at the radio's calibrated levels for @p receiveHz,
-///   receiving the channel's slot through a repeater, or both slots
-///   direct. False if the chip did not take it.
+/// - setDigital(settings, receiveHz, transmitHz, repeater): DMR on the
+///   channel's colour code, at the radio's calibrated levels for the
+///   channel's frequencies, receiving the channel's slot through a
+///   repeater, or both slots direct. False if the chip did not take it.
 /// - nextEvent(event): the next thing heard on a digital channel; false
 ///   when there is none.
 /// - startDigitalCall(settings, lc, transmitHz, timed, level): transmits
@@ -88,7 +88,7 @@ concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, s
     { bb.setVoiceEnhancement(on) } -> std::same_as<bool>;
     { bb.setCarrier(on) } -> std::same_as<bool>;
     { bb.setMicrophone(on) } -> std::same_as<bool>;
-    { bb.setDigital(dmrSettings, receiveHz, on) } -> std::same_as<bool>;
+    { bb.setDigital(dmrSettings, receiveHz, receiveHz, on) } -> std::same_as<bool>;
     { bb.nextEvent(event) } -> std::same_as<bool>;
     { bb.startDigitalCall(dmrSettings, lc, receiveHz, on, level) } -> std::same_as<bool>;
     { bb.endDigitalCall(dmrSettings, lc) } -> std::same_as<bool>;
