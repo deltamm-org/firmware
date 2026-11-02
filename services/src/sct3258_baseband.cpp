@@ -283,7 +283,8 @@ bool Sct3258Baseband::selectVocoder(std::uint8_t vocoder)
     return true;
 }
 
-bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, bool repeater)
+bool Sct3258Baseband::setDigital(
+    const dmr::ChannelSettings &settings, std::uint32_t receiveHz, std::uint32_t transmitHz, bool repeater)
 {
     const bool fromAnalog = m_vocoder != Sct3258::VocoderDigital;
     if (!m_info.running || !selectVocoder(Sct3258::VocoderDigital)) {
@@ -292,7 +293,10 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
     if (fromAnalog && !write(m_audio.digitalReceive)) {
         warn("codec did not take the digital receive levels");
     }
-    if (const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(receiveHz) : std::nullopt) {
+    // The calibrated values are taken at the transmit frequency, where the
+    // radio's calibration points lie.
+    (void)receiveHz;
+    if (const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(transmitHz) : std::nullopt) {
         std::uint8_t offset[1 + 12] = {Sct3258::DcOffset};
         for (std::size_t i = 0; i < trims->dcOffset.size(); ++i) {
             offset[1 + i] = trims->dcOffset[i];
@@ -312,7 +316,7 @@ bool Sct3258Baseband::setDigital(const dmr::ChannelSettings &settings, std::uint
     }
     // The transmitter's settings too: a repeater wake-up goes out before any
     // call sets them.
-    sendTransmitTrims(receiveHz, PowerLevel::High);
+    sendTransmitTrims(transmitHz, PowerLevel::High);
     if (!sendSquelch(m_chip, m_audio.digitalSquelch)) {
         warn("digital squelch levels not taken");
     }

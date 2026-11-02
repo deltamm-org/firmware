@@ -257,7 +257,7 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
     dmm::services::dmr::ChannelSettings settings;
     settings.colourCode = 7;
     settings.slot = 2;
-    REQUIRE(baseband.setDigital(settings, 433'450'000, true));
+    REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, true));
     REQUIRE(chip.packets.size() == 10);
     // Without a calibration source, no DC offset or demodulator gain.
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x10, 0x0C});
@@ -273,7 +273,7 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
 
     // Direct: both slots; the vocoder and the call options stay.
     chip.packets.clear();
-    REQUIRE(baseband.setDigital(settings, 433'450'000, false));
+    REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
     REQUIRE(chip.packets.size() == 5);
     CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
 
@@ -352,7 +352,7 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
     chip.packets.clear();
     dmm::services::dmr::ChannelSettings settings;
     settings.slot = 2;
-    REQUIRE(baseband.setDigital(settings, 438'075'000, true));
+    REQUIRE(baseband.setDigital(settings, 438'075'000, 438'075'000, true));
     REQUIRE(chip.packets.size() == 14);
     CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0x00, 0x00, 0x00}); // DAC 0 dB
     CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
@@ -361,7 +361,7 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
     CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x2C, 0x08, 0x00}); // modulator gain before any transmission
     CHECK(chip.packets[11] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02});      // the channel's slot alone
     chip.packets.clear();
-    REQUIRE(baseband.setDigital(settings, 145'000'000, false));
+    REQUIRE(baseband.setDigital(settings, 145'000'000, 145'000'000, false));
     REQUIRE(chip.packets.size() == 5);                                     // no values for this band; the vocoder stays
     CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03}); // direct: both slots
 }
@@ -413,7 +413,7 @@ TEST_CASE("on a repeater's fresh timing a DMR call takes the channel's slot on i
     REQUIRE(baseband.start());
     dmm::services::dmr::ChannelSettings settings;
     settings.slot = 2;
-    REQUIRE(baseband.setDigital(settings, 438'075'000, true));
+    REQUIRE(baseband.setDigital(settings, 438'075'000, 438'075'000, true));
     chip.packets.clear();
     using dmm::services::dmr::CallType;
     REQUIRE(baseband.startDigitalCall(settings, dmm::services::dmr::FullLc::voiceCall({CallType::Group, 91}, 1234567), 430'475'000, true, dmm::services::PowerLevel::High));
