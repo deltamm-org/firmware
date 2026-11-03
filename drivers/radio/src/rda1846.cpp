@@ -80,6 +80,7 @@ constexpr Rda1846::Tuning Maker{
     .transmit = {},
     .bandWords = MakerBandWords,
     .normalBand = BandNormal,
+    .deviationSteps = {},
 };
 
 constexpr std::uint8_t ControlRegister = 0x30;
@@ -202,6 +203,16 @@ bool Rda1846::start(void (*sleepMs)(unsigned), std::uint16_t gpio)
     return true;
 }
 
+std::uint8_t Rda1846::voiceDeviationExtra() const
+{
+    for (const DeviationStep &d : m_tuning->deviationSteps) {
+        if (m_hz >= d.lowHz && m_hz <= d.highHz && m_band == d.band) {
+            return d.extra;
+        }
+    }
+    return 0;
+}
+
 bool Rda1846::relock(void (*sleepMs)(unsigned))
 {
     if (m_tuning->relock.empty()) {
@@ -226,6 +237,7 @@ void Rda1846::setFrequency(std::uint32_t hz)
             break;
         }
     }
+    m_band = band;
     m_bus.write(BandRegister, band);
     const std::uint32_t word = frequencyWord(hz);
     m_bus.write(FrequencyHigh, static_cast<std::uint16_t>(word >> 16));

@@ -102,6 +102,16 @@ public:
         std::uint32_t highHz;
         std::uint16_t value;
     };
+    /// Extra FM voice deviation, in the deviation register's voice units,
+    /// where the band register holds @p band and the frequency is from
+    /// lowHz to highHz (both included).
+    struct DeviationStep
+    {
+        std::uint32_t lowHz;
+        std::uint32_t highHz;
+        std::uint16_t band;
+        std::uint8_t extra;
+    };
 
     /// Every register value the driver writes, apart from the ones its
     /// calls ask for (frequency, squelch, tones, mode).
@@ -127,6 +137,8 @@ public:
         /// frequency, else normalBand. Written on every tuning.
         std::span<const BandWord> bandWords;
         std::uint16_t normalBand;
+        /// See voiceDeviationExtra().
+        std::span<const DeviationStep> deviationSteps;
     };
 
     /// The chip maker's start-up and per-width values for a 26 MHz
@@ -179,6 +191,9 @@ public:
     bool synthesizerLocked() { return (m_bus.read(LockRegister) & SynthesizerLocked) != 0; }
     /// Writes the tuning's relock steps; false when it has none.
     bool relock(void (*sleepMs)(unsigned));
+    /// The extra FM voice deviation the tuning asks for at the frequency
+    /// last set, with the band register value it took.
+    std::uint8_t voiceDeviationExtra() const;
 
     /// The tone sent while transmitting.
     void setTransmitTone(const SubTone &tone);
@@ -212,6 +227,7 @@ private:
     hal::RegisterBus &m_bus;
     const Tuning *m_tuning;
     std::uint32_t m_hz = 0;
+    std::uint16_t m_band = 0;
     Bandwidth m_bandwidth = Bandwidth::Narrow;
     Mode m_mode = Mode::Idle;
     // The tone detectors switched on, and the flag of the one listened for.
