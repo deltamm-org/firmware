@@ -203,6 +203,22 @@ TEST_CASE("the synthesizer's lock flag, and the tuning's relock steps with their
     CHECK(other.log.empty());
 }
 
+TEST_CASE("a kept width value leaves the register as it is")
+{
+    constexpr Rda1846::WidthSetting Width[] = {{0x35, 0x51EC, Rda1846::Keep, 0x50A9}};
+    Rda1846::Tuning tuning = TestTuning;
+    tuning.width = Width;
+    LoggingBus bus;
+    Rda1846 chip(bus, tuning);
+
+    chip.setBandwidth(Rda1846::Bandwidth::Digital);
+    CHECK(bus.registers[0x35] == 0x50A9);
+    chip.setBandwidth(Rda1846::Bandwidth::Wide); // kept
+    CHECK(bus.registers[0x35] == 0x50A9);
+    chip.setBandwidth(Rda1846::Bandwidth::Narrow);
+    CHECK(bus.registers[0x35] == 0x51EC);
+}
+
 TEST_CASE("width settings for a frequency range follow the width settings")
 {
     LoggingBus bus;

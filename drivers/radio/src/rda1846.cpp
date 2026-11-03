@@ -153,6 +153,9 @@ void Rda1846::write(std::span<const WidthSetting> settings)
     for (const WidthSetting &s : settings) {
         std::uint16_t value = m_bandwidth == Bandwidth::Wide ? s.wide : m_bandwidth == Bandwidth::Digital ? s.digital
                                                                                                           : s.narrow;
+        if (value == Keep) {
+            continue;
+        }
         if (s.reg == DetectRegister) {
             value = static_cast<std::uint16_t>((value & ~DetectBits) | m_detect);
         }

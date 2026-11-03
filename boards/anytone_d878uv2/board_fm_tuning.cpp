@@ -18,6 +18,7 @@ using Setting = dmm::drivers::radio::Rda1846::Setting;
 using WidthSetting = dmm::drivers::radio::Rda1846::WidthSetting;
 using RangeSetting = dmm::drivers::radio::Rda1846::RangeSetting;
 using BandWord = dmm::drivers::radio::Rda1846::BandWord;
+constexpr std::uint16_t Keep = dmm::drivers::radio::Rda1846::Keep;
 
 // Where the radio information block names the chip version, first and
 // second copy.
@@ -125,8 +126,8 @@ constexpr WidthSetting Width[] = {
     {0x32, 0x4495, 0x75E3, 0x44D5},
     {0x33, 0x4493, 0x4495, 0x44D5},
     {0x34, 0x2B8E, 0x2B89, 0x2398},
-    {0x35, 0x51EC, 0x51EC, 0x50A9},
-    {0x36, 0x51EC, 0x51EC, 0x50A9},
+    {0x35, 0x51EC, Keep, 0x50A9}, // wide channels keep the last value
+    {0x36, 0x51EC, Keep, 0x50A9},
     {0x3A, 0x40C3, 0x44C3, 0x40C3}, // transmit from the microphone; squelch detectors
     {0x3C, 0x0408, 0x0408, 0x1A32},
     {0x41, 0x070F, 0x070F, 0x4006}, // transmit voice digital gain
