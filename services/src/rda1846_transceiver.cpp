@@ -6,6 +6,7 @@
 #include "dmm/lib/format.h"
 #include "dmm/lib/strings.h"
 #include "dmm/services/log.h"
+#include "dmm/services/microphone_gain.h"
 
 namespace dmm::services {
 
@@ -270,6 +271,11 @@ void Rda1846Transceiver::setMicrophoneMuted(bool muted)
 {
     const std::uint16_t before = m_chip.readRegister(Chip::GpioRegister);
     logPins(muted ? "microphone muted" : "microphone on", before, muteMicrophone(muted));
+}
+
+void Rda1846Transceiver::setMicrophoneGain(int db)
+{
+    m_chip.setVoiceGain(microphone_gain::clampFm(db) - microphone_gain::StandardDb);
 }
 
 void Rda1846Transceiver::setGpsPower(bool on)

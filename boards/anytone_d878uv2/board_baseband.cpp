@@ -3,6 +3,7 @@
 
 #include "board_baseband.h"
 
+#include "dmm/drivers/baseband/tlv320aic3204.h"
 #include "dmm/hal/cortex_m/core.h"
 #include "dmm/hal/gd32f30x/clock.h"
 #include "dmm/os/os.h"
@@ -17,54 +18,42 @@ using hal::PinMode;
 namespace {
 
 using CodecWrite = dmm::services::Sct3258Baseband::CodecWrite;
+namespace aic = dmm::drivers::baseband::tlv320aic3204;
+using aic::hplDb;
+using aic::Page0;
+using aic::Page1;
 
-// TLV320AIC3204 registers (page, register).
-constexpr std::uint8_t Page0 = 0;
-constexpr std::uint8_t Page1 = 1;
-constexpr std::uint8_t HplGain = 16; // page 1: headphone-left driver gain, 6-bit dB
-constexpr std::uint8_t HplMuted = 0x40;
-constexpr std::uint8_t LeftOutGain = 18;       // page 1
-constexpr std::uint8_t RightOutGain = 19;      // page 1
-constexpr std::uint8_t LeftMicPositive = 52;   // page 1: 0 = nothing connected
-constexpr std::uint8_t LeftMicPgaVolume = 59;  // page 1
-constexpr std::uint8_t RightMicPgaVolume = 60; // page 1
-constexpr std::uint8_t LeftDacVolume = 65;     // page 0: signed, 0.5 dB steps
-constexpr std::uint8_t LeftAgcControl = 86;    // page 0
-constexpr std::uint8_t LeftAgcMaxGain = 88;    // page 0
-
-constexpr std::uint8_t MicIn1Left20k = 0x80;
-constexpr std::uint8_t MicGain16Db = 32;
-constexpr std::uint8_t AgcOn = 0x80;
 constexpr std::uint8_t DacMinus22Db = static_cast<std::uint8_t>(-44);
-
-constexpr std::uint8_t hplDb(int db)
-{
-    return static_cast<std::uint8_t>(db & 0x3F);
-}
 
 // The speaker is loud: the DAC is turned down by 22 dB for receive.
 constexpr CodecWrite Receive[] = {
-    {Page1, LeftMicPositive, 0x00},
-    {Page0, LeftDacVolume, DacMinus22Db},
+    {Page1, aic::LeftMicPositive, 0x00},
+    {Page0, aic::LeftDacVolume, DacMinus22Db},
 };
 
 // Digital receive: the voice comes from the vocoder at its calibrated
 // level, so the DAC stays at 0 dB.
 constexpr CodecWrite DigitalReceive[] = {
-    {Page1, LeftMicPositive, 0x00},
-    {Page0, LeftDacVolume, 0},
+    {Page1, aic::LeftMicPositive, 0x00},
+    {Page0, aic::LeftDacVolume, 0},
 };
 
-// Transmit: DAC back to 0 dB, the microphone on the left input through
-// 20 kOhm, input amplifier +16 dB, left AGC on with the same target; the
-// microphone is connected last.
+// Transmit, after the microphone gain: DAC back to 0 dB, the left AGC on
+// with its target 10 dB below full scale, then the microphone on the left
+// input through 20 kOhm.
 constexpr CodecWrite Transmit[] = {
-    {Page0, LeftDacVolume, 0},
-    {Page1, LeftMicPgaVolume, MicGain16Db},
-    {Page0, LeftAgcControl, AgcOn | MicGain16Db},
-    {Page0, LeftAgcMaxGain, MicGain16Db},
-    {Page1, LeftMicPositive, MicIn1Left20k},
+    {Page0, aic::LeftDacVolume, 0},
+    {Page0, aic::LeftAgcControl, aic::AgcOn | aic::AgcTargetMinus10Db},
+    {Page1, aic::LeftMicPositive, aic::MicIn1Left20k},
 };
+
+// The microphone gain is the most the AGC applies, and the amplifier
+// volume it starts from. Quiet voices get the whole gain; louder ones are
+// held at the target.
+dmm::services::Sct3258Baseband::MicrophoneGainWrites microphoneGain(int db)
+{
+    return {{{Page1, aic::LeftMicPgaVolume, aic::micPgaVolume(db)}, {Page0, aic::LeftAgcMaxGain, aic::agcMaxGain(db)}}};
+}
 
 // The demodulated FM signal reaches the baseband with its polarity
 // reversed: digital receive decodes nothing otherwise.
@@ -83,17 +72,18 @@ constexpr dmm::services::Sct3258Baseband::Audio Audio{
     .digitalReceive = DigitalReceive,
     .transmit = Transmit,
     .speakerPage = Page1,
-    .speakerRegister = HplGain,
-    .speakerMuted = HplMuted,
+    .speakerRegister = aic::HplGain,
+    .speakerMuted = aic::HplMuted,
     .speakerSteps = {hplDb(-6), hplDb(-4), hplDb(-1), hplDb(2), hplDb(6), hplDb(8), hplDb(10), hplDb(12), hplDb(13),
         hplDb(15), hplDb(16), hplDb(18), hplDb(20), hplDb(22), hplDb(23)},
-    .trims = {{{Page1, LeftOutGain}, {Page1, RightOutGain}, {Page1, RightMicPgaVolume}}},
+    .trims = {{{Page1, aic::LeftOutGain}, {Page1, aic::RightOutGain}, {Page1, aic::RightMicPgaVolume}}},
     .digitalSquelch = DigitalSquelch,
     .analogSquelch = AnalogSquelch,
     .demodulatorInverted = true,
     // Voice enhancement: a little less around 180 Hz, a lift around 2.4 kHz
     // with the rest 1.7 dB down, and a narrow dip at 2 kHz.
     .transmitEqualizer = {{{184.0F, -3.3F, 0.95F, 0.0F}, {2450.0F, 4.1F, 1.25F, -1.7F}, {1990.0F, -3.1F, 4.5F, 0.0F}}},
+    .microphoneGain = microphoneGain,
 };
 
 void outputLow(Pin pin)

@@ -89,6 +89,8 @@ public:
     void logStatus(std::string_view what);
     /// Also logs the chip's pin register, as a debug line.
     void setMicrophoneMuted(bool muted);
+    /// StandardDb is the tuning's own level.
+    void setMicrophoneGain(int db);
     /// Also logs the chip's pin register, as a debug line.
     void setGpsPower(bool on);
     /// "<reg> [value]" (hex), "tune <value>|auto", "sweep".

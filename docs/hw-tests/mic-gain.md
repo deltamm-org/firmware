@@ -1,0 +1,108 @@
+# Microphone gain
+
+The codeplug's Mic gain (DMR) and FM mic gain, levels 1 to 5, set the
+transmit voice level as +12, +14, +16, +18 and +21 dB; level 3, +16 dB,
+is the level the radio was set up with. On FM the voice gain register
+(`fm 41`) then holds 0709, 070c, 070f, 0713 and 071b.
+
+Menu > Settings > Audio sets either gain in dB instead: DMR mic gain
++0 to +30 dB, FM mic gain +0 to +24 dB, in 1 dB steps. The first choice,
+`Codeplug +N dB`, follows the codeplug's level again; the row then shows
+`Plug +N dB`. A value set on the radio is kept in the preferences record
+and wins over the codeplug's level until set back to Codeplug.
+
+- DMR: the gain is the most the codec's microphone AGC applies. Quiet
+  speech gets all of it; louder speech is held at the AGC's target
+  (10 dB below full scale), so a high gain does not clip.
+- FM: the microphone reaches the FM transceiver directly, with no AGC on
+  the way, and the gain scales the transceiver's voice gain against its
+  standard setting. To keep loud speech from over-deviating, FM stops at
+  +24 dB, a few dB above the top level. With `fm txaudio bb` or `both`
+  the codec takes the FM gain too, as on DMR.
+
+A new gain takes effect on the next transmission. The console sets the
+same kept values as the menu: `mic gain` (logs both), `mic gain dmr
+<0-30>|codeplug` and `mic gain fm <0-24>|codeplug`.
+
+Steps marked **Listen** need a person to listen; steps 6, 7, 8, 13 and
+14 also need the radio's keys (named as on the key test) and a look at
+its screen. The rest are console commands and log lines.
+
+## Before you start
+
+- The log port open in a terminal, the codeplug read with `dmrconf read
+  -y a.yaml` and kept as the original.
+- A DMR channel through a repeater or hotspot with a parrot (echo)
+  service. The parrot answers private calls only: `dmr pc <parrot ID>`
+  before the DMR steps (again after a restart).
+- An FM simplex channel, and a second radio on it at a distance that
+  gives a clean, full-quieting signal, with someone listening on it.
+- The same test sentence for every call, spoken at a normal level about
+  10 cm from the microphone, or played from a phone held there: a
+  recording gives the same input every time.
+
+## Steps
+
+Without calls:
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 1 | Note the codeplug's levels in a.yaml (`settings: audio: micGain` and `fmMicGain`), restart, `mic gain` | `radio: microphone gain: DMR +N dB, FM +M dB`, N and M the dB of the codeplug's levels; `ui: microphone gain: DMR +N dB (codeplug), FM +M dB (codeplug)` |
+| 2 | `mic gain dmr 31`, `mic gain fm 25` | `unknown command` both times; `mic gain` as before |
+| 3 | `mic gain dmr 30`, `mic gain fm 24`; after 5 s `settings` | `DMR +30 dB, FM +24 dB` without `(codeplug)`; `ui: settings kept in the codeplug`; `preferences record: ..., mic gain DMR +30 dB, FM +24 dB` |
+| 4 | Select another channel and the FM channel again, `fm 41` | `register 41 = 0726` (the voice gain 15 scaled by +8 dB) |
+| 5 | `mic gain fm 8`, select another channel and the FM channel again, `fm 41` | `register 41 = 0706` |
+| 6 | On the standby screen press Menu, Down four times, Menu, Down, Menu; look | Settings > Audio: DMR mic gain `+30 dB`, FM mic gain `+8 dB` |
+| 7 | Press Menu; look | DMR mic gain's value screen: `+30 dB`, `In use: +30 dB` |
+| 8 | Press Exit four times (back to the standby screen); `restart`; `mic gain` | `DMR +30 dB, FM +8 dB`, kept across the restart |
+| 9 | In a.yaml set `micGain: 4` and `fmMicGain: 8` (levels 2 and 4), `dmrconf write -y a.yaml` | After the restart still `DMR +30 dB, FM +8 dB`: the values set on the radio win, and the codeplug write kept them |
+| 10 | `mic gain dmr codeplug`, `mic gain fm codeplug` | `DMR +14 dB (codeplug), FM +18 dB (codeplug)` |
+| 11 | `dmrconf read -y b.yaml` | `micGain: 4`, `fmMicGain: 8`: the same levels; the rest as in a.yaml. QDMR releases without its level round-trip fix read one level lower |
+| 12 | Select another channel and the FM channel again, `fm 41` | `register 41 = 0713`: level 4, +18 dB |
+| 13 | Menu > Settings > Audio (keys as in 6); look | `Plug +14 dB`, `Plug +18 dB` |
+| 14 | Press Exit three times; `mic gain fm 16`, select the FM channel again, `fm 41` | `register 41 = 070f`, the standard |
+
+Calls, each started with `ptt 4000` while the sentence is spoken:
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 15 | DMR channel, `dmr pc <parrot ID>`; `mic gain dmr 8`, `ptt 4000` | The parrot plays it back |
+| 16 | **Listen**: `mic gain dmr 16`, `ptt 4000`; then `mic gain dmr 24`, `ptt 4000` | Each louder than the one before; no distortion at 24 |
+| 17 | **Listen**: `mic gain dmr 30`, `ptt 4000`, the sentence spoken loudly | Not clipped (held at the AGC's target); the room between words louder |
+| 18 | FM channel; **Listen** on the second radio: `mic gain fm 8`, `ptt 4000`; `mic gain fm 16`, `ptt 4000`; `mic gain fm 24`, `ptt 4000` | Each louder than the one before, the steps about as large as on DMR |
+| 19 | **Listen**: `mic gain fm 24`, `ptt 4000`, the sentence spoken loudly | Rate: clean, or distorted (over-deviation); note which |
+| 20 | `fm txaudio bb`; **Listen**: `mic gain fm 8`, `16`, `24`, `ptt 4000` each; then `fm txaudio direct` | The same steps as in 18, the voice through the baseband |
+
+Rate each **Listen** call against the one before: quieter, same or
+louder, and distorted or not.
+
+## Results
+
+Run 2026-11-03 on a D878UVII PLUS, with this branch, the settings store,
+menu, home screen and frequency offset branches, the write stall branch
+and the loader in one image. The calls were heard on 2026-11-02, on the
+same branches before the review changes; they set the gains in dB, which
+the levels' new values do not change.
+
+| # | Result |
+| --- | --- |
+| 1-3 | Pass |
+| 4 | Pass: `register 41 = 0726` |
+| 5 | Pass: `register 41 = 0706` |
+| 6-9 | Pass |
+| 10 | Pass: `DMR +14 dB (codeplug), FM +18 dB (codeplug)` |
+| 11 | Pass: `micGain: 4`, `fmMicGain: 8` |
+| 12 | Pass: `register 41 = 0713` |
+| 13 | Pass |
+| 14 | Pass: `register 41 = 070f` |
+| 15 | Pass, heard: the call played back |
+| 16 | Pass, heard: louder at each step, no distortion at 24 |
+| 17 | Pass, heard: not clipped |
+| 18 | Pass, heard: louder at each step |
+| 19 | Pass, heard: sounded clean |
+| 20 | Optional, only for the console's baseband route: not run |
+
+## Undo
+
+`mic gain dmr codeplug`, `mic gain fm codeplug`; `dmrconf write -y` the
+original a.yaml.

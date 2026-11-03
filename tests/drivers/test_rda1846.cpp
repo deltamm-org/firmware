@@ -322,3 +322,38 @@ TEST_CASE("a digital channel takes the tuning's digital column, idle like a narr
     chip.setBandwidth(Rda1846::Bandwidth::Narrow);
     CHECK(bus.registers[0x3C] == 0x0408);
 }
+
+TEST_CASE("the voice gain scales the tuning's voice digital gain as an amplitude")
+{
+    CHECK(Rda1846::scaledVoiceGain(0x070F, 0) == 0x070F);
+    CHECK(Rda1846::scaledVoiceGain(0x070F, 6) == 0x071E);   // 15 x 2.0 = 30
+    CHECK(Rda1846::scaledVoiceGain(0x070F, 8) == 0x0726);   // 15 x 2.5 = 37.7
+    CHECK(Rda1846::scaledVoiceGain(0x070F, -6) == 0x0708);  // 15 x 0.5 = 7.5
+    CHECK(Rda1846::scaledVoiceGain(0x070F, -16) == 0x0702); // 15 x 0.16 = 2.4
+    CHECK(Rda1846::scaledVoiceGain(0x070F, -40) == 0x0701); // never off
+    CHECK(Rda1846::scaledVoiceGain(0x070F, 30) == 0x077F);  // the field's top
+    CHECK(Rda1846::scaledVoiceGain(0x4700, 6) == 0x4700);   // nothing to scale
+
+    using Setting = Rda1846::WidthSetting;
+    constexpr Setting Transmit[] = {{0x41, 0x070F, 0x070F, 0x070F}};
+    Rda1846::Tuning tuning = Rda1846::makerTuning();
+    tuning.transmit = Transmit;
+    LoggingBus bus;
+    Rda1846 chip(bus, tuning);
+    chip.setVoiceGain(-6);
+    chip.setMode(Rda1846::Mode::Transmit);
+    CHECK(bus.registers[0x41] == 0x0708);
+    chip.setVoiceGain(0);
+    chip.setMode(Rda1846::Mode::Transmit);
+    CHECK(bus.registers[0x41] == 0x070F);
+
+    // A tuning that writes the gain only at start gets it on transmit too.
+    LoggingBus makerBus;
+    makerBus.registers[0x00] = 0x1846;
+    Rda1846 maker(makerBus);
+    REQUIRE(maker.start(sleep, 0));
+    CHECK(makerBus.registers[0x41] == 0x470F);
+    maker.setVoiceGain(6);
+    maker.setMode(Rda1846::Mode::Transmit);
+    CHECK(makerBus.registers[0x41] == 0x471E);
+}

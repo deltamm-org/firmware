@@ -16,6 +16,7 @@
 #include "dmm/services/clock.h"
 #include "dmm/services/data_link.h"
 #include "dmm/services/log.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/version.h"
 
 #include <optional>
@@ -272,6 +273,7 @@ bool chipCommand(radio::ChipCommand::Chip chip, std::string_view command, std::s
 // them.
 bool radioCommand(std::string_view command)
 {
+    using Gain = ui::MicrophoneGain;
     std::int32_t n[3] = {};
     bool posted = true;
     if (command == "bb") {
@@ -344,6 +346,16 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::FmStatus{});
     } else if (numbersAfter(command, "fm sq ", 10, n, 1) && n[0] <= 5) {
         posted = radio::post(radio::FmSquelch{static_cast<std::uint8_t>(n[0])});
+    } else if (command == "mic gain") {
+        posted = ui::post(ui::MicrophoneGain{Gain::Unchanged, Gain::Unchanged});
+    } else if (command == "mic gain dmr codeplug") {
+        posted = ui::post(ui::MicrophoneGain{Gain::FromCodeplug, Gain::Unchanged});
+    } else if (command == "mic gain fm codeplug") {
+        posted = ui::post(ui::MicrophoneGain{Gain::Unchanged, Gain::FromCodeplug});
+    } else if (numbersAfter(command, "mic gain dmr ", 10, n, 1) && n[0] <= services::microphone_gain::MaxDigitalDb) {
+        posted = ui::post(ui::MicrophoneGain{static_cast<std::int8_t>(n[0]), Gain::Unchanged});
+    } else if (numbersAfter(command, "mic gain fm ", 10, n, 1) && n[0] <= services::microphone_gain::MaxFmDb) {
+        posted = ui::post(ui::MicrophoneGain{Gain::Unchanged, static_cast<std::int8_t>(n[0])});
     } else if (command == "mic on" || command == "mic off") {
         posted = radio::post(radio::Microphone{command == "mic on"});
     } else if (numbersAfter(command, "beep ", 10, n, 2) && n[0] > 0 && n[0] <= 8000 && n[1] > 0 && n[1] <= 10000) {
@@ -437,7 +449,7 @@ void runCommand(std::string_view command)
         log::info("console") << "commands: help, fault, hang, restart, battery, autooff <min>, storage, peek <hex addr>, "
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, "
-                                "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+                                "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, mic gain [dmr 0-30|codeplug, fm 0-24|codeplug] (dB, kept), lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>, settings";
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
         log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>; clock: time, time set YYYY-MM-DD HH:MM:SS (UTC)";
@@ -472,6 +484,8 @@ void runCommand(std::string_view command)
         if (!ui::post(ui::Backlight{static_cast<std::uint8_t>(level)})) {
             log::info("console") << "no display";
         }
+    } else if (command == "settings") {
+        ui::post(ui::SettingsReport{});
     } else if (command == "pattern") {
         ui::post(ui::ShowTestPattern{});
     } else if (command == "logview") {
@@ -630,7 +644,7 @@ void start(Platform &p)
 {
     platform = &p;
     if (p.display != nullptr) {
-        ui::start(*p.display, p.codeplug, p.input);
+        ui::start(*p.display, p.codeplug, p.input, p.settingsStore);
     }
     if (p.input != nullptr) {
         input::start(*p.input);

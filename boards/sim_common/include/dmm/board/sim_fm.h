@@ -39,6 +39,7 @@ public:
     dmm::services::FmReceiveStatus status() { return {}; }
     void logStatus(std::string_view what) { dmm::services::log::info("sim") << what; }
     void setMicrophoneMuted(bool) {}
+    void setMicrophoneGain(int) {}
     void setGpsPower(bool) {}
     bool debugCommand(std::string_view) { return false; }
     const char *debugHelp() const { return "none"; }

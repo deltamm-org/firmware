@@ -12,6 +12,7 @@
 #include "dmm/os/os.h"
 #include "dmm/services/battery_saver.h"
 #include "dmm/services/log.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/services/power.h"
 #include "dmm/services/roaming.h"
 #include "dmm/services/squelch_gate.h"
@@ -93,6 +94,12 @@ constexpr int RepeaterWakeTries = 2;
 // The repeater's carrier is heard now.
 bool carrierHeard = false;
 bool timingSeen = false;
+// The level of the signal last heard, read twice a second while one is
+// there; signalAt is 0 until the first.
+constexpr os::Ticks SignalEveryMs = 500;
+os::Ticks lastSignalRead = 0;
+std::atomic<int> signalDbm{0};
+std::atomic<os::Ticks> signalAt{0};
 bool idleLogged = false;
 services::BatterySaver saver;
 
@@ -1750,6 +1757,13 @@ void handle(Message &message)
                        fm->setMicrophoneMuted(!m.on);
                        log::info("fm") << "microphone " << (m.on ? "on" : "muted");
                    },
+                   [](const MicrophoneGain &g) {
+                       const int dmrDb = services::microphone_gain::clampDigital(g.dmrDb);
+                       const int fmDb = services::microphone_gain::clampFm(g.fmDb);
+                       fm->setMicrophoneGain(fmDb);
+                       withBaseband([&](auto &b) { b.setMicrophoneGain(dmrDb, fmDb); });
+                       log::info("radio") << "microphone gain: DMR +" << dmrDb << " dB, FM +" << fmDb << " dB";
+                   },
                    [](const ChipCommand &c) {
                        bool known = false;
                        if (c.chip == ChipCommand::Chip::Fm) {
@@ -1807,6 +1821,14 @@ void radioMain(void *)
                 pollFm();
             }
         }
+        // A level only from a signal: the DMR carrier, or the FM carrier
+        // the squelch heard; never the noise between signals.
+        const bool signal = fmChannel.digital ? carrierHeard : carrierGate.heard();
+        if (fm->receiving() && signal && os::nowMs() - lastSignalRead >= SignalEveryMs) {
+            lastSignalRead = os::nowMs();
+            signalDbm.store(fm->status().rssiDbm);
+            signalAt.store(lastSignalRead);
+        }
     }
 }
 
@@ -1817,6 +1839,15 @@ void start(board::Fm &f, board::Baseband *b)
     fm = &f;
     baseband = b;
     radioTask.start("radio", 7, radioMain, nullptr);
+}
+
+SignalLevel signalLevel()
+{
+    SignalLevel l;
+    l.atMs = signalAt.load();
+    l.known = l.atMs != 0;
+    l.dbm = signalDbm.load();
+    return l;
 }
 
 void roamingView(RoamingView &out)

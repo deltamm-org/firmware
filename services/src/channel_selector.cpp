@@ -42,6 +42,9 @@ bool ChannelSelector::loadZone(std::uint8_t zone, std::uint16_t position)
 bool ChannelSelector::loadChannel()
 {
     m_current = m_codeplug.channel(m_channels[m_position]);
+    if (m_current && m_adjust) {
+        (*m_adjust)(m_channels[m_position], *m_current);
+    }
     return m_current.has_value();
 }
 

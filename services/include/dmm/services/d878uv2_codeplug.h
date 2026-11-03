@@ -32,7 +32,8 @@ ChannelLinks channelLinks(std::span<const std::uint8_t, 64> record);
 /// bytes; the roaming settings need 0xE8).
 CodeplugSettings decodeSettings(std::span<const std::uint8_t> block);
 /// Adds what the extended general settings block holds (at least 0x40
-/// bytes): the GPS satellite systems.
+/// bytes): the GPS satellite systems, and from 0x44 bytes the FM
+/// microphone gain.
 void decodeSettingsExtension(std::span<const std::uint8_t> block, CodeplugSettings &settings);
 
 /// The D878UVII's codeplug on its data flash, read only. Every 128 KB
@@ -51,6 +52,7 @@ public:
     StorageResult read(std::uint32_t address, std::span<std::uint8_t> data);
 
     std::optional<CodeplugSettings> settings() override;
+    std::optional<RadioPreferences> preferences() override;
     std::optional<Channel> channel(std::uint16_t index) override;
     std::optional<Channel> vfo(bool sideB) override;
     bool zoneInUse(std::uint8_t zone) override;
@@ -65,6 +67,13 @@ public:
     bool roamingSiteName(std::uint8_t zone, std::size_t position, std::span<char, SiteNameBytes + 1> name) override;
     std::size_t roamingZones(std::span<std::uint8_t> out) override;
     bool roamingZoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name) override;
+
+    /// Forgets which copy of each block is valid, after the codeplug was
+    /// written through another reader.
+    void forgetCopies() { m_cachedCount = 0; }
+    /// Where codeplug address @p address is kept now: in the valid copy of
+    /// its block.
+    std::optional<std::uint32_t> storageAddress(std::uint32_t address);
 
     /// Contact @p index, if it is in use.
     std::optional<dmr::Target> contact(std::uint32_t index);

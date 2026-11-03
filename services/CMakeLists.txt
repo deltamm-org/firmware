@@ -6,6 +6,8 @@ add_library(dmm_services STATIC
     src/channel_selector.cpp
     src/d878uv2_calibration.cpp
     src/d878uv2_codeplug.cpp
+    src/d878uv2_preferences.cpp
+    src/d878uv2_settings_store.cpp
     src/d878uv2_programming.cpp
     src/d878uv2_storage.cpp
     src/data_link.cpp
@@ -17,6 +19,7 @@ add_library(dmm_services STATIC
     src/casic_receiver.cpp
     src/clock.cpp
     src/gps_schedule.cpp
+    src/home_screen.cpp
     src/power.cpp
     src/roaming.cpp
     src/audio.cpp

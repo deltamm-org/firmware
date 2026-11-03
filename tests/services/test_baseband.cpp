@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Tommi Tauriainen
 
 #include "../drivers/fake_sct3258.h"
+#include "dmm/drivers/baseband/tlv320aic3204.h"
 #include "dmm/services/sct3258_baseband.h"
 
 #include <doctest/doctest.h>
@@ -497,4 +498,53 @@ TEST_CASE("the slot line leads by the calibrated time at High, 20 steps less at 
     chip.packets.clear();
     REQUIRE(baseband.startDigitalCall(settings, lc, 430'475'000, false, PowerLevel::Low));
     CHECK(offset() == std::vector<std::uint8_t>{0x08, 0x7A, 0x00, 0x82, 1, 2, 3, 4, 5, 6});
+}
+
+TEST_CASE("the microphone gain goes to the codec before the transmit writes, by mode")
+{
+    namespace aic = dmm::drivers::baseband::tlv320aic3204;
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    constexpr CodecWrite GainTransmit[] = {{0, 65, 0x00}, {0, 86, 0xA0}, {1, 52, 0x80}};
+    Sct3258Baseband::Audio audio = TestAudio;
+    audio.transmit = GainTransmit;
+    audio.microphoneGain = [](int db) {
+        return Sct3258Baseband::MicrophoneGainWrites{
+            {{1, 59, aic::micPgaVolume(db)}, {0, 88, aic::agcMaxGain(db)}}};
+    };
+    Sct3258Baseband baseband(sct, board, Blob, audio, testTrims);
+    REQUIRE(baseband.start());
+    chip.packets.clear();
+
+    // The standard gain until set: amplifier and AGC at 16 dB.
+    CHECK(baseband.setMicrophone(true));
+    REQUIRE(chip.packets.size() == 5);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 59, 32, 0x00, 0x00});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 88, 32, 0x00, 0x00});
+    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 86, 0xA0, 0x00, 0x00});
+    CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 52, 0x80, 0x00, 0x00});
+
+    // Analog mode takes the FM gain, limited to the FM range.
+    baseband.setMicrophoneGain(30, 40);
+    chip.packets.clear();
+    CHECK(baseband.setMicrophone(true));
+    REQUIRE(chip.packets.size() == 5);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 59, 48, 0x00, 0x00});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 88, 48, 0x00, 0x00});
+
+    // Digital mode takes the DMR gain, and a DMR call writes it too.
+    dmm::services::dmr::ChannelSettings settings;
+    settings.colourCode = 1;
+    settings.slot = 1;
+    REQUIRE(baseband.setDigital(settings, 433'450'000, true));
+    chip.packets.clear();
+    CHECK(baseband.setMicrophone(true));
+    REQUIRE(chip.packets.size() == 5);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 59, 60, 0x00, 0x00});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 88, 60, 0x00, 0x00});
+    baseband.setMicrophoneGain(8, 16);
+    chip.packets.clear();
+    CHECK(baseband.setMicrophone(true));
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 88, 16, 0x00, 0x00});
 }
