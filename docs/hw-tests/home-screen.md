@@ -96,6 +96,32 @@ the way into the group depends on what came before:
 | 20 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
 | 21 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 
+## Results
+
+Run 2026-11-03 on a D878UVII PLUS, with this branch, the settings store,
+menu, microphone gain and frequency offset branches, the write stall
+branch and the loader in one image. Steps 7, 12, 13, 15 and the volume
+knob in 18 by hand on 2026-11-02, and step 19 with a codeplug write on
+2026-11-01, on the same branches before the review changes.
+
+| # | Result |
+| --- | --- |
+| 1 | Pass, on a DMR channel that does not roam |
+| 2 | Pass: tones and offset on a repeater channel; the zone and place on a simplex channel without tones |
+| 3-6 | Pass |
+| 7 | Pass, seen: bars and the level (-61 to -25 dBm) while a second radio sent; `-` and dark bars about 2 s after it stopped. Seen with the meter's earlier floor of -125 dBm |
+| 8 | Pass for the bottom row, `via <n> <name>`; the meter between beacons Open: no roaming repeater answered |
+| 9-11 | Pass |
+| 12 | Pass, seen: the volume notice, and `VOL` followed from 0 to 9 |
+| 13 | Pass, seen: the position at the bottom, with the receiver on GPS + BeiDou; no fix indoors on 2026-11-03 |
+| 14 | Pass: the record line, and the layout kept across the restart |
+| 15 | Pass, seen: after a call answered by an echo service, `Last: <caller>` and its age in minutes |
+| 16, 17 | Pass |
+| 18 | Pass: the channel knob drawn in place; the volume knob too, by eye |
+| 19 | Pass: the layout and the channels kept through the write |
+| 20 | Pass: no differences |
+| 21 | Pass: 383 unused stack words in the ui task |
+
 ## Undo
 
 - `restart`, then `H`, press Menu, Menu (Preset Detailed), then `X`;
