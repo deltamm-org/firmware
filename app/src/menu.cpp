@@ -13,13 +13,13 @@ namespace {
 
 using services::Key;
 
-constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Settings, Group::Tools};
+constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Display, Group::Settings, Group::Tools};
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::RoamStatus, Item::Roaming, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::GpsStatus, Item::Gps};
-constexpr Row SettingsRows[] = {Group::Display, Group::Keys, Group::Clock, Group::GpsSettings};
-constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
+constexpr Row SettingsRows[] = {Group::Keys, Group::Clock, Group::GpsSettings};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime};
+constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock, Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
 constexpr Row GpsSettingsRows[] = {Item::GpsSystems};
@@ -29,9 +29,9 @@ constexpr GroupInfo Groups[] = {
     {"Channel", "Squelch and power of the channel in use", ChannelRows},
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "The position and the GPS receiver", GpsRows},
-    {"Settings", "How the radio is set up: display, keys, clock, GPS", SettingsRows},
-    {"Tools", "The log, the key test and the version", ToolsRows},
     {"Display", "Brightness and how long the light stays on", DisplayRows},
+    {"Settings", "How the radio is set up: keys, clock, GPS", SettingsRows},
+    {"Tools", "The log, the key test and the version", ToolsRows},
     {"Keys & battery", "The key lock and battery save", KeysRows},
     {"Clock", "The time zone", ClockRows},
     {"GPS", "The satellite systems the receiver uses", GpsSettingsRows},

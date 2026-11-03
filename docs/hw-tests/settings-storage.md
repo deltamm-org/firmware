@@ -31,7 +31,7 @@ screen.
 | 5 | `save 1` again | No `settings kept` line; `settings` shows `last write unchanged` |
 | 6 | `restart`; then `save` and `settings` | `power: battery save on, 150 ms sleep; ...`; the `codeplug:` line as in step 4; the backlight goes off 15 s after the last key |
 | 7 | Menu > Channel: Squelch 4, Squelch type the other one, Power the other one; Menu > Roaming: Roaming Off, Roam zone another one | Each takes effect at once; 3 s after the last one `settings kept in the codeplug` |
-| 8 | Menu > Settings > Display: Brightness 2, Light time 30 s; Menu > GPS: Receiver On; Menu > Settings > GPS: Satellites GPS; Menu > Settings > Clock: Time zone one step on | One `settings kept` line after the last |
+| 8 | Menu > Display: Brightness 2, Light time 30 s; Menu > GPS: Receiver On; Menu > Settings > GPS: Satellites GPS; Menu > Settings > Clock: Time zone one step on | One `settings kept` line after the last |
 | 9 | Zone key: pick another zone; knob two channels on; wait 3 s; `settings` | `settings kept`; `codeplug:` shows the new zone, squelch 4, light 2 30 s, GPS on systems 1, the new time zone, `auto roaming off` and the new roaming zone |
 | 10 | `restart`; `settings`; look at the screen | Starts in the zone and on the channel of step 9, dimmer (level 2); the channel of step 7 has its new power and squelch type; `automatic off` in the `roam:` start line, and Menu > Roaming > Roaming shows Off |
 | 11 | `light time 20`; about 2 s later start `dmrconf read -D <data> -R d878uv2 during.yaml`; when it has ended, `light time 30` | While it reads, `settings wait: the PC is programming`; the read completes without an error; right after it, `settings kept in the codeplug`; 3 s after `light time 30` (the light time of step 8 back) `settings kept` again |
