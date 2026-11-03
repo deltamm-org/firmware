@@ -41,6 +41,32 @@ screen.
 | 15 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
 | 16 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 
+## Results
+
+Run 2026-11-03 on a D878UVII PLUS, with this branch, the menu, home
+screen, microphone gain and frequency offset branches, the write stall
+branch and the loader in one image. Steps 14 and 15 with a codeplug
+write: 2026-11-01, on the same branches before the review changes.
+
+| # | Result |
+| --- | --- |
+| 1 | Pass: no crash; the `codeplug:` and preferences lines |
+| 2 | Pass: one `settings kept` 3.4 s after the last command |
+| 3 | Pass |
+| 4 | Pass: one write |
+| 5 | Pass: no write, `last write unchanged` |
+| 6 | Pass: battery save on and light 15 s after the restart; the backlight going off was not watched |
+| 7 | Pass for squelch, squelch type, Roaming Off and another roam zone, one write; Power was not changed |
+| 8 | Pass: one write after the last |
+| 9 | Pass: the `codeplug:` line with all of them; `roaming off` in the record |
+| 10 | Pass: roaming off, the zone, light 2 30 s and the other values as in step 9 after the restart |
+| 11 | Pass: `settings wait` during the read, kept right after it, and again 3 s after `light time 30` |
+| 12 | Pass: both channels pending while the writes were refused; one write after program mode ended; both with the new squelch type. Back on the first channel before the write, its new value was in use |
+| 13 | Pass |
+| 14 | Pass: the write completes, the radio restarts, the record kept |
+| 15 | Pass: no differences other than two fields the codeplug tool changes on every write |
+| 16 | Pass: 375 unused stack words in the ui task |
+
 ## Undo
 
 - `dmrconf write -D <data> -R d878uv2 before.yaml` puts the codeplug's
