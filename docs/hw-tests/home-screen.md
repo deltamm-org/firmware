@@ -31,8 +31,8 @@ else the zone and the channel's place in it (the channel's name instead
 when something else is large), also on an FM simplex channel without
 tones.
 
-The signal meter has 10 bars from -125 dBm (none) to -65 dBm (all) and
-the level in dBm. The level is read only while a carrier is heard and
+The signal meter has 10 bars, one per 4 dB from -105 dBm (none) to -65
+dBm (all), and the level in dBm. The level is read only while a carrier is heard and
 shown for 2 s after; on a roaming channel the repeater's last beacon
 level is shown while it is fresh. Otherwise, and after a restart until
 the first signal, it shows `-` and no bars.
