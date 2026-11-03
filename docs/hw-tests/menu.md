@@ -71,6 +71,33 @@ two clicks anticlockwise. Each step starts where the one before ended.
 | 27 | By hand: turn the knob fast in a list, on Power and on Time zone | Only the rows, buttons and values that change are redrawn; nothing blanks or flashes |
 | 28 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 
+## Results
+
+Run 2026-11-03 on a D878UVII PLUS, with this branch, the settings store,
+home screen, microphone gain and frequency offset branches, the write
+stall branch and the loader in one image. Step 25 with a codeplug write:
+2026-11-01; step 27 by hand: 2026-11-02, both on the same branches
+before the review changes. Step 24 again on 2026-11-10, with Roaming as
+the codeplug's Auto Roaming.
+
+| # | Result |
+| --- | --- |
+| 1 | Pass: `1/6`, Channel to Settings above the panel |
+| 2 | Pass: Tools at `6/6`; the knob wraps round to Channel |
+| 3-7 | Pass |
+| 8 | Pass for the four buttons and Exit; another power was not set |
+| 9-11 | Pass |
+| 12 | Pass: `Menu > Display`, the Brightness value screen; Exit leaves it |
+| 13 | Pass: the Settings groups, Display not among them |
+| 14-21 | Pass |
+| 22 | Pass: nothing blanked or flashed |
+| 23 | Pass: squelch and power as before the restart |
+| 24 | Pass: `ui: auto roaming off` and `settings kept` about 3.5 s later; Off after the restart, `auto roaming off` in the `codeplug:` line |
+| 25 | Not run again with Auto Roaming |
+| 26 | Pass: no differences |
+| 27 | Pass, by eye: only what changes is redrawn; turning very fast can outrun the drawing |
+| 28 | Pass: 390 unused stack words in the ui task |
+
 ## Undo
 
 - Menu > Roaming > Roaming On, and put back the squelch and power noted
