@@ -116,7 +116,8 @@ TEST_CASE("labels and titles fit the screen without being cut")
         }
     }
     CHECK(groupTitle(Group::Channel).view() == "Menu > Channel");
-    CHECK(groupTitle(Group::Display).view() == "Settings > Display");
+    CHECK(groupTitle(Group::Display).view() == "Menu > Display");
+    CHECK(groupTitle(Group::Clock).view() == "Settings > Clock");
     CHECK(groupTitle(Group::Keys).view() == "Keys & battery");
     CHECK(valueTitle(Group::Channel, Item::Squelch).view() == "Channel > Squelch");
     CHECK(valueTitle(Group::Channel, Item::SquelchMode).view() == "Squelch type");
@@ -130,19 +131,19 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     CHECK(nav.group() == Group::Top);
     CHECK(nav.row() == 0);
 
-    // Settings > Display.
-    moveTo(nav, 3);
+    // Settings > Keys & battery.
+    moveTo(nav, 4);
     CHECK(nav.current().group == Group::Settings);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Settings);
     CHECK(nav.press(Key::Menu) == Step::Opened);
-    CHECK(nav.group() == Group::Display);
+    CHECK(nav.group() == Group::Keys);
     CHECK(nav.press(Key::Down) == Step::Moved);
-    CHECK(nav.current().item == Item::BacklightTime);
+    CHECK(nav.current().item == Item::AutoLock);
 
     CHECK(nav.press(Key::Exit) == Step::Opened);
     CHECK(nav.group() == Group::Settings);
-    CHECK(nav.current().group == Group::Display);
+    CHECK(nav.current().group == Group::Keys);
     CHECK(nav.press(Key::Exit) == Step::Opened);
     CHECK(nav.group() == Group::Top);
     CHECK(nav.current().group == Group::Settings);
@@ -155,7 +156,20 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     CHECK(nav.current().group == Group::Settings);
     nav.press(Key::Menu);
     nav.press(Key::Menu);
-    CHECK(nav.current().item == Item::BacklightTime);
+    CHECK(nav.current().item == Item::AutoLock);
+}
+
+TEST_CASE("Display opens from the top of the menu")
+{
+    Navigator nav;
+    nav.open();
+    moveTo(nav, 3);
+    CHECK(nav.current().group == Group::Display);
+    CHECK(nav.press(Key::Menu) == Step::Opened);
+    CHECK(nav.current().item == Item::Backlight);
+    CHECK(nav.press(Key::Exit) == Step::Opened);
+    CHECK(nav.group() == Group::Top);
+    CHECK(nav.current().group == Group::Display);
 }
 
 TEST_CASE("the cursor wraps round both ends of a list")
