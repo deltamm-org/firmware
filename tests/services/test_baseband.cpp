@@ -271,11 +271,30 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
     CHECK(chip.packets[8] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
     CHECK(chip.packets[9] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
 
-    // Direct: both slots; the vocoder and the call options stay.
+    // Direct: both slots; only the slot changes, so only it goes again with
+    // the receive mode and carrier.
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
-    REQUIRE(chip.packets.size() == 5);
-    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
+    REQUIRE(chip.packets.size() == 3);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
+
+    // A retune with nothing changed: the receive mode and carrier alone.
+    chip.packets.clear();
+    REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
+    REQUIRE(chip.packets.size() == 2);
+    // Another colour code: it goes too.
+    chip.packets.clear();
+    settings.colourCode = 3;
+    REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
+    REQUIRE(chip.packets.size() == 3);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x77, 0x03});
+    // After anything else told to the chip, all of it again.
+    REQUIRE(baseband.setCarrier(true));
+    chip.packets.clear();
+    REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
+    CHECK(chip.packets.size() == 5); // layer 2, colour code, slot, receive mode, carrier
 
     // Back to FM: the analog vocoder first.
     chip.packets.clear();
@@ -362,8 +381,12 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
     CHECK(chip.packets[11] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02});      // the channel's slot alone
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 145'000'000, 145'000'000, false));
-    REQUIRE(chip.packets.size() == 5);                                     // no values for this band; the vocoder stays
-    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03}); // direct: both slots
+    REQUIRE(chip.packets.size() == 3);                                     // no values for this band; the vocoder stays
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03}); // direct: both slots
+    // Back to the band with values: they go again.
+    chip.packets.clear();
+    REQUIRE(baseband.setDigital(settings, 438'075'000, 438'075'000, false));
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
 }
 
 TEST_CASE("a DMR call: slot, microphone, transmit, header, voice; then the terminator")

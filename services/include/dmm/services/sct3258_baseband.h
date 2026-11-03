@@ -102,6 +102,8 @@ public:
         std::optional<std::array<std::uint8_t, 2>> micGain;
         /// DMR_OFFSET: transmit slot timing.
         std::optional<std::array<std::uint8_t, 8>> slotTiming;
+
+        bool operator==(const DigitalTrims &) const = default;
     };
     using DigitalTrimsSource = std::optional<DigitalTrims> (*)(std::uint32_t hz);
 
@@ -169,6 +171,12 @@ private:
     std::uint8_t m_vocoder = 0;
     bool m_voiceEnhancement = false;
     bool m_callOptionsSet = false;
+    // The digital receive settings the chip has, so that a retune sends only
+    // what changed; m_digitalSet false: send them all.
+    bool m_digitalSet = false;
+    std::optional<DigitalTrims> m_digitalTrimsSent;
+    std::uint8_t m_colourCodeSent = 0;
+    std::uint8_t m_slotSent = 0;
 };
 
 } // namespace dmm::services
