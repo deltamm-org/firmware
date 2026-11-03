@@ -71,3 +71,28 @@ and the new image runs.
 
 Undo: `dmm-radio flash <plain image set or factory .CDD> --replace-loader`
 in update mode (PTT+PF3).
+
+## Results
+
+Run 2026-11-01 on a D878UVII PLUS; steps 1-4 again and step 21 with the
+force key PTT and PF1 on 2026-11-02.
+
+| # | Result |
+| --- | --- |
+| 0.1, 0.2 | Pass. Cycles below 256 KB / past it / bank 1: straight-line code 67.00 / 68.15 / 68.15, taken branches 67.00 / 67.86 / 67.86, word reads 7.01 / 25.82 / 25.80 |
+| 1-4 | Pass: installed through update mode, `image confirmed` |
+| 5 | Pass: update mode as before |
+| 6, 7 | Pass: loader mode on request; it restarts the app after 60 s without the PC |
+| 8 | Pass: 31 s from the start of the update to the new image running |
+| 9-11 | Pass: confirm, restart, rollback twice |
+| 12 | Pass: confirmed by itself after 60 s |
+| 13 | Pass: fell back after three crashing starts; the crash record shown after |
+| 14 | Pass: fell back through the loader's watchdog |
+| 15 | Pass: fell back after three restarts without confirming |
+| 16 | Pass: the bad chunk and the wrong CRC refused |
+| 17 | Pass: resumed at 77 %, 15 chunks sent, 56 already there |
+| 18 | Pass: the swap resumed from the record after 20 steps |
+| 19 | Pass: the red LED stayed on 10-15 s until the swap ended, then the radio went off; the next start finished normally |
+| 20 | Pass: 20 of 20, no crash in 29 starts |
+| 21 | Pass: blue LED, `Waiting: force key held at power-on`; the app started by itself about 60 s later |
+| 22 | Pass: every task above 50 unused stack words |
