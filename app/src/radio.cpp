@@ -1812,6 +1812,7 @@ void radioMain(void *)
             } else {
                 pollFm();
             }
+            fm->keepLocked();
         }
     }
 }

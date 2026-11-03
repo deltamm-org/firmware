@@ -58,6 +58,8 @@ struct FmReceiveStatus
 ///   the tuning; asleep until woken, or receive(), transmit() or idle().
 /// - receiving(), transmitting(), status(): what the receiver hears; the
 ///   carrier and the tone separately.
+/// - keepLocked(): called often while receiving; now and then checks the
+///   receiver is still on its frequency and puts it back if not.
 /// - logStatus(what): logs @p what, then what the receiver hears in the
 ///   chip's own figures.
 /// - setMicrophoneMuted(muted).
@@ -81,6 +83,7 @@ concept FmTransceiver = requires(T &fm, const T &state, const FmChannel &channel
     { state.receiving() } -> std::same_as<bool>;
     { state.transmitting() } -> std::same_as<bool>;
     { fm.status() } -> std::same_as<FmReceiveStatus>;
+    fm.keepLocked();
     fm.logStatus(text);
     fm.setMicrophoneMuted(on);
     fm.setGpsPower(on);

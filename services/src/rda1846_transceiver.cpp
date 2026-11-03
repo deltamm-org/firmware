@@ -5,6 +5,7 @@
 
 #include "dmm/lib/format.h"
 #include "dmm/lib/strings.h"
+#include "dmm/os/os.h"
 #include "dmm/services/log.h"
 
 namespace dmm::services {
@@ -29,6 +30,12 @@ constexpr unsigned TransmitSettleMs = 100;
 constexpr unsigned AmplifierSettleMs = 10;
 constexpr unsigned PowerStepMs = 1;
 
+// The synthesizer's lock is checked this often while receiving, the first
+// time this long after tuning. A lock lost for good is logged only a few
+// times.
+constexpr std::uint32_t LockCheckMs = 100;
+constexpr unsigned UnlockLogs = 3;
+
 // Log lines are built in their own frames, kept out of the callers that go
 // on to talk to the chip.
 [[gnu::noinline, gnu::cold]] void logNoAnswer(std::uint16_t id)
@@ -44,6 +51,12 @@ constexpr unsigned PowerStepMs = 1;
 [[gnu::noinline]] void logSquelch(int openDbm, int noiseOpenDb)
 {
     log::info("fm") << "squelch opens at " << openDbm << " dBm and noise below " << noiseOpenDb << " dB";
+}
+
+[[gnu::noinline, gnu::cold]] void logUnlocked(std::uint32_t hz, bool relocked)
+{
+    log::warning("fm") << "synthesizer unlocked at " << hz / 1000 << " kHz: "
+                       << (relocked ? "locked again" : "receive set up again");
 }
 
 [[gnu::noinline]] void logNumber(const char *what, int value, const char *unit)
@@ -136,6 +149,9 @@ const char *Rda1846Transceiver::receive(const FmChannel &channel, int squelchLev
     m_chip.setReceiveTone(chipTone(channel.digital ? Tone{} : channel.receiveTone));
     m_chip.setMode(Chip::Mode::Receive);
     m_receiveHz = hz;
+    m_channel = channel;
+    m_squelchLevel = squelchLevel;
+    m_lockCheckedMs = os::nowMs();
     setPin(frontEnd(), true);
     return nullptr;
 }
@@ -244,6 +260,7 @@ void Rda1846Transceiver::wakeReceiver()
     m_chip.setMode(Chip::Mode::Receive);
     setPin(frontEnd(), true);
     m_asleep = false;
+    m_lockCheckedMs = os::nowMs();
 }
 
 unsigned Rda1846Transceiver::frontEnd() const
@@ -258,6 +275,29 @@ FmReceiveStatus Rda1846Transceiver::status()
     const std::uint16_t flags = m_chip.flags();
     const bool flag = (flags & Chip::SquelchOpen) != 0;
     return {flag || strong, m_chip.rssiDbm(), m_chip.receiveToneHeard(flags)};
+}
+
+void Rda1846Transceiver::keepLocked()
+{
+    if (!receiving()) {
+        return;
+    }
+    const std::uint32_t now = os::nowMs();
+    if (now - m_lockCheckedMs < LockCheckMs) {
+        return;
+    }
+    m_lockCheckedMs = now;
+    if (m_chip.synthesizerLocked()) {
+        m_unlockedInRow = 0;
+        return;
+    }
+    const bool relocked = m_chip.relock(m_sleepMs);
+    if (!relocked) {
+        (void)receive(m_channel, m_squelchLevel);
+    }
+    if (++m_unlockedInRow <= UnlockLogs) {
+        logUnlocked(m_receiveHz, relocked);
+    }
 }
 
 void Rda1846Transceiver::logStatus(std::string_view what)

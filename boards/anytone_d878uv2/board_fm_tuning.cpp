@@ -103,6 +103,15 @@ constexpr Setting AfterCalibration[] = {
     {0x79, 0x1E3C},
 };
 
+// The N version's way back to a locked synthesizer while receiving: 0x27
+// in the same three steps as after calibration. The S version is set up
+// for receive again instead.
+constexpr Setting RelockN[] = {
+    {0x27, 0x74A4, 10},
+    {0x27, 0x7CA4},
+    {0x27, 0x6CA4},
+};
+
 // Per channel kind (narrow, wide, digital). 0x0A: PA bias pin higher on
 // wide channels. Digital channels have a set of their own. 0x13: by
 // chip version. 0x32: AGC target. 0x33: AGC. 0x34: receive digital gain.
@@ -304,6 +313,7 @@ constexpr BandWord BandWords[] = {
 constexpr Tuning TuningS{
     .startUp = StartUpS,
     .afterCalibration = AfterCalibration,
+    .relock = {},
     .width = Width<Version13S>,
     .widthPage1 = WidthPage1,
     .ranges = Ranges,
@@ -315,6 +325,7 @@ constexpr Tuning TuningS{
 constexpr Tuning TuningN{
     .startUp = StartUpN,
     .afterCalibration = AfterCalibration,
+    .relock = RelockN,
     .width = Width<Version13N>,
     .widthPage1 = WidthPage1,
     .ranges = Ranges,

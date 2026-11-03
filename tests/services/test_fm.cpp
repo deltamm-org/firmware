@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tommi Tauriainen
 
+#include "dmm/os/os.h"
 #include "dmm/services/d878uv2_calibration.h"
 #include "dmm/services/rda1846_transceiver.h"
 #include "dmm/services/squelch_gate.h"
@@ -288,6 +289,67 @@ TEST_CASE("a sleeping receiver keeps its tuning and wakes on the same front end"
     CHECK_FALSE(fm.receiverAsleep());
     fm.wakeReceiver(); // idle wins
     CHECK_FALSE(fm.receiving());
+}
+
+TEST_CASE("a lost synthesizer lock is put right while receiving, at most every 100 ms")
+{
+    constexpr Rda1846::Setting Relock[] = {{0x27, 0x74A4, 10}, {0x27, 0x7CA4}, {0x27, 0x6CA4}};
+    Rda1846::Tuning withRelock = Rda1846::makerTuning();
+    withRelock.relock = Relock;
+    const D878Uv2Calibration cal = calibration();
+    testCalibration = &cal;
+    const FmChannel channel{145'500'000, 0, false, {}, {}, true};
+
+    // Steps of its own: written instead of a new set-up.
+    {
+        FakeBus bus;
+        bus.registers[0x00] = 0x1846;
+        Rda1846 chip(bus, withRelock);
+        FakeRf rf;
+        Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+        REQUIRE(fm.start());
+        fm.keepLocked(); // not receiving: nothing read or written
+        REQUIRE(fm.receive(channel, 1) == nullptr);
+        bus.events.clear();
+        bus.registers[0x0D] = 0; // unlocked
+        fm.keepLocked();         // just tuned
+        CHECK(bus.events.empty());
+        dmm::os::sleepMs(110);
+        fm.keepLocked();
+        CHECK(bus.events == std::vector<std::string>{"r39=29860", "r39=31908", "r39=27812"});
+        bus.events.clear();
+        fm.keepLocked(); // checked just now
+        CHECK(bus.events.empty());
+        bus.registers[0x0D] = 0x8000;
+        dmm::os::sleepMs(110);
+        fm.keepLocked();
+        CHECK(bus.events.empty());
+    }
+
+    // No steps: the receiver is set up again, on the same channel.
+    {
+        FakeBus bus;
+        bus.registers[0x00] = 0x1846;
+        Rda1846 chip(bus);
+        FakeRf rf;
+        Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+        REQUIRE(fm.start());
+        REQUIRE(fm.receive(channel, 1) == nullptr);
+        const std::uint16_t frequencyLow = bus.registers[0x2A];
+        bus.registers[0x2A] = 0;
+        bus.registers[0x0D] = 0;
+        dmm::os::sleepMs(110);
+        fm.keepLocked();
+        CHECK(bus.registers[0x2A] == frequencyLow);
+        CHECK(fm.receiving());
+
+        // Asleep, the receiver is not checked.
+        fm.sleepReceiver();
+        bus.events.clear();
+        dmm::os::sleepMs(110);
+        fm.keepLocked();
+        CHECK(bus.events.empty());
+    }
 }
 
 TEST_CASE("a receive tone has its own detector and flag, apart from the carrier")

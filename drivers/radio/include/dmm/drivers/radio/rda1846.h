@@ -22,6 +22,8 @@ public:
     static constexpr std::uint8_t GpioRegister = 0x1F;
     static constexpr std::uint8_t FlagsRegister = 0x1C;
     static constexpr std::uint8_t QualityRegister = 0x21;
+    static constexpr std::uint8_t LockRegister = 0x0D;
+    static constexpr std::uint16_t SynthesizerLocked = 1u << 15;
 
     // Bits in the flags register.
     static constexpr std::uint16_t SquelchOpen = 1u << 0;
@@ -107,6 +109,9 @@ public:
         std::span<const Setting> startUp;
         /// After the calibration run.
         std::span<const Setting> afterCalibration;
+        /// Locks the frequency synthesizer again while receiving. Empty:
+        /// the receiver is set up again instead.
+        std::span<const Setting> relock;
         /// Per channel width: page 0, then page 1 (the AGC table).
         std::span<const WidthSetting> width;
         std::span<const WidthSetting> widthPage1;
@@ -167,6 +172,11 @@ public:
     /// A receive quality figure, 0..15, lower for a strong clean signal
     /// (low four bits of register 0x21, not in the programming guide).
     int signalQuality() { return m_bus.read(QualityRegister) & 0xF; }
+    /// True while the frequency synthesizer is locked. Unlocked, the chip
+    /// turns its RF off.
+    bool synthesizerLocked() { return (m_bus.read(LockRegister) & SynthesizerLocked) != 0; }
+    /// Writes the tuning's relock steps; false when it has none.
+    bool relock(void (*sleepMs)(unsigned));
 
     /// The tone sent while transmitting.
     void setTransmitTone(const SubTone &tone);
