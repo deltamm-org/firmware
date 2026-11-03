@@ -63,6 +63,12 @@ QString checkImage(const QByteArray &image)
     if (stack < 0x20000000 || stack > 0x20018000 || (stack & 7) != 0) {
         return QStringLiteral("the image's initial stack pointer 0x%1 is not in RAM").arg(stack, 8, 16, QLatin1Char('0'));
     }
+    // An image with an info block names the address it is linked for.
+    if (image.size() >= 0x150 + 16 && qFromLittleEndian<quint32>(image.constData() + 0x150) == 0x494D4D44 &&
+        le32(image, 0x150 + 8) != ImageLoadAddress) {
+        return QStringLiteral("the image is linked for 0x%1, not 0x08004000 (an image for the loader's slot: use dmm-radio update)")
+            .arg(le32(image, 0x150 + 8), 8, 16, QLatin1Char('0'));
+    }
     const quint32 end = ImageLoadAddress + static_cast<quint32>(image.size());
     if ((reset & 1) == 0 || (reset & ~1u) < ImageLoadAddress || (reset & ~1u) >= end) {
         return QStringLiteral("the image's reset handler 0x%1 is not inside the image").arg(reset, 8, 16, QLatin1Char('0'));

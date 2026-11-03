@@ -77,6 +77,7 @@ inline constexpr std::uint32_t UsbdClock = 1u << 23;
 inline constexpr std::uint32_t DacClock = 1u << 29;
 
 // RCU_RSTSCK
+inline constexpr std::uint32_t ResetFlagsMask = 0xFC000000u;
 inline constexpr std::uint32_t ClearResetFlags = 1u << 24;
 inline constexpr std::uint32_t ResetByPin = 1u << 26;
 inline constexpr std::uint32_t ResetByPower = 1u << 27;
@@ -307,7 +308,34 @@ constexpr std::uint32_t complementaryPolarity(unsigned n)
 } // namespace timer
 
 namespace fmc {
-inline constexpr std::uintptr_t WaitState = 0x40022000; // FMC_WS
+inline constexpr std::uintptr_t Base = 0x40022000;
+inline constexpr std::uintptr_t WaitState = Base + 0x00; // FMC_WS
+// Bank 0 (the first 512 KB, 2 KB pages) and bank 1 (the rest, 4 KB pages)
+// each have a key, status, control and address register.
+inline constexpr std::uintptr_t Key0 = Base + 0x04;
+inline constexpr std::uintptr_t Stat0 = Base + 0x0C;
+inline constexpr std::uintptr_t Ctl0 = Base + 0x10;
+inline constexpr std::uintptr_t Addr0 = Base + 0x14;
+inline constexpr std::uintptr_t Key1 = Base + 0x44;
+inline constexpr std::uintptr_t Stat1 = Base + 0x4C;
+inline constexpr std::uintptr_t Ctl1 = Base + 0x50;
+inline constexpr std::uintptr_t Addr1 = Base + 0x54;
+inline constexpr std::uintptr_t Bank1Start = 0x08080000;
+
+inline constexpr std::uint32_t UnlockKey1 = 0x45670123;
+inline constexpr std::uint32_t UnlockKey2 = 0xCDEF89AB;
+
+// FMC_STATx; the flags clear when written 1.
+inline constexpr std::uint32_t Busy = 1u << 0;
+inline constexpr std::uint32_t ProgramError = 1u << 2; // target not erased
+inline constexpr std::uint32_t ProtectError = 1u << 4; // write-protected page
+inline constexpr std::uint32_t EndFlag = 1u << 5;
+
+// FMC_CTLx
+inline constexpr std::uint32_t Program = 1u << 0;
+inline constexpr std::uint32_t PageErase = 1u << 1;
+inline constexpr std::uint32_t Start = 1u << 6;
+inline constexpr std::uint32_t Locked = 1u << 7;
 } // namespace fmc
 
 namespace fwdgt {

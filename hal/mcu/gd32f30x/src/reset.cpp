@@ -9,8 +9,14 @@ namespace dmm::hal::gd32f30x {
 
 ResetFlags takeResetFlags()
 {
-    const std::uint32_t raw = reg(rcu::ResetSource) & 0xFC000000u;
+    const ResetFlags flags = readResetFlags();
     reg(rcu::ResetSource) |= rcu::ClearResetFlags;
+    return flags;
+}
+
+ResetFlags readResetFlags()
+{
+    const std::uint32_t raw = reg(rcu::ResetSource) & rcu::ResetFlagsMask;
 
     // Several flags can be set at once (a power-on also sets the pin flag);
     // the most specific one wins.

@@ -12,6 +12,26 @@
 #include <functional>
 #include <optional>
 
+/// One request in DeltaMM's framing (0xDD, letter, ...) and its reply:
+/// checks the reply's letter, length and CRC and returns its payload and
+/// status. Used for the app's data protocol and the loader's.
+bool dmmExchange(Transport &transport, const QByteArray &request, QByteArray &payload, quint8 &status, QString *error,
+    int timeoutMs);
+
+/// How the loader sees the running image (radios with DeltaMM's loader).
+struct DeltaMmLoaderState
+{
+    bool present = false;
+    bool trial = false;
+    bool manual = false;
+    int attempts = 0;
+    int maxAttempts = 0;
+    bool previousKept = false;
+    /// The loader's fallback code: 0 none, 1 not confirmed, 2 check
+    /// failed, 3 asked for, 4 no image.
+    int fallback = 0;
+};
+
 /// What a radio running DeltaMM reports about itself and its data flash.
 struct DeltaMmInfo
 {
@@ -22,6 +42,8 @@ struct DeltaMmInfo
     quint32 storageBytes = 0;
     /// -1: the radio found no bad-block table.
     int remappedBlocks = -1;
+    /// Empty (present false) from images that report no loader state.
+    DeltaMmLoaderState loader;
 };
 
 /// Client for DeltaMM's data protocol on the radio's data port.
@@ -50,9 +72,18 @@ public:
     bool read(quint32 address, quint32 length, bool physical, QByteArray &out, ReadReport &report, QString *error,
         const Progress &progress = {});
 
+    /// Asks the image to restart into the loader: to wait for the PC, or
+    /// to bring the previous image back.
+    bool enterLoader(bool rollback, QString *error);
+
+    /// Confirms the running image.
+    bool confirm(QString *error);
+
 private:
-    /// Sends @p request and returns the reply's payload and status.
-    bool exchange(const QByteArray &request, QByteArray &payload, quint8 &status, QString *error, int timeoutMs);
+    bool exchange(const QByteArray &request, QByteArray &payload, quint8 &status, QString *error, int timeoutMs)
+    {
+        return dmmExchange(m_transport, request, payload, status, error, timeoutMs);
+    }
 
     Transport &m_transport;
 };

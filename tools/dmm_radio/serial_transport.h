@@ -19,6 +19,9 @@ public:
     /// Serial ports of radios running DeltaMM (data and log ports alike).
     static QList<QSerialPortInfo> findDeltaMmPorts();
 
+    /// Serial ports of radios in DeltaMM's loader mode.
+    static QList<QSerialPortInfo> findLoaderPorts();
+
     bool open(const QString &portName, QString *error);
     void close();
     bool write(const QByteArray &data) override;

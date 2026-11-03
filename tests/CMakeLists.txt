@@ -17,8 +17,13 @@ add_executable(tests
     drivers/test_sct3258.cpp
     drivers/test_spi_nand.cpp
     drivers/test_st7735.cpp
-    drivers/test_usb.cpp)
-target_link_libraries(tests PRIVATE dmm_lib dmm_drivers_usb dmm_drivers_display dmm_drivers_storage dmm_drivers_baseband dmm_drivers_radio doctest::doctest)
+    drivers/test_usb.cpp
+    services/fake_program_flash.h
+    services/boot_test_rig.h
+    services/test_boot_record.cpp
+    services/test_boot_loader.cpp
+    services/test_loader_protocol.cpp)
+target_link_libraries(tests PRIVATE dmm_lib dmm_boot dmm_drivers_usb dmm_drivers_display dmm_drivers_storage dmm_drivers_baseband dmm_drivers_radio doctest::doctest)
 target_compile_definitions(tests PRIVATE DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS)
 dmm_core_options(tests)
 if(TARGET dmm_os)
@@ -28,7 +33,7 @@ endif()
 add_test(NAME tests COMMAND tests)
 
 # The core libraries must not pull in the heap, exceptions or printf.
-set(DMM_CORE_LIBS $<TARGET_FILE:dmm_lib> $<TARGET_FILE:dmm_drivers_usb> $<TARGET_FILE:dmm_drivers_display> $<TARGET_FILE:dmm_drivers_storage> $<TARGET_FILE:dmm_drivers_baseband> $<TARGET_FILE:dmm_drivers_radio>)
+set(DMM_CORE_LIBS $<TARGET_FILE:dmm_lib> $<TARGET_FILE:dmm_boot> $<TARGET_FILE:dmm_drivers_usb> $<TARGET_FILE:dmm_drivers_display> $<TARGET_FILE:dmm_drivers_storage> $<TARGET_FILE:dmm_drivers_baseband> $<TARGET_FILE:dmm_drivers_radio>)
 if(TARGET dmm_services)
     list(APPEND DMM_CORE_LIBS $<TARGET_FILE:dmm_services>)
 endif()
