@@ -7,6 +7,7 @@
 
 #include <concepts>
 #include <cstdint>
+#include <optional>
 
 namespace dmm::services {
 
@@ -18,6 +19,13 @@ enum class SaveResult : std::uint8_t
     /// The codeplug is being written from the PC; tried again later.
     Busy,
     Failed,
+};
+
+/// A memory channel's values kept by the store and not yet written.
+struct KeptChannel
+{
+    PowerLevel power;
+    SquelchMode squelchMode;
 };
 
 /// Keeps settings changed on the radio in its codeplug, so they hold after
@@ -33,6 +41,9 @@ enum class SaveResult : std::uint8_t
 ///   in the zone's channel list.
 /// - keepChannel(index, power, squelch, nowMs): a memory channel's power
 ///   and squelch mode.
+/// - keptChannel(index): the values kept for that channel and not yet
+///   written, if any; a channel read from the codeplug takes them over
+///   its own.
 /// - pending(): something is kept and not yet written.
 /// - flush(nowMs): writes what is due; called often from one task.
 /// - report(): logs what is kept and the last write's outcome.
@@ -43,6 +54,7 @@ concept SettingsStore = requires(T &s, const CodeplugSettings &settings, const R
     s.keepPreferences(preferences, nowMs);
     s.keepZone(sideB, zone, index, nowMs);
     s.keepChannel(index, power, squelch, nowMs);
+    { s.keptChannel(index) } -> std::same_as<std::optional<KeptChannel>>;
     { s.pending() } -> std::same_as<bool>;
     { s.flush(nowMs) } -> std::same_as<SaveResult>;
     s.report();

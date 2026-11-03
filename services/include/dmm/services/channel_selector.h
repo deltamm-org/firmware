@@ -3,9 +3,11 @@
 
 #pragma once
 
+#include "dmm/lib/fn_ref.h"
 #include "dmm/services/codeplug.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace dmm::services {
 
@@ -17,10 +19,17 @@ class ChannelSelector
 public:
     static constexpr std::size_t NameBytes = CodeplugSource::ZoneNameBytes + 1;
 
+    /// Changes a memory channel as it is read from the codeplug: values
+    /// changed on the radio and not yet written there.
+    using Adjust = lib::FnRef<void(std::uint16_t index, Channel &channel)>;
+
     explicit ChannelSelector(CodeplugSource &codeplug)
         : m_codeplug(codeplug)
     {
     }
+
+    /// From now on, every memory channel loaded goes through @p adjust.
+    void setAdjust(Adjust adjust) { m_adjust = adjust; }
 
     /// Reads the settings and the main side's zone and channel. False when
     /// the codeplug has no usable zone (the VFO is then used).
@@ -74,6 +83,7 @@ private:
     bool loadChannel();
 
     CodeplugSource &m_codeplug;
+    std::optional<Adjust> m_adjust;
     CodeplugSettings m_settings;
     bool m_sideB = false;
     bool m_vfo = false;

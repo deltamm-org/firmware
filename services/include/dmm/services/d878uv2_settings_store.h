@@ -55,6 +55,8 @@ public:
     /// change on a kept channel replaces its values. A further channel
     /// writes what is kept at once, and is not kept if that write fails.
     void keepChannel(std::uint16_t index, PowerLevel power, SquelchMode squelch, std::uint32_t nowMs);
+    /// The values kept for channel @p index and not yet written, if any.
+    std::optional<KeptChannel> keptChannel(std::uint16_t index) const;
 
     bool pending() const { return m_pending; }
     /// Writes what is kept once QuietMs have passed since the last change.

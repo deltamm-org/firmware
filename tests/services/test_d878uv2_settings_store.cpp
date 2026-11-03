@@ -3,6 +3,7 @@
 
 #include "../drivers/fake_spi_nand.h"
 #include "dmm/lib/crc32.h"
+#include "dmm/services/channel_selector.h"
 #include "dmm/services/d878uv2_codeplug.h"
 #include "dmm/services/d878uv2_preferences.h"
 #include "dmm/services/d878uv2_settings_store.h"
@@ -16,6 +17,8 @@
 #include <vector>
 
 using dmm::drivers::storage::SpiNand;
+using dmm::services::Channel;
+using dmm::services::ChannelSelector;
 using dmm::services::CodeplugSettings;
 using dmm::services::D878Uv2Codeplug;
 using dmm::services::D878Uv2CodeplugWriter;
@@ -38,8 +41,9 @@ constexpr std::uint32_t ZoneSelections = Settings + 0x100;
 constexpr std::uint32_t GpsSystems = Settings + 0x1435;
 constexpr std::uint32_t Channels = 0x00800000;
 constexpr std::uint32_t Preferences = 0x0081E000;
+constexpr std::uint32_t ZoneChannels = 0x01000000;
 
-// A codeplug with general settings and five channels; the store writes
+// A codeplug with general settings and five channels in zone 0; the store writes
 // through the codeplug writer, as on the radio.
 struct Radio
 {
@@ -99,6 +103,9 @@ struct Radio
             ch[i * 0x40 + 0x19] = 0x80; // carrier squelch, a bit to keep
         }
         chip.put(Channels, ch);
+        // Zone 0 lists the five channels.
+        markValid(ZoneChannels);
+        chip.put(ZoneChannels, {0, 0, 1, 0, 2, 0, 3, 0, 4, 0, 0xFF, 0xFF});
         storage.start();
     }
 
@@ -340,6 +347,97 @@ TEST_CASE("settings store: failed writes are retried, then dropped")
     r.answer = SaveResult::Saved;
     CHECK(r.store.flush(now + D878Uv2SettingsStore::QuietMs) == SaveResult::Unchanged);
     CHECK(r.codeplug.settings()->squelchA == 1);
+}
+
+TEST_CASE("settings store: kept channel values until written")
+{
+    Radio r;
+    CHECK_FALSE(r.store.keptChannel(1).has_value());
+    r.store.keepChannel(1, PowerLevel::High, SquelchMode::Tone, 0);
+    REQUIRE(r.store.keptChannel(1).has_value());
+    CHECK(r.store.keptChannel(1)->power == PowerLevel::High);
+    CHECK(r.store.keptChannel(1)->squelchMode == SquelchMode::Tone);
+    CHECK_FALSE(r.store.keptChannel(0).has_value());
+    r.answer = SaveResult::Busy;
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Busy);
+    CHECK(r.store.keptChannel(1)->power == PowerLevel::High);
+    r.answer = SaveResult::Saved;
+    CHECK(r.store.flush(2 * D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    CHECK_FALSE(r.store.keptChannel(1).has_value());
+    CHECK(r.codeplug.channel(1)->power == PowerLevel::High);
+}
+
+namespace {
+
+// The channel selector as the ui sets it up: each channel it loads takes
+// the store's kept values; a change is made on the channel and kept.
+struct Working
+{
+    Radio &r;
+    std::function<void(std::uint16_t, Channel &)> take = [this](std::uint16_t index, Channel &c) {
+        if (const auto kept = r.store.keptChannel(index)) {
+            c.power = kept->power;
+            c.squelchMode = kept->squelchMode;
+        }
+    };
+    ChannelSelector sel{r.codeplug};
+
+    explicit Working(Radio &radio)
+        : r(radio)
+    {
+        sel.setAdjust(take);
+        REQUIRE(sel.load());
+    }
+
+    void change(PowerLevel power, SquelchMode squelch, std::uint32_t nowMs)
+    {
+        sel.setPower(power);
+        sel.setSquelchMode(squelch);
+        r.store.keepChannel(sel.channelIndex(), power, squelch, nowMs);
+    }
+};
+
+} // namespace
+
+TEST_CASE("settings store: back on a channel changed while writes are refused, its kept values are in use")
+{
+    Radio r;
+    Working w(r);
+    REQUIRE(w.sel.channelIndex() == 0);
+    w.change(PowerLevel::High, SquelchMode::Tone, 0);
+    r.answer = SaveResult::Busy;
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Busy);
+    REQUIRE(w.sel.step(1));
+    w.change(PowerLevel::Turbo, SquelchMode::Tone, 4000);
+    CHECK(r.store.flush(4000 + D878Uv2SettingsStore::QuietMs) == SaveResult::Busy);
+    REQUIRE(w.sel.step(-1));
+    CHECK(w.sel.current()->power == PowerLevel::High);
+    CHECK(w.sel.current()->squelchMode == SquelchMode::Tone);
+    CHECK(r.codeplug.channel(0)->power == PowerLevel::Low);
+    REQUIRE(w.sel.step(1));
+    CHECK(w.sel.current()->power == PowerLevel::Turbo);
+
+    r.answer = SaveResult::Saved;
+    CHECK(r.store.flush(4000 + 2 * D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    REQUIRE(w.sel.step(-1));
+    CHECK(w.sel.current()->power == PowerLevel::High);
+    CHECK(w.sel.current()->squelchMode == SquelchMode::Tone);
+}
+
+TEST_CASE("settings store: back on a channel within the quiet time, its kept values are in use")
+{
+    Radio r;
+    Working w(r);
+    w.change(PowerLevel::Mid, SquelchMode::Tone, 0);
+    REQUIRE(w.sel.step(1));
+    w.change(PowerLevel::High, SquelchMode::Carrier, 500);
+    REQUIRE(w.sel.step(-1));
+    CHECK(r.writes.empty());
+    CHECK(w.sel.current()->power == PowerLevel::Mid);
+    CHECK(w.sel.current()->squelchMode == SquelchMode::Tone);
+    REQUIRE(w.sel.step(1));
+    CHECK(w.sel.current()->power == PowerLevel::High);
+    CHECK(w.sel.current()->squelchMode == SquelchMode::Carrier);
 }
 
 TEST_CASE("preferences record: round trip, and none in an erased codeplug")

@@ -45,6 +45,10 @@ not kept.
   replaces its values. A change on one more channel writes what is kept
   at once; if that write is refused or fails, the kept channels stay and
   the new one is not kept, with a warning in the log.
+- A channel loaded again before its kept values are written (the knob,
+  a zone change) takes them over what the codeplug holds
+  (`keptChannel`, laid over by the channel selector), so the radio shows
+  and uses the values set on it.
 - Changes made in the quiet time before the radio is switched off are
   lost.
 - The `settings` console command logs what is pending, the last write's
