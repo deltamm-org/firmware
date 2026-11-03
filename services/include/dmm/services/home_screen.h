@@ -82,7 +82,7 @@ HomePreset presetOf(const HomeLayout &layout);
 /// The signal meter: SignalBars bars, none lit at SignalFloorDbm or
 /// below, all lit at SignalFullDbm or above.
 inline constexpr int SignalBars = 10;
-inline constexpr int SignalFloorDbm = -125;
+inline constexpr int SignalFloorDbm = -105;
 inline constexpr int SignalFullDbm = -65;
 /// The bars lit for a level of @p dbm, 0..SignalBars.
 int signalBars(int dbm);

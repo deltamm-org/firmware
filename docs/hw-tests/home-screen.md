@@ -35,11 +35,11 @@ On a roaming channel the Frequency row shows the repeater in use,
 `Searching` during a search and `No repeater` while the repeater in use
 is lost.
 
-The signal meter has 10 bars from -125 dBm (none) to -65 dBm (all) and
-the level in dBm. The level is read only while a carrier is heard and
-shown for 2 s after; on a roaming channel the repeater's last level is
-shown while it is current (2 minutes). Otherwise, and after a restart until
-the first signal, it shows `-` and no bars.
+The signal meter has 10 bars, one per 4 dB from -105 dBm (none) to -65
+dBm (all), and the level in dBm. The level is read only while a carrier
+is heard and shown for 2 s after; on a roaming channel the repeater's
+last level is shown while it is current (2 minutes). Otherwise, and
+after a restart until the first signal, it shows `-` and no bars.
 
 The status bar keeps its TX, RX, LOCK and GPS marks; the battery is an
 icon filled by its level, red when low. Only rows whose shown value
