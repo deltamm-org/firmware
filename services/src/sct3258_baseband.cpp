@@ -153,6 +153,8 @@ bool Sct3258Baseband::fail(const char *problem)
 
 bool Sct3258Baseband::start()
 {
+    // Anything else the chip is told may change its receive set-up.
+    m_digitalSet = false;
     m_info = {};
     if (m_blob.empty()) {
         return fail("this build has no boot program (configure with DMM_STOCK_FIRMWARE)");
@@ -240,6 +242,7 @@ bool Sct3258Baseband::playTone(std::uint16_t hz, std::uint16_t ms, int percent)
 
 bool Sct3258Baseband::setAnalog(bool wide)
 {
+    m_digitalSet = false;
     if (!m_info.running) {
         return false;
     }
@@ -290,21 +293,36 @@ bool Sct3258Baseband::setDigital(
     if (!m_info.running || !selectVocoder(Sct3258::VocoderDigital)) {
         return false;
     }
+    // A retune within digital receive sends only the settings that change:
+    // the chip takes a burst of set-ups badly.
+    const bool full = fromAnalog || !m_digitalSet;
+    m_digitalSet = false;
     if (fromAnalog && !write(m_audio.digitalReceive)) {
         warn("codec did not take the digital receive levels");
     }
     // The calibrated values are taken at the transmit frequency, where the
     // radio's calibration points lie.
     (void)receiveHz;
-    if (const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(transmitHz) : std::nullopt) {
+    const auto trims = m_digitalTrims != nullptr ? m_digitalTrims(transmitHz) : std::nullopt;
+    // Each setting goes only when it changed: within a band only the DC
+    // offset follows the frequency.
+    const std::optional<DigitalTrims> &sent = m_digitalTrimsSent;
+    if (trims && (full || !sent || trims->dcOffset != sent->dcOffset)) {
         std::uint8_t offset[1 + 12] = {Sct3258::DcOffset};
         for (std::size_t i = 0; i < trims->dcOffset.size(); ++i) {
             offset[1 + i] = trims->dcOffset[i];
         }
-        const std::uint8_t gain[] = {Sct3258::DemodGain, trims->demodGain[0], trims->demodGain[1]};
-        if (m_chip.control(offset) != 0 || m_chip.control(gain) != 0) {
+        if (m_chip.control(offset) != 0) {
             warn("digital calibration not taken");
         }
+    }
+    if (trims && (full || !sent || trims->demodGain != sent->demodGain)) {
+        const std::uint8_t gain[] = {Sct3258::DemodGain, trims->demodGain[0], trims->demodGain[1]};
+        if (m_chip.control(gain) != 0) {
+            warn("digital calibration not taken");
+        }
+    }
+    if (trims && (full || !sent || trims->speakerGain != sent->speakerGain)) {
         if (trims->speakerGain) {
             const std::uint8_t speaker[] = {Sct3258::DigitalSpeakerGain, (*trims->speakerGain)[0], (*trims->speakerGain)[1]};
             if (m_chip.control(speaker) != 0) {
@@ -316,13 +334,20 @@ bool Sct3258Baseband::setDigital(
     }
     // The transmitter's settings too: a repeater wake-up goes out before any
     // call sets them.
-    sendTransmitTrims(transmitHz, PowerLevel::High);
-    if (!sendSquelch(m_chip, m_audio.digitalSquelch)) {
-        warn("digital squelch levels not taken");
+    if (trims && (full || !sent || trims->modGain != sent->modGain || trims->micGain != sent->micGain || trims->slotTiming != sent->slotTiming)) {
+        sendTransmitTrims(transmitHz, PowerLevel::High);
     }
-    const std::uint8_t process[] = {Sct3258::ProcessMode, Sct3258::ProcessLayer2};
-    if (m_chip.control(process) != 0) {
-        return false;
+    if (full) {
+        if (!trims) {
+            sendTransmitTrims(transmitHz, PowerLevel::High);
+        }
+        if (!sendSquelch(m_chip, m_audio.digitalSquelch)) {
+            warn("digital squelch levels not taken");
+        }
+        const std::uint8_t process[] = {Sct3258::ProcessMode, Sct3258::ProcessLayer2};
+        if (m_chip.control(process) != 0) {
+            return false;
+        }
     }
     if (!m_callOptionsSet) {
         // Every report the chip can give, also the burst sync events, and a
@@ -346,8 +371,20 @@ bool Sct3258Baseband::setDigital(
     const std::uint8_t work[] = {Sct3258::WorkMode, Sct3258::WorkReceive, 0, 0};
     const std::uint8_t carrier[] = {
         Sct3258::CarrierReady, m_audio.demodulatorInverted ? CarrierReadyReversed : CarrierReady};
-    return m_chip.control(Sct3258::TypeDmr, cc) == 0 && m_chip.control(Sct3258::TypeDmr, slot) == 0 &&
-        m_chip.control(work) == 0 && m_chip.control(carrier) == 0;
+    if ((full || cc[1] != m_colourCodeSent) && m_chip.control(Sct3258::TypeDmr, cc) != 0) {
+        return false;
+    }
+    if ((full || slot[1] != m_slotSent) && m_chip.control(Sct3258::TypeDmr, slot) != 0) {
+        return false;
+    }
+    if (m_chip.control(work) != 0 || m_chip.control(carrier) != 0) {
+        return false;
+    }
+    m_digitalSet = true;
+    m_digitalTrimsSent = trims;
+    m_colourCodeSent = cc[1];
+    m_slotSent = slot[1];
+    return true;
 }
 
 bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e) const
@@ -450,6 +487,7 @@ void Sct3258Baseband::sendTransmitTrims(std::uint32_t transmitHz, PowerLevel lev
 bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc,
     std::uint32_t transmitHz, bool timed, PowerLevel level)
 {
+    m_digitalSet = false;
     if (!m_info.running) {
         return false;
     }
@@ -475,6 +513,7 @@ bool Sct3258Baseband::startDigitalCall(const dmr::ChannelSettings &settings, con
 
 bool Sct3258Baseband::endDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc)
 {
+    m_digitalSet = false;
     std::array<std::uint8_t, dmr::FullLc::Bytes> b{};
     lc.encode(b);
     const bool sent =
@@ -485,6 +524,7 @@ bool Sct3258Baseband::endDigitalCall(const dmr::ChannelSettings &settings, const
 
 bool Sct3258Baseband::wakeRepeater(const dmr::ChannelSettings &settings, std::uint32_t source)
 {
+    m_digitalSet = false;
     if (!m_info.running) {
         return false;
     }
@@ -568,6 +608,7 @@ bool Sct3258Baseband::nextEvent(dmr::Event &event)
 
 bool Sct3258Baseband::setVoiceEnhancement(bool on)
 {
+    m_digitalSet = false;
     m_voiceEnhancement = on;
     if (!m_info.running) {
         return true; // sent when the chip has started
@@ -611,6 +652,7 @@ bool Sct3258Baseband::setVoiceEnhancement(bool on)
 
 bool Sct3258Baseband::setWorkMode(BasebandWorkMode mode)
 {
+    m_digitalSet = false;
     const std::uint8_t code = mode == BasebandWorkMode::Receive ? Sct3258::WorkReceive : mode == BasebandWorkMode::Transmit ? Sct3258::WorkTransmit
                                                                                                                             : Sct3258::WorkIdle;
     const std::uint8_t work[] = {Sct3258::WorkMode, code, 0, 0};
@@ -619,6 +661,7 @@ bool Sct3258Baseband::setWorkMode(BasebandWorkMode mode)
 
 bool Sct3258Baseband::setCarrier(bool present)
 {
+    m_digitalSet = false;
     const std::uint8_t carrier[] = {Sct3258::CarrierReady, static_cast<std::uint8_t>(present ? 1 : 0)};
     return m_info.running && m_chip.control(carrier) == 0;
 }
@@ -679,6 +722,7 @@ int Sct3258Baseband::exchange(std::uint8_t type, std::span<const std::uint8_t> f
 
 bool Sct3258Baseband::debugCommand(std::string_view command)
 {
+    m_digitalSet = false;
     std::string_view rest = command;
     const std::string_view verb = lib::takeWord(rest);
     if (verb == "codec") {
