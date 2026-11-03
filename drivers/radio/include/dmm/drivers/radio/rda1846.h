@@ -78,6 +78,8 @@ public:
         std::uint16_t value;
         std::uint8_t sleepMs = 0;
     };
+    /// A WidthSetting value that leaves the register as it is.
+    static constexpr std::uint16_t Keep = 0xFFFF;
     /// One register with a value per Bandwidth.
     struct WidthSetting
     {
