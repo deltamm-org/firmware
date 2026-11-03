@@ -58,14 +58,15 @@ TEST_CASE("a layout changed from a preset is the user's own")
     CHECK(dmm::services::presetOf(l) == HomePreset::Detailed);
 }
 
-TEST_CASE("the signal meter lights a bar per 6 dB from -125 dBm to -65 dBm")
+TEST_CASE("the signal meter lights a bar per 4 dB from -105 dBm to -65 dBm")
 {
     CHECK(dmm::services::signalBars(-140) == 0);
-    CHECK(dmm::services::signalBars(-125) == 0);
-    CHECK(dmm::services::signalBars(-120) == 0);
-    CHECK(dmm::services::signalBars(-119) == 1);
-    CHECK(dmm::services::signalBars(-101) == 4);
-    CHECK(dmm::services::signalBars(-71) == 9);
+    CHECK(dmm::services::signalBars(-105) == 0);
+    CHECK(dmm::services::signalBars(-102) == 0);
+    CHECK(dmm::services::signalBars(-101) == 1);
+    CHECK(dmm::services::signalBars(-85) == 5);
+    CHECK(dmm::services::signalBars(-69) == 9);
+    CHECK(dmm::services::signalBars(-66) == 9);
     CHECK(dmm::services::signalBars(-65) == 10);
     CHECK(dmm::services::signalBars(-42) == 10);
 }
