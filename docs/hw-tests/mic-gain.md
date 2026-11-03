@@ -79,6 +79,36 @@ Calls, each started with `ptt 4000` while the sentence is spoken:
 Rate each **Listen** call against the one before: quieter, same or
 louder, and distorted or not.
 
+## Results
+
+Run 2026-11-03 on a D878UVII PLUS, with this branch, the settings store,
+menu, home screen and frequency offset branches, the write stall branch
+and the loader in one image. The calls were heard on 2026-11-02, on the
+same branches before the review changes; they set the gains in dB, which
+the levels' new values do not change.
+
+Steps 4, 5, 12, 14, 18 and 19 were run when every FM gain was made with
+the voice gain alone; since FM takes each codeplug level's transmit
+gain, they are open until run again.
+
+| # | Result |
+| --- | --- |
+| 1-3 | Pass |
+| 4 | Open: to run again with `fm 44` |
+| 5 | Open: to run again with `fm 44` |
+| 6-9 | Pass |
+| 10 | Pass: `DMR +14 dB (codeplug), FM +18 dB (codeplug)` |
+| 11 | Pass: `micGain: 4`, `fmMicGain: 8` |
+| 12 | Open: to run again with `fm 44` |
+| 13 | Pass |
+| 14 | Open: to run again with `fm 44` |
+| 15 | Pass, heard: the call played back |
+| 16 | Pass, heard: louder at each step, no distortion at 24 |
+| 17 | Pass, heard: not clipped |
+| 18 | Open: to hear again |
+| 19 | Open: to hear again |
+| 20 | Optional, only for the console's baseband route: not run |
+
 ## Undo
 
 `mic gain dmr codeplug`, `mic gain fm codeplug`; `dmrconf write -y` the
