@@ -35,6 +35,20 @@ os::Queue<Message, 16> inbox;
 Display *display = nullptr;
 CodeplugSource *codeplug = nullptr;
 const board::Input *input = nullptr;
+board::SettingsStore *settingsStore = nullptr;
+
+// A channel read from the codeplug, with the values still waiting in the
+// settings store laid over it.
+void takeKeptChannel(std::uint16_t index, Channel &c)
+{
+    if (settingsStore == nullptr) {
+        return;
+    }
+    if (const auto kept = settingsStore->keptChannel(index)) {
+        c.power = kept->power;
+        c.squelchMode = kept->squelchMode;
+    }
+}
 
 // The label on @p key as the user sees it.
 std::string_view keyText(Key key)
@@ -474,7 +488,8 @@ std::uint16_t backlightS = 0; // 0 = always on
 bool backlightLit = true;
 os::Ticks lastLightUse = 0;
 std::uint8_t batterySave = 0;
-// The GPS receiver as last reported, and the codeplug's choice at start.
+// The GPS receiver as last reported, and the GPS setting: the codeplug's
+// choice at start, then the menu's.
 GpsState gpsState;
 bool gpsAtStart = false;
 std::uint8_t gpsSystems = services::gps_systems::Gps | services::gps_systems::Beidou;
@@ -814,10 +829,13 @@ void uiMain(void *)
     // The codeplug: settings, and the channel the radio starts on.
     if (codeplug != nullptr) {
         static ChannelSelector selector(*codeplug);
+        selector.setAdjust(takeKeptChannel);
         selector.load();
         if (selector.current()) {
             channels = &selector;
             keyLock.setSettings(selector.settings().keyLock);
+            backlightLevel = selector.settings().backlightLevel;
+            d.setBacklight(backlightLevel);
             backlightS = selector.settings().backlightS;
             batterySave = selector.settings().batterySave;
             if (selector.settings().voiceEnhancement) {
@@ -837,6 +855,12 @@ void uiMain(void *)
             logLockSettings();
         } else {
             log::warning("ui") << "codeplug: no channel to start on";
+        }
+        if (const auto p = codeplug->preferences()) {
+            roamingOn = p->roaming;
+        }
+        if (!roamingOn) {
+            radio::post(radio::RoamingOn{false});
         }
     }
 
@@ -1232,6 +1256,38 @@ void uiMain(void *)
         view = View::MenuValue;
         redrawView();
     };
+    // Changes kept in the codeplug; the store writes them after a quiet time.
+    auto keepSettings = [&] {
+        if (settingsStore == nullptr || channels == nullptr) {
+            return;
+        }
+        CodeplugSettings s = channels->settings();
+        s.keyLock = keyLock.settings();
+        s.batterySave = batterySave;
+        s.backlightS = backlightS;
+        if (backlightLevel >= 1) {
+            s.backlightLevel = static_cast<std::uint8_t>(backlightLevel);
+        }
+        s.gps = gpsAtStart;
+        s.gpsSystems = gpsSystems;
+        s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
+        s.roaming.zone = roamingZone;
+        settingsStore->keepSettings(s, os::nowMs());
+    };
+    auto keepPreferences = [&] {
+        if (settingsStore != nullptr) {
+            services::RadioPreferences p;
+            p.roaming = roamingOn;
+            settingsStore->keepPreferences(p, os::nowMs());
+        }
+    };
+    auto keepChannel = [&] {
+        if (settingsStore != nullptr && channels != nullptr && channels->current() &&
+            channels->channelIndex() != CodeplugSource::NoChannel) {
+            const Channel &c = *channels->current();
+            settingsStore->keepChannel(channels->channelIndex(), c.power, c.squelchMode, os::nowMs());
+        }
+    };
     auto useChannel = [&] {
         if (channels == nullptr || !channels->current()) {
             return;
@@ -1247,6 +1303,10 @@ void uiMain(void *)
         radio::post(radio::UseChannel{c, channels->squelch()});
         if (view == View::Standby) {
             redrawView();
+        }
+        if (settingsStore != nullptr && !channels->vfoMode()) {
+            settingsStore->keepZone(channels->sideB(), channels->zone(),
+                static_cast<std::uint16_t>(channels->position() - 1), os::nowMs());
         }
     };
     auto tuneEntry = [&] {
@@ -1272,7 +1332,8 @@ void uiMain(void *)
         zonePicker.select(channels->zone());
         show(View::ZonePicker);
     };
-    // The value chosen in the menu takes effect at once, for this session.
+    // The value chosen in the menu takes effect at once and is kept in the
+    // codeplug.
     auto applyMenuValue = [&] {
         const std::uint8_t v = menuValue.chosen();
         switch (menuItem) {
@@ -1331,6 +1392,7 @@ void uiMain(void *)
         case MenuItem::Gps:
             // The menu shows the new value before the gps task reports it.
             gpsState.on = v == 1;
+            gpsAtStart = v == 1;
             gps::post(gps::Power{v == 1});
             break;
         case MenuItem::GpsSystems:
@@ -1344,6 +1406,13 @@ void uiMain(void *)
         case MenuItem::GpsStatus:
         case MenuItem::Count:
             break;
+        }
+        if (menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power) {
+            keepChannel();
+        } else if (menuItem == MenuItem::Roaming) {
+            keepPreferences();
+        } else if (menuItem != MenuItem::RoamStatus && menuItem != MenuItem::GpsStatus) {
+            keepSettings();
         }
         if (menuItem == MenuItem::Squelch || menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power ||
             menuItem == MenuItem::Roaming || menuItem == MenuItem::RoamZone) {
@@ -1510,6 +1579,16 @@ void uiMain(void *)
     };
 
     while (!os::stopRequested()) {
+        if (settingsStore != nullptr) {
+            const services::SaveResult saved = settingsStore->flush(os::nowMs());
+            if (saved == services::SaveResult::Saved) {
+                log::info("ui") << "settings kept in the codeplug";
+            } else if (saved == services::SaveResult::Busy) {
+                log::info("ui") << "settings wait: the PC is programming";
+            } else if (saved == services::SaveResult::Failed) {
+                log::warning("ui") << "settings not kept: the codeplug write failed";
+            }
+        }
         Message m;
         if (inbox.receive(m, RedrawStepMs)) {
             auto refreshValues = [&] {
@@ -1530,6 +1609,7 @@ void uiMain(void *)
                                backlightS = t.seconds;
                                useLight(d);
                                log::info("ui") << "light time " << durationText(backlightS).view();
+                               keepSettings();
                            },
                            [&](const ShowTestPattern &) {
                                drawTestPattern(d);
@@ -1659,13 +1739,39 @@ void uiMain(void *)
                                logLockSettings();
                                notice(s.locked ? "Keys locked" : "Keys unlocked");
                            },
-                           [&](const BatterySave &b) { setBatterySave(b.mode); },
+                           [&](const BatterySave &b) {
+                               setBatterySave(b.mode);
+                               keepSettings();
+                           },
                            [&](const KeyLockSettings &s) {
                                keyLock.setSettings(s.settings);
                                refreshLockMark();
                                logLockSettings();
                            },
                            [&](const KeyLockReport &) { logLockSettings(); },
+                           [&](const SettingsReport &) {
+                               if (settingsStore != nullptr) {
+                                   settingsStore->report();
+                               }
+                               if (codeplug == nullptr) {
+                                   return;
+                               }
+                               // As the codeplug holds them now.
+                               if (const auto s = codeplug->settings()) {
+                                   log::info("ui") << "codeplug: squelch " << s->squelchA << '/' << s->squelchB << ", zone "
+                                                   << s->zoneA << '/' << s->zoneB << ", light " << s->backlightLevel << ' '
+                                                   << durationText(s->backlightS).view() << ", battery save "
+                                                   << s->batterySave << ", auto lock " << s->keyLock.autoLockMs / 1000
+                                                   << " s, GPS " << (s->gps ? "on" : "off") << " systems "
+                                                   << s->gpsSystems << ", " << zoneText(s->timeZoneMinutes).view()
+                                                   << ", roaming zone " << s->roaming.zone;
+                               }
+                               if (const auto p = codeplug->preferences()) {
+                                   log::info("ui") << "preferences record: roaming " << (p->roaming ? "on" : "off");
+                               } else {
+                                   log::info("ui") << "no preferences record";
+                               }
+                           },
                            [&](const EncoderClicks &c) {
                                useLight(d);
                                if (!hardwareUp()) {
@@ -1845,11 +1951,12 @@ void uiMain(void *)
 
 } // namespace
 
-void start(Display &d, CodeplugSource *c, const board::Input *i)
+void start(Display &d, CodeplugSource *c, const board::Input *i, board::SettingsStore *k)
 {
     display = &d;
     codeplug = c;
     input = i;
+    settingsStore = k;
     log::setTap(onLogLine);
     uiTask.start("ui", 4, uiMain, nullptr);
 }

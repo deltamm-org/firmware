@@ -37,7 +37,7 @@ automatic roaming on it moves to a clearly better repeater by itself.
 Searches, on a side key set to roaming or when PTT finds no repeater,
 try the most likely repeaters first. The codeplug's repeater range check
 is followed. Menu > Channel turns roaming off or picks another roaming
-zone for the session, and Roam status shows what the radio hears. How to
+zone, and Roam status shows what the radio hears. How to
 set roaming up and use it is in `docs/roaming-setup.md`, the design in
 `docs/design/roaming.md`; moving between two real repeaters is still to
 be tested.
@@ -48,8 +48,9 @@ a frequency on the keypad.
 
 **Interface.** A first version of the user interface: a standby screen
 with zone, channel, frequency, tones, power, volume and battery, and a
-short grouped settings menu. Key lock
-covers the keypad, side keys and knob, with auto lock and forced lock.
+short grouped settings menu. Settings changed on the radio are kept in
+the codeplug (`docs/settings-storage.md`). Key lock covers the keypad,
+side keys and knob, with auto lock and forced lock.
 
 **Battery.** Battery save cycles the receiver while the radio is idle,
 with the codeplug's setting, and the backlight goes off after its light

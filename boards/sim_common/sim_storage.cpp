@@ -99,7 +99,9 @@ void SimStorage::putSampleCodeplug()
     }
     put(0x02500000 + 0x09, 3); // squelch A
     put(0x02500000 + 0x0A, 3);
-    put(0x02500000 + 0x04, 1); // 30 s timeout
+    put(0x02500000 + 0x04, 1);  // 30 s timeout
+    put(0x02500000 + 0x26, 3);  // brightness 4 of 5
+    put(0x02500000 + 0x30, 24); // UTC
     put(0x02500000 + 0xBE, 0x0B);
     putBytes(0x02500100, {1, 0});
     put(0x02500000 + 0x12, 0x24); // PF3: roam
@@ -140,4 +142,25 @@ dmm::services::StorageResult SimStorage::read(std::uint32_t address, std::span<s
         data[i] = it == m_bytes.end() ? 0xFF : it->second;
     }
     return dmm::services::StorageResult::Ok;
+}
+
+void SimStorage::write(std::uint32_t address, std::span<const std::uint8_t> data)
+{
+    std::lock_guard guard(m_lock);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        m_bytes[address + static_cast<std::uint32_t>(i)] = data[i];
+    }
+}
+
+dmm::services::SaveResult writeSettings(SimStorage &storage, dmm::services::D878Uv2Codeplug &codeplug,
+    std::span<const dmm::services::D878Uv2SettingsStore::Piece> pieces)
+{
+    for (const auto &p : pieces) {
+        const auto at = codeplug.storageAddress(p.address);
+        if (!at) {
+            return dmm::services::SaveResult::Failed;
+        }
+        storage.write(*at, p.data);
+    }
+    return dmm::services::SaveResult::Saved;
 }
