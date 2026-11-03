@@ -91,7 +91,7 @@ void D878Uv2SettingsStore::drop()
     m_preferences.reset();
     m_zone[0].reset();
     m_zone[1].reset();
-    m_channel.reset();
+    m_channelCount = 0;
 }
 
 void D878Uv2SettingsStore::keepSettings(const CodeplugSettings &s, std::uint32_t nowMs)
@@ -117,10 +117,19 @@ void D878Uv2SettingsStore::keepChannel(std::uint16_t index, PowerLevel power, Sq
     if (index >= CodeplugSource::MaxChannels) {
         return;
     }
-    if (m_channel && m_channel->index != index) {
-        flushNow();
+    const auto end = m_channels + m_channelCount;
+    auto kept = std::find_if(m_channels, end, [index](const ChannelValues &c) { return c.index == index; });
+    if (kept == end) {
+        if (m_channelCount == MaxKeptChannels) {
+            const SaveResult r = flushNow();
+            if (m_channelCount == MaxKeptChannels) {
+                log::warning("settings") << "channel " << index + 1 << " not kept: write " << resultText(r);
+                return;
+            }
+        }
+        kept = &m_channels[m_channelCount++];
     }
-    m_channel = ChannelValues{index, power, squelch};
+    *kept = ChannelValues{index, power, squelch};
     changed(nowMs);
 }
 
@@ -190,21 +199,22 @@ bool D878Uv2SettingsStore::collect()
             addPiece(Preferences, m_preferenceBytes);
         }
     }
-    if (m_channel) {
-        const std::uint32_t at = channelAddress(m_channel->index);
-        const std::span read(m_read, sizeof m_channelBytes);
+    for (std::size_t i = 0; i < m_channelCount; ++i) {
+        const ChannelValues &c = m_channels[i];
+        auto &bytes = m_channelBytes[i];
+        const std::uint32_t at = channelAddress(c.index);
+        const std::span read(m_read, sizeof bytes);
         if (!readable(m_codeplug.read(at, read))) {
             return false;
         }
-        std::copy(read.begin(), read.end(), std::begin(m_channelBytes));
+        std::copy(read.begin(), read.end(), std::begin(bytes));
         // Power at bits 2..3; squelch at bits 4..6: 0 carrier, 1 the
         // receive tone.
-        m_channelBytes[0x08] =
-            static_cast<std::uint8_t>((read[0x08] & ~0x0Cu) | (static_cast<unsigned>(m_channel->power) & 3u) << 2);
-        m_channelBytes[0x19] = static_cast<std::uint8_t>(
-            (read[0x19] & ~0x70u) | (m_channel->squelch == SquelchMode::Tone ? 0x10u : 0u));
-        if (!std::equal(read.begin(), read.end(), std::begin(m_channelBytes))) {
-            addPiece(at, m_channelBytes);
+        bytes[0x08] = static_cast<std::uint8_t>((read[0x08] & ~0x0Cu) | (static_cast<unsigned>(c.power) & 3u) << 2);
+        bytes[0x19] =
+            static_cast<std::uint8_t>((read[0x19] & ~0x70u) | (c.squelch == SquelchMode::Tone ? 0x10u : 0u));
+        if (!std::equal(read.begin(), read.end(), std::begin(bytes))) {
+            addPiece(at, bytes);
         }
     }
     std::sort(m_pieces, m_pieces + m_pieceCount, [](const Piece &a, const Piece &b) { return a.address < b.address; });
@@ -245,8 +255,8 @@ void D878Uv2SettingsStore::report() const
                      << m_zone[side]->position + 1;
             }
         }
-        if (m_channel) {
-            line << " channel " << m_channel->index + 1;
+        for (std::size_t i = 0; i < m_channelCount; ++i) {
+            line << " channel " << m_channels[i].index + 1;
         }
         line << ", changed at " << m_changedAt << " ms";
     }

@@ -37,6 +37,8 @@ public:
     static constexpr std::uint32_t QuietMs = 3000;
     /// Failed writes in a row after which the kept values are dropped.
     static constexpr unsigned MaxFailures = 3;
+    /// Channels whose values are kept at once.
+    static constexpr std::size_t MaxKeptChannels = 4;
 
     D878Uv2SettingsStore(D878Uv2Codeplug &codeplug, Writer write)
         : m_codeplug(codeplug), m_write(write)
@@ -49,8 +51,9 @@ public:
     void keepSettings(const CodeplugSettings &s, std::uint32_t nowMs);
     void keepPreferences(const RadioPreferences &p, std::uint32_t nowMs);
     void keepZone(bool sideB, std::uint8_t zone, std::uint16_t position, std::uint32_t nowMs);
-    /// Kept for one channel at a time: a change on another channel writes
-    /// the first one's at once.
+    /// Kept for up to MaxKeptChannels channels until written; a later
+    /// change on a kept channel replaces its values. A further channel
+    /// writes what is kept at once, and is not kept if that write fails.
     void keepChannel(std::uint16_t index, PowerLevel power, SquelchMode squelch, std::uint32_t nowMs);
 
     bool pending() const { return m_pending; }
@@ -89,7 +92,8 @@ private:
     std::optional<CodeplugSettings> m_settings;
     std::optional<RadioPreferences> m_preferences;
     std::optional<Zone> m_zone[2];
-    std::optional<ChannelValues> m_channel;
+    ChannelValues m_channels[MaxKeptChannels] = {};
+    std::size_t m_channelCount = 0;
 
     // The codeplug's bytes as read, one part at a time.
     std::uint8_t m_read[0x100] = {};
@@ -98,8 +102,8 @@ private:
     std::uint8_t m_extension[1] = {};
     std::uint8_t m_selection[2][2] = {};
     std::uint8_t m_preferenceBytes[d878uv2::PreferencesRecordBytes] = {};
-    std::uint8_t m_channelBytes[0x40] = {};
-    static constexpr std::size_t MaxPieces = 6;
+    std::uint8_t m_channelBytes[MaxKeptChannels][0x40] = {};
+    static constexpr std::size_t MaxPieces = 5 + MaxKeptChannels;
     Piece m_pieces[MaxPieces] = {};
     std::size_t m_pieceCount = 0;
 };
