@@ -255,3 +255,28 @@ TEST_CASE("squelch, power and squelch mode can be changed for the session")
     REQUIRE(sel.step(-1));
     CHECK(sel.current()->squelchMode == dmm::services::SquelchMode::Carrier);
 }
+
+TEST_CASE("each memory channel loaded goes through the adjust, the VFO not")
+{
+    FakeCodeplug cp = sample();
+    cp.vfoA = Channel{};
+    std::vector<std::uint16_t> seen;
+    auto adjust = [&seen](std::uint16_t index, Channel &c) {
+        seen.push_back(index);
+        if (index == 11) {
+            c.power = dmm::services::PowerLevel::High;
+        }
+    };
+    ChannelSelector sel(cp);
+    sel.setAdjust(adjust);
+    REQUIRE(sel.load());
+    CHECK(sel.current()->power == dmm::services::PowerLevel::High);
+    REQUIRE(sel.step(1));
+    CHECK(sel.current()->power == dmm::services::PowerLevel::Low);
+    REQUIRE(sel.step(-1));
+    CHECK(sel.current()->power == dmm::services::PowerLevel::High);
+    sel.tune(145'000'000);
+    REQUIRE(sel.memoryMode());
+    CHECK(sel.current()->power == dmm::services::PowerLevel::High);
+    CHECK(seen == std::vector<std::uint16_t>{11, 12, 11, 11});
+}

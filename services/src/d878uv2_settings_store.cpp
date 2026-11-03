@@ -133,6 +133,16 @@ void D878Uv2SettingsStore::keepChannel(std::uint16_t index, PowerLevel power, Sq
     changed(nowMs);
 }
 
+std::optional<KeptChannel> D878Uv2SettingsStore::keptChannel(std::uint16_t index) const
+{
+    const auto end = m_channels + m_channelCount;
+    const auto kept = std::find_if(m_channels, end, [index](const ChannelValues &c) { return c.index == index; });
+    if (kept == end) {
+        return std::nullopt;
+    }
+    return KeptChannel{kept->power, kept->squelch};
+}
+
 void D878Uv2SettingsStore::addPiece(std::uint32_t address, std::span<const std::uint8_t> data)
 {
     if (m_pieceCount < MaxPieces) {

@@ -37,6 +37,19 @@ CodeplugSource *codeplug = nullptr;
 const board::Input *input = nullptr;
 board::SettingsStore *settingsStore = nullptr;
 
+// A channel read from the codeplug, with the values still waiting in the
+// settings store laid over it.
+void takeKeptChannel(std::uint16_t index, Channel &c)
+{
+    if (settingsStore == nullptr) {
+        return;
+    }
+    if (const auto kept = settingsStore->keptChannel(index)) {
+        c.power = kept->power;
+        c.squelchMode = kept->squelchMode;
+    }
+}
+
 // The label on @p key as the user sees it.
 std::string_view keyText(Key key)
 {
@@ -819,6 +832,7 @@ void uiMain(void *)
     // The codeplug: settings, and the channel the radio starts on.
     if (codeplug != nullptr) {
         static ChannelSelector selector(*codeplug);
+        selector.setAdjust(takeKeptChannel);
         selector.load();
         if (selector.current()) {
             channels = &selector;
