@@ -403,15 +403,18 @@ TEST_CASE("the FM microphone gain takes the nearest level and makes up the rest 
     transmit(16, analog); // the middle level: the tables' own
     CHECK(bus.registers[0x44] == 0x09FF);
     CHECK(bus.registers[0x41] == 0x070F);
-    transmit(24, analog); // the top level
+    transmit(21, analog); // the top level
     CHECK(bus.registers[0x44] == 0x0CFF);
     CHECK(bus.registers[0x41] == 0x070F);
-    transmit(22, analog); // between 20 and 24 dB: the lower level, 2 dB more
-    CHECK(bus.registers[0x44] == 0x0AFF);
-    CHECK(bus.registers[0x41] == 0x0713);
-    transmit(0, analog); // the lowest level, 8 dB less
+    transmit(24, analog); // the top level, 3 dB more
+    CHECK(bus.registers[0x44] == 0x0CFF);
+    CHECK(bus.registers[0x41] == 0x0715);
+    transmit(13, analog); // between 12 and 14 dB: the lower level, 1 dB more
     CHECK(bus.registers[0x44] == 0x07FF);
-    CHECK(bus.registers[0x41] == 0x0706);
+    CHECK(bus.registers[0x41] == 0x0711);
+    transmit(0, analog); // the lowest level, 12 dB less
+    CHECK(bus.registers[0x44] == 0x07FF);
+    CHECK(bus.registers[0x41] == 0x0704);
     transmit(0, FmChannel{433'450'000, 433'450'000, false, {}, {}, true}); // digital keeps its own
     CHECK(bus.registers[0x44] == 0x0BFF);
     CHECK(bus.registers[0x41] == 0x070F);
