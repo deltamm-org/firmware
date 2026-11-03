@@ -359,30 +359,30 @@ TEST_CASE("the home screen group sets a preset or each row, kept with the prefer
 TEST_CASE("the microphone gains follow the codeplug's level until set in dB, FM to a lower top")
 {
     Settings s;
-    s.plugDmrMicGainDb = 8;
-    s.plugFmMicGainDb = 20;
+    s.plugDmrMicGainDb = 14;
+    s.plugFmMicGainDb = 18;
     CHECK(keptIn(Item::DmrMicGain) == Kept::Preferences);
-    CHECK(choiceOf(Item::DmrMicGain, s) == FromCodeplug + 8);
-    CHECK(valueText(Item::DmrMicGain, choiceOf(Item::DmrMicGain, s)).view() == "Plug +8 dB");
+    CHECK(choiceOf(Item::DmrMicGain, s) == FromCodeplug + 14);
+    CHECK(valueText(Item::DmrMicGain, choiceOf(Item::DmrMicGain, s)).view() == "Plug +14 dB");
 
     Choices c;
     REQUIRE(listChoices(Item::DmrMicGain, c, s));
     CHECK(c.size() == 32);
-    CHECK(c.value(0) == FromCodeplug + 8);
-    CHECK(c.text(0) == "Codeplug +8 dB");
+    CHECK(c.value(0) == FromCodeplug + 14);
+    CHECK(c.text(0) == "Codeplug +14 dB");
     CHECK(c.text(1) == "+0 dB");
     CHECK(c.value(31) == 30);
     CHECK(styleOf(c) == Style::Spinner);
     REQUIRE(listChoices(Item::FmMicGain, c, s));
     CHECK(c.size() == 26);
-    CHECK(c.text(0) == "Codeplug +20 dB");
+    CHECK(c.text(0) == "Codeplug +18 dB");
     CHECK(c.value(25) == 24);
 
     setChoice(Item::FmMicGain, 12, s);
     CHECK(s.fmMicGainDb == std::optional<std::uint8_t>(12));
     CHECK(valueText(Item::FmMicGain, choiceOf(Item::FmMicGain, s)).view() == "+12 dB");
     CHECK(!s.dmrMicGainDb.has_value());
-    setChoice(Item::FmMicGain, FromCodeplug + 20, s);
+    setChoice(Item::FmMicGain, FromCodeplug + 18, s);
     CHECK(!s.fmMicGainDb.has_value());
 }
 

@@ -17,21 +17,21 @@ inline constexpr int StandardDb = 16;
 /// its target level.
 inline constexpr int MaxDigitalDb = 30;
 /// FM channels: the microphone may reach the modulator with no limiter in
-/// between, so the range ends at the top level (fromLevel(Levels)).
+/// between, so the range ends a few dB above the top level
+/// (fromLevel(Levels)).
 inline constexpr int MaxFmDb = 24;
 
 /// Stored formats that keep the gain as a level 1..Levels give the levels
-/// no unit. They are taken as StandardDb for the middle level and
-/// LevelStepDb more for each level above it: a choice, not a measurement.
+/// no unit. They are taken as these gains, StandardDb for the middle level.
 inline constexpr int Levels = 5;
-inline constexpr int LevelStepDb = 4;
+inline constexpr int LevelDb[Levels] = {12, 14, 16, 18, 21};
 
 /// The gain for level @p level (1..Levels); a level out of range is the
 /// middle one.
 constexpr int fromLevel(int level)
 {
     constexpr int Middle = (Levels + 1) / 2;
-    return StandardDb + ((level >= 1 && level <= Levels ? level : Middle) - Middle) * LevelStepDb;
+    return LevelDb[(level >= 1 && level <= Levels ? level : Middle) - 1];
 }
 
 /// @p db limited to the range on digital channels.
@@ -46,6 +46,7 @@ constexpr int clampFm(int db)
     return std::clamp(db, MinDb, MaxFmDb);
 }
 
-static_assert(fromLevel(Levels) == MaxFmDb);
+static_assert(fromLevel((Levels + 1) / 2) == StandardDb);
+static_assert(fromLevel(1) >= MinDb && fromLevel(Levels) <= MaxFmDb && MaxFmDb <= MaxDigitalDb);
 
 } // namespace dmm::services::microphone_gain
