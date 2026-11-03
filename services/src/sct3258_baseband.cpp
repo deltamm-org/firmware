@@ -22,10 +22,13 @@ constexpr std::uint8_t VocoderAnalog = Sct3258::VocoderAnalog;
 constexpr std::uint8_t ProcessAnalog = Sct3258::ProcessAnalog;
 
 // DMR call options: the chip does squelch detection, direct mode without a
-// reverse channel (repeaters work with it too), no voice delay; one good
-// access channel report before the slot counts as verified, three repeated
-// LC headers; every CSBK and idle burst reported.
-constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x00, 0x13, 0x0C, 0x00};
+// reverse channel (repeaters work with it too), no voice delay; four good
+// access channel bursts before the slot counts as verified, so one burst
+// misread from noise cannot lock a wrong slot timing; three repeated LC
+// headers; every CSBK and idle burst reported (beacons are idle bursts).
+// Bit 6 of the second and fourth bytes and bit 3 of the last byte are set
+// too.
+constexpr std::uint8_t CallOptions[] = {Sct3258::DmrCallOption, 0x41, 0x40, 0x43, 0x4C, 0x08};
 // How long the chip may take to switch between receive and transmit.
 constexpr unsigned SwitchMs = 500;
 // The first frame after the switch to transmit: how often it is handed
