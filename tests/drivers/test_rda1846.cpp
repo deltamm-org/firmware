@@ -113,6 +113,7 @@ namespace {
 // A small tuning that exercises every list the driver walks.
 constexpr Rda1846::Setting TestStartUp[] = {{0x04, 0x0FD0}, {0x47, 0x7F2F}};
 constexpr Rda1846::Setting TestAfterCalibration[] = {{0x27, 0x74A4, 5}, {0x27, 0x6CA4}};
+constexpr Rda1846::Setting TestRelock[] = {{0x27, 0x74A4, 10}, {0x27, 0x7CA4}, {0x27, 0x6CA4}};
 constexpr Rda1846::WidthSetting TestWidth[] = {{0x32, 0x4495, 0x75E3, 0x4495}};
 constexpr Rda1846::WidthSetting TestWidthPage1[] = {{0x06, 0x0014, 0x0024, 0x0014}};
 constexpr Rda1846::RangeSetting TestRanges[] = {{200'000'000, 299'999'999, {0x34, 0x2B8E, 0x2B8B, 0x2B8E}}};
@@ -126,6 +127,7 @@ constexpr Rda1846::BandWord TestBandWords[] = {
 constexpr Rda1846::Tuning TestTuning{
     .startUp = TestStartUp,
     .afterCalibration = TestAfterCalibration,
+    .relock = TestRelock,
     .width = TestWidth,
     .widthPage1 = TestWidthPage1,
     .ranges = TestRanges,
@@ -180,6 +182,25 @@ TEST_CASE("start writes the tuning's lists around the calibration run, with thei
     CHECK(calibrated[1] == Write{0x27, 0x74A4});
     CHECK(calibrated[2] == Write{0x27, 0x6CA4});
     CHECK(bus.registers[0x32] == 0x4495); // narrow after start
+}
+
+TEST_CASE("the synthesizer's lock flag, and the tuning's relock steps with their wait")
+{
+    LoggingBus bus;
+    Rda1846 chip(bus, TestTuning);
+    bus.registers[0x0D] = 0x8000;
+    CHECK(chip.synthesizerLocked());
+    bus.registers[0x0D] = 0x7FFF;
+    CHECK_FALSE(chip.synthesizerLocked());
+    sleptMs = 0;
+    REQUIRE(chip.relock(sleep));
+    CHECK(sleptMs == 10);
+    CHECK(bus.log == std::vector<Write>{{0x27, 0x74A4}, {0x27, 0x7CA4}, {0x27, 0x6CA4}});
+
+    LoggingBus other;
+    Rda1846 maker(other);
+    CHECK_FALSE(maker.relock(sleep)); // no steps: nothing written
+    CHECK(other.log.empty());
 }
 
 TEST_CASE("width settings for a frequency range follow the width settings")

@@ -37,6 +37,7 @@ public:
     bool receiving() const { return m_mode == Mode::Receive; }
     bool transmitting() const { return m_mode == Mode::Transmit; }
     dmm::services::FmReceiveStatus status() { return {}; }
+    void keepLocked() {}
     void logStatus(std::string_view what) { dmm::services::log::info("sim") << what; }
     void setMicrophoneMuted(bool) {}
     void setGpsPower(bool) {}

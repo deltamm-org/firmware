@@ -72,6 +72,7 @@ constexpr std::uint16_t BandNormal = 0x8763;
 constexpr Rda1846::Tuning Maker{
     .startUp = MakerStartUp,
     .afterCalibration = {},
+    .relock = {},
     .width = MakerWidth,
     .widthPage1 = MakerWidthPage1,
     .ranges = {},
@@ -195,6 +196,15 @@ bool Rda1846::start(void (*sleepMs)(unsigned), std::uint16_t gpio)
     write(m_tuning->afterCalibration, sleepMs);
     m_mode = Mode::Idle;
     setBandwidth(Bandwidth::Narrow);
+    return true;
+}
+
+bool Rda1846::relock(void (*sleepMs)(unsigned))
+{
+    if (m_tuning->relock.empty()) {
+        return false;
+    }
+    write(m_tuning->relock, sleepMs);
     return true;
 }
 

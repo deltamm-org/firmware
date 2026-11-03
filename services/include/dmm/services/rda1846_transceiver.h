@@ -86,6 +86,9 @@ public:
     bool receiving() const { return m_chip.mode() == drivers::radio::Rda1846::Mode::Receive; }
     bool transmitting() const { return m_chip.mode() == drivers::radio::Rda1846::Mode::Transmit; }
     FmReceiveStatus status();
+    /// While receiving, at most every 100 ms and not within 100 ms of
+    /// tuning: checks the synthesizer is locked, and locks it again if not.
+    void keepLocked();
     void logStatus(std::string_view what);
     /// Also logs the chip's pin register, as a debug line.
     void setMicrophoneMuted(bool muted);
@@ -115,6 +118,10 @@ private:
     std::uint16_t m_power = 0;
     bool m_wide = false;
     std::uint32_t m_receiveHz = 0;
+    FmChannel m_channel{};
+    int m_squelchLevel = 0;
+    std::uint32_t m_lockCheckedMs = 0;
+    unsigned m_unlockedInRow = 0;
     std::uint16_t m_tune = 0; // the calibrated front-end tuning in use
     bool m_asleep = false;
     bool m_gpsOn = false;
