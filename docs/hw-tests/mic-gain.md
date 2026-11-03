@@ -60,7 +60,7 @@ Without calls:
 | 8 | Press Exit four times (back to the standby screen); `restart`; `mic gain` | `DMR +30 dB, FM +8 dB`, kept across the restart |
 | 9 | In a.yaml set `micGain: 4` and `fmMicGain: 8` (levels 2 and 4), `dmrconf write -y a.yaml` | After the restart still `DMR +30 dB, FM +8 dB`: the values set on the radio win, and the codeplug write kept them |
 | 10 | `mic gain dmr codeplug`, `mic gain fm codeplug` | `DMR +14 dB (codeplug), FM +18 dB (codeplug)` |
-| 11 | `dmrconf read -y b.yaml` | `micGain: 3`, `fmMicGain: 7` (the same levels, as QDMR shows them); the rest as in a.yaml |
+| 11 | `dmrconf read -y b.yaml` | `micGain: 4`, `fmMicGain: 8`: the same levels; the rest as in a.yaml. QDMR releases without its level round-trip fix read one level lower |
 | 12 | Select another channel and the FM channel again, `fm 41`, `fm 44` | `register 41 = 070f`, `register 44 = 0af9`: level 4, +18 dB |
 | 13 | Menu > Settings > Audio (keys as in 6); look | `Plug +14 dB`, `Plug +18 dB` |
 | 14 | Press Exit three times; `mic gain fm 16`, select the FM channel again, `fm 41`, `fm 44` | `register 41 = 070f`, `register 44 = 09f9`, the standard |
