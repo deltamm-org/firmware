@@ -102,7 +102,9 @@ private:
             std::vector<std::uint8_t> reply = {field, static_cast<std::uint8_t>(text.size())};
             reply.insert(reply.end(), text.begin(), text.end());
             queue(0x20, reply);
-        } else if (type == 0x08 && std::find(p.begin(), p.end(), std::uint8_t{0x43}) != p.end()) {
+        } else if (type == 0x08 && field != 0x79 && std::find(p.begin(), p.end(), std::uint8_t{0x43}) != p.end()) {
+            // A data frame field anywhere in the packet; the call options'
+            // values can hold the same byte.
             queue(0x20, {0x43}); // a data frame taken for sending
         } else if (field == 0x7E) {
             queue(0x00, {0x17, 0x04}); // unknown command
