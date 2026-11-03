@@ -18,6 +18,7 @@ using Setting = dmm::drivers::radio::Rda1846::Setting;
 using WidthSetting = dmm::drivers::radio::Rda1846::WidthSetting;
 using RangeSetting = dmm::drivers::radio::Rda1846::RangeSetting;
 using BandWord = dmm::drivers::radio::Rda1846::BandWord;
+using DeviationStep = dmm::drivers::radio::Rda1846::DeviationStep;
 constexpr std::uint16_t Keep = dmm::drivers::radio::Rda1846::Keep;
 
 // Where the radio information block names the chip version, first and
@@ -311,6 +312,15 @@ constexpr BandWord BandWords[] = {
     {167'110'000, 167'125'000, BandA},
 };
 
+// FM transmit on a channel with an alternative band setting: the voice
+// deviation goes up by this much, by band setting and band.
+constexpr DeviationStep DeviationSteps[] = {
+    {0, 300'000'000, BandA, 0x11},
+    {0, 300'000'000, BandB, 0x06},
+    {300'000'001, 0xFFFF'FFFF, BandA, 0x10},
+    {300'000'001, 0xFFFF'FFFF, BandB, 0x06},
+};
+
 constexpr Tuning TuningS{
     .startUp = StartUpS,
     .afterCalibration = AfterCalibration,
@@ -322,6 +332,7 @@ constexpr Tuning TuningS{
     .transmit = Transmit,
     .bandWords = BandWords,
     .normalBand = BandNormal,
+    .deviationSteps = DeviationSteps,
 };
 constexpr Tuning TuningN{
     .startUp = StartUpN,
@@ -334,6 +345,7 @@ constexpr Tuning TuningN{
     .transmit = Transmit,
     .bandWords = BandWords,
     .normalBand = BandNormal,
+    .deviationSteps = DeviationSteps,
 };
 
 bool isVersionN(dmm::services::Storage &storage)

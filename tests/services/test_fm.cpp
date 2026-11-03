@@ -352,6 +352,31 @@ TEST_CASE("a lost synthesizer lock is put right while receiving, at most every 1
     }
 }
 
+TEST_CASE("FM transmit adds the band setting's extra voice deviation; digital stays at none")
+{
+    constexpr Rda1846::DeviationStep Steps[] = {{0, 300'000'000, 0x8543, 0x11}};
+    Rda1846::Tuning tuning = Rda1846::makerTuning();
+    tuning.deviationSteps = Steps;
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    Rda1846 chip(bus, tuning);
+    FakeRf rf;
+    Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+    REQUIRE(fm.start());
+    const D878Uv2Calibration cal = calibration();
+    testCalibration = &cal;
+
+    // 136.5 MHz takes 0x8543 near the reference's harmonic.
+    REQUIRE(fm.transmit(FmChannel{136'500'000, 136'500'000, false, {}, {}, false}, dmm::services::PowerLevel::Low) == nullptr);
+    CHECK((bus.registers[0x59] >> 6) == 0x2A + 0x11);
+    fm.endTransmit();
+    REQUIRE(fm.transmit(FmChannel{145'000'000, 145'000'000, false, {}, {}, false}, dmm::services::PowerLevel::Low) == nullptr);
+    CHECK((bus.registers[0x59] >> 6) == 0x2A);
+    fm.endTransmit();
+    REQUIRE(fm.transmit(FmChannel{136'500'000, 136'500'000, false, {}, {}, true}, dmm::services::PowerLevel::Low) == nullptr);
+    CHECK(bus.registers[0x59] == 0);
+}
+
 TEST_CASE("a receive tone has its own detector and flag, apart from the carrier")
 {
     FakeBus bus;

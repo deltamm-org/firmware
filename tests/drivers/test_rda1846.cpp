@@ -124,6 +124,7 @@ constexpr Rda1846::BandWord TestBandWords[] = {
     {144'000'000, 146'000'000, 0x8543},
     {145'000'000, 145'000'000, 0x1111}, // never reached: the first match wins
 };
+constexpr Rda1846::DeviationStep TestDeviationSteps[] = {{0, 300'000'000, 0x8543, 0x11}, {0, 300'000'000, 0x8643, 6}};
 constexpr Rda1846::Tuning TestTuning{
     .startUp = TestStartUp,
     .afterCalibration = TestAfterCalibration,
@@ -135,6 +136,7 @@ constexpr Rda1846::Tuning TestTuning{
     .transmit = TestTransmit,
     .bandWords = TestBandWords,
     .normalBand = 0x8763,
+    .deviationSteps = TestDeviationSteps,
 };
 
 } // namespace
@@ -217,6 +219,18 @@ TEST_CASE("a kept width value leaves the register as it is")
     CHECK(bus.registers[0x35] == 0x50A9);
     chip.setBandwidth(Rda1846::Bandwidth::Narrow);
     CHECK(bus.registers[0x35] == 0x51EC);
+}
+
+TEST_CASE("extra FM deviation by band setting")
+{
+    LoggingBus bus;
+    Rda1846 chip(bus, TestTuning);
+    chip.setFrequency(144'500'000); // 0x8543
+    CHECK(chip.voiceDeviationExtra() == 0x11);
+    chip.setFrequency(145'000'000); // 0x8643
+    CHECK(chip.voiceDeviationExtra() == 6);
+    chip.setFrequency(150'000'000); // normal
+    CHECK(chip.voiceDeviationExtra() == 0);
 }
 
 TEST_CASE("width settings for a frequency range follow the width settings")

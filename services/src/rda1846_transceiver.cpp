@@ -190,11 +190,13 @@ const char *Rda1846Transceiver::transmit(const FmChannel &channel, PowerLevel le
                                                                       : 0;
     // Digital: no deviation of the transceiver's own at all. The baseband
     // modulates the RF itself; any voice or tone deviation here would put
-    // analog FM on top of the DMR signal.
+    // analog FM on top of the DMR signal. FM: the calibrated voice
+    // deviation, plus what the frequency's band setting needs.
     if (channel.digital) {
         m_chip.setDeviation(0, 0);
     } else {
-        m_chip.setDeviation(trims->voiceDeviation, toneDeviation);
+        m_chip.setDeviation(static_cast<std::uint16_t>(trims->voiceDeviation + m_chip.voiceDeviationExtra()),
+            toneDeviation);
     }
     m_chip.setTransmitTone(channel.digital ? Chip::SubTone{} : chipTone(tone));
     m_chip.setMode(Chip::Mode::Transmit);
