@@ -156,13 +156,15 @@ constexpr RangeSetting Ranges[] = {
     {200'000'000, 299'999'999, {0x34, 0x2B8E, 0x2B8B, 0x2392}},
 };
 
-// Receive: PA bias by width, receive volume step 9 of 15, full DAC gain;
-// filters with the transceiver's de-emphasis bypassed (the baseband chip
-// does it) and the 250 Hz tone filter. Digital channels bypass the audio
-// filters too and take a different audio path setting.
+// Receive: PA bias by width, receive volume step 9 of 15 (on digital
+// channels step 10 and transmit gain 10: the level the baseband's
+// demodulator is calibrated at), full DAC gain; filters with the
+// transceiver's de-emphasis bypassed (the baseband chip does it) and the
+// 250 Hz tone filter. Digital channels bypass the audio filters too and
+// take a different audio path setting.
 constexpr WidthSetting Receive[] = {
     {0x0A, 0x4380, 0x43A0, 0x4381},
-    {0x44, 0x09F9, 0x09F9, 0x09F9},
+    {0x44, 0x09F9, 0x09F9, 0x0AFA},
     {0x58, 0x8085, 0x8085, 0x80E5},
     {0x40, 0x0030, 0x0030, 0x0031},
 };
