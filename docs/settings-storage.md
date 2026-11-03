@@ -39,8 +39,11 @@ not kept.
   store reads the parts concerned and writes only the bytes that differ,
   all in one write, in rising address order. A run of changes costs one
   write; a value set back to what the codeplug holds costs none.
-- A change on another channel writes the previous channel's values at
-  once: one channel is kept at a time.
+- Values are kept for up to `D878Uv2SettingsStore::MaxKeptChannels`
+  channels until they are written; a later change on a kept channel
+  replaces its values. A change on one more channel writes what is kept
+  at once; if that write is refused or fails, the kept channels stay and
+  the new one is not kept, with a warning in the log.
 - Changes made in the quiet time before the radio is switched off are
   lost.
 - The `settings` console command logs what is pending, the last write's
@@ -89,8 +92,8 @@ and every preference takes its default; the radio never reads a damaged
 record as values.
 
 **Wear.** Each write rewrites one copy of every block it touches: at
-most three (the general settings' block, the channel's bank, and the
-first channel bank for the record). The quiet time keeps that to one
+most the general settings' block, the changed channels' banks, and the
+first channel bank for the record. The quiet time keeps that to one
 write per run of changes.
 
 ## Room

@@ -4,9 +4,10 @@ Settings changed on the radio are written to the codeplug after a quiet
 time of 3 s, and hold after a restart (`docs/settings-storage.md`). The
 radio never writes while the PC programs it.
 
-This is the first image that writes the codeplug by itself. Steps 1-6
-and 11-15 run from the console and the PC. Steps 7-9 and the screen and
-menu checks of step 10 need the radio's keys, knob and screen.
+This is the first image that writes the codeplug by itself. Steps 1-6,
+11 and 13-16 run from the console and the PC. Steps 7-9, 12 and the
+screen and menu checks of step 10 need the radio's keys, knob and
+screen.
 
 ## Before you start
 
@@ -34,10 +35,11 @@ menu checks of step 10 need the radio's keys, knob and screen.
 | 9 | Zone key: pick another zone; knob two channels on; wait 3 s; `settings` | `settings kept`; `codeplug:` shows the new zone, squelch 4, light 2 30 s, GPS on systems 1, the new time zone and roaming zone |
 | 10 | `restart`; `settings`; look at the screen | Starts in the zone and on the channel of step 9, dimmer (level 2); the channel of step 7 has its new power and squelch type |
 | 11 | `light time 20`; about 2 s later start `dmrconf read -D <data> -R d878uv2 during.yaml`; when it has ended, `light time 30` | While it reads, `settings wait: the PC is programming`; the read completes without an error; right after it, `settings kept in the codeplug`; 3 s after `light time 30` (the light time of step 8 back) `settings kept` again |
-| 12 | QDMR round trip: `settings`; `dmrconf read -D <data> -R d878uv2 a.yaml` | The `codeplug:` line noted |
-| 13 | `dmrconf write -D <data> -R d878uv2 a.yaml`; wait for the radio to start again; `settings` | The write completes; the radio restarts; the `codeplug:` line as in step 12, except that squelch B now has squelch A's value |
-| 14 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
-| 15 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
+| 12 | Menu > Channel > Squelch type the other one; within 3 s `stty -F /dev/<data> raw -echo; printf PROGRAM > /dev/<data>` (program mode, left 10 s after its last command); within those 10 s: knob one channel on, Menu > Channel > Squelch type the other one, `settings` | `settings wait: the PC is programming`; `pending: channel <n> channel <n+1>`; about 10 s after `PROGRAM` one `settings kept in the codeplug`; knob back and forth: both channels show their new squelch type |
+| 13 | QDMR round trip: `settings`; `dmrconf read -D <data> -R d878uv2 a.yaml` | The `codeplug:` line noted |
+| 14 | `dmrconf write -D <data> -R d878uv2 a.yaml`; wait for the radio to start again; `settings` | The write completes; the radio restarts; the `codeplug:` line as in step 13, except that squelch B now has squelch A's value |
+| 15 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
+| 16 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 
 ## Undo
 
@@ -57,12 +59,12 @@ menu checks of step 10 need the radio's keys, knob and screen.
   and the `codeplug:` line before and after the restart.
 - Step 11 read fails or hangs: report the `dmrconf` output and the log
   around it.
-- `diff` shows differences in step 14: report the lines. Differences in
-  fields the radio changed in steps 7-9 between steps 12 and 14 would
-  mean a write slipped in during step 13.
+- `diff` shows differences in step 15: report the lines. Differences in
+  fields the radio changed in steps 7-9 between steps 13 and 15 would
+  mean a write slipped in during step 14.
 
 ## Report back
 
-- The `codeplug:` lines of steps 1, 9, 10 and 13.
-- The ui task's unused stack words from step 15.
+- The `codeplug:` lines of steps 1, 9, 10 and 14.
+- The ui task's unused stack words from step 16.
 - Whether the screen, the menu and the channel matched after step 10.

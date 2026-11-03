@@ -39,7 +39,7 @@ constexpr std::uint32_t GpsSystems = Settings + 0x1435;
 constexpr std::uint32_t Channels = 0x00800000;
 constexpr std::uint32_t Preferences = 0x0081E000;
 
-// A codeplug with general settings and two channels; the store writes
+// A codeplug with general settings and five channels; the store writes
 // through the codeplug writer, as on the radio.
 struct Radio
 {
@@ -89,8 +89,8 @@ struct Radio
         chip.put(Settings, s);
         chip.put(Settings + 0x1400, std::vector<std::uint8_t>(0x40, 0));
         markValid(Channels);
-        std::vector<std::uint8_t> ch(0x80, 0);
-        for (int i = 0; i < 2; ++i) {
+        std::vector<std::uint8_t> ch(5 * 0x40, 0);
+        for (int i = 0; i < 5; ++i) {
             ch[i * 0x40 + 0] = 0x43; // 433.50000 MHz
             ch[i * 0x40 + 1] = 0x35;
             ch[i * 0x40 + 8] = 0x01 | 0x40; // digital, low power, a bit to keep
@@ -218,18 +218,89 @@ TEST_CASE("settings store: zone, channel and preferences go out in one write, in
     CHECK(r.codeplug.preferences().has_value());
 }
 
-TEST_CASE("settings store: a change on another channel writes the first one's at once")
+TEST_CASE("settings store: changes on several channels are kept and written together")
 {
     Radio r;
     r.store.keepChannel(0, PowerLevel::Mid, SquelchMode::Carrier, 0);
-    r.store.keepChannel(0, PowerLevel::High, SquelchMode::Carrier, 10);
+    r.store.keepChannel(1, PowerLevel::Turbo, SquelchMode::Tone, 10);
+    r.store.keepChannel(0, PowerLevel::High, SquelchMode::Carrier, 20);
     CHECK(r.writes.empty());
-    r.store.keepChannel(1, PowerLevel::Turbo, SquelchMode::Carrier, 20);
-    REQUIRE(r.writes.size() == 1);
-    CHECK(r.codeplug.channel(0)->power == PowerLevel::High);
-    CHECK(r.store.pending());
     CHECK(r.store.flush(20 + D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0] == std::vector<std::uint32_t>{Channels, Channels + 0x40});
+    CHECK(r.codeplug.channel(0)->power == PowerLevel::High);
     CHECK(r.codeplug.channel(1)->power == PowerLevel::Turbo);
+    CHECK(r.codeplug.channel(1)->squelchMode == SquelchMode::Tone);
+}
+
+TEST_CASE("settings store: a channel's values stay kept through a refused write and a channel change")
+{
+    Radio r;
+    r.store.keepChannel(0, PowerLevel::High, SquelchMode::Carrier, 0);
+    r.answer = SaveResult::Busy;
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Busy);
+    r.store.keepChannel(1, PowerLevel::Turbo, SquelchMode::Tone, 4000);
+    CHECK(r.store.flush(4000 + D878Uv2SettingsStore::QuietMs) == SaveResult::Busy);
+    CHECK(r.store.pending());
+    r.answer = SaveResult::Saved;
+    CHECK(r.store.flush(4000 + 2 * D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0] == std::vector<std::uint32_t>{Channels, Channels + 0x40});
+    CHECK(r.codeplug.channel(0)->power == PowerLevel::High);
+    CHECK(r.codeplug.channel(1)->power == PowerLevel::Turbo);
+    CHECK(r.codeplug.channel(1)->squelchMode == SquelchMode::Tone);
+}
+
+TEST_CASE("settings store: a channel's values stay kept through a failed write and a channel change")
+{
+    Radio r;
+    r.store.keepChannel(0, PowerLevel::High, SquelchMode::Carrier, 0);
+    r.answer = SaveResult::Failed;
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Failed);
+    r.store.keepChannel(1, PowerLevel::Turbo, SquelchMode::Carrier, 4000);
+    r.answer = SaveResult::Saved;
+    CHECK(r.store.flush(4000 + D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0] == std::vector<std::uint32_t>{Channels, Channels + 0x40});
+    CHECK(r.codeplug.channel(0)->power == PowerLevel::High);
+    CHECK(r.codeplug.channel(1)->power == PowerLevel::Turbo);
+}
+
+TEST_CASE("settings store: a channel past the kept ones writes them at once")
+{
+    Radio r;
+    static_assert(D878Uv2SettingsStore::MaxKeptChannels == 4);
+    for (std::uint16_t i = 0; i < 4; ++i) {
+        r.store.keepChannel(i, PowerLevel::High, SquelchMode::Carrier, i);
+    }
+    CHECK(r.writes.empty());
+    r.store.keepChannel(4, PowerLevel::Turbo, SquelchMode::Carrier, 10);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0].size() == 4);
+    CHECK(r.store.pending());
+    CHECK(r.store.flush(10 + D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    for (std::uint16_t i = 0; i < 4; ++i) {
+        CHECK(r.codeplug.channel(i)->power == PowerLevel::High);
+    }
+    CHECK(r.codeplug.channel(4)->power == PowerLevel::Turbo);
+}
+
+TEST_CASE("settings store: while the writer refuses, the kept channels stay and a further one is not kept")
+{
+    Radio r;
+    for (std::uint16_t i = 0; i < 4; ++i) {
+        r.store.keepChannel(i, PowerLevel::High, SquelchMode::Carrier, 0);
+    }
+    r.answer = SaveResult::Busy;
+    r.store.keepChannel(4, PowerLevel::Turbo, SquelchMode::Carrier, 10);
+    r.store.keepChannel(2, PowerLevel::Mid, SquelchMode::Carrier, 20);
+    r.answer = SaveResult::Saved;
+    CHECK(r.store.flush(20 + D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0].size() == 4);
+    CHECK(r.codeplug.channel(2)->power == PowerLevel::Mid);
+    CHECK(r.codeplug.channel(3)->power == PowerLevel::High);
+    CHECK(r.codeplug.channel(4)->power == PowerLevel::Low);
 }
 
 TEST_CASE("settings store: a write refused while the PC programs is tried again later")
