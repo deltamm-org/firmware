@@ -5,6 +5,8 @@
 
 #include "audio.h"
 #include "gps.h"
+#include "menu.h"
+#include "menu_screen.h"
 #include "radio.h"
 #include "standby.h"
 #include "system.h"
@@ -14,11 +16,14 @@
 #include "dmm/services/channel_selector.h"
 #include "dmm/services/clock.h"
 #include "dmm/services/codeplug.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/input.h"
 #include "dmm/services/log.h"
 #include "dmm/services/power.h"
 #include "dmm/version.h"
 
+#include <algorithm>
+#include <array>
 #include <iterator>
 #include <string_view>
 
@@ -30,11 +35,25 @@ using namespace services;
 using services::log::Level;
 namespace log = services::log;
 
-os::Task<896> uiTask;
+os::Task<1088> uiTask;
 os::Queue<Message, 16> inbox;
 Display *display = nullptr;
 CodeplugSource *codeplug = nullptr;
 const board::Input *input = nullptr;
+board::SettingsStore *settingsStore = nullptr;
+
+// A channel read from the codeplug, with the values still waiting in the
+// settings store laid over it.
+void takeKeptChannel(std::uint16_t index, Channel &c)
+{
+    if (settingsStore == nullptr) {
+        return;
+    }
+    if (const auto kept = settingsStore->keptChannel(index)) {
+        c.power = kept->power;
+        c.squelchMode = kept->squelchMode;
+    }
+}
 
 // The label on @p key as the user sees it.
 std::string_view keyText(Key key)
@@ -172,57 +191,45 @@ struct BatteryState
 
 BatteryState batteryState;
 
-// Right-aligned in the header: four bars (red when low) and the voltage.
+// Right-aligned in the header: a battery icon.
 // The radio's own screens put it in their taller status bar.
 int headerHeight = 8;
 int headerTop = 0;
 
-void fillArea(Display &d, int x, int y, int w, int h, Color c)
-{
-    if (w > 0 && h > 0) {
-        d.fillRect(x, y, w, h, c);
-    }
-}
-
-// The battery at the header's right end, in its own field from 48 pixels
-// before the edge: the voltage, then four bars. Everything is drawn in
-// place with only the gaps painted, so an update does not flicker.
+// A battery at the header's right end, in its own field from 48 pixels
+// before the edge: filled from the left by its level, so the outline shows
+// as it drains, red when low. Every pixel is painted once, so an update
+// does not flicker.
 void drawBattery(Display &d)
 {
     const BatteryState &b = batteryState;
     const int w = d.width();
     const int fieldX = w - 48;
-    const int barsX = w - 13;
-    lib::StaticString<12> text;
+    constexpr int BodyW = 21;
+    constexpr int InnerW = BodyW - 2;
+    const int x = w - 5 - BodyW;
+    const int y = headerTop == 0 ? 0 : 1;
+    const int bodyH = std::min(9, headerHeight - y);
+    const Color ink = b.low ? colors::Red : colors::White;
+    int filled = 0;
     if (b.millivolts > 0) {
-        const int cv = (b.millivolts + 5) / 10;
-        text << cv / 100 << '.' << static_cast<char>('0' + cv / 10 % 10) << 'V';
+        // A low battery keeps a sliver.
+        filled = std::max(b.level * InnerW / 3, b.low ? 3 : 0);
     }
-    const int textW = static_cast<int>(text.view().size()) * HeaderFont.width;
-    const int tx = barsX - textW - 2;
-    const int below = headerTop + HeaderFont.height;
-    drawText(d, HeaderFont, tx, headerTop, text.view(), b.low ? colors::Red : colors::White, headerGround);
-    fillArea(d, fieldX, 0, tx - fieldX, headerHeight, headerGround);
-    fillArea(d, tx, 0, textW, headerTop, headerGround);
-    fillArea(d, tx, below, textW, headerHeight - below, headerGround);
-    fillArea(d, tx + textW, 0, barsX - tx - textW, headerHeight, headerGround);
-    if (b.millivolts <= 0) {
-        fillArea(d, barsX, 0, w - barsX, headerHeight, headerGround);
-        return;
-    }
-    const Color on = b.low ? colors::Red : colors::Green;
-    for (int i = 0; i < 4; ++i) {
-        // The first bar always shows, so an empty battery still has one red bar.
-        const bool lit = i == 0 || i <= b.level;
-        const int bx = barsX + i * 3;
-        const int by = headerTop + 7 - (i + 1) * 2 + 1;
-        const int bh = (i + 1) * 2 - 1;
-        d.fillRect(bx, by, 2, bh, lit ? on : rgb(60, 60, 60));
-        fillArea(d, bx, 0, 2, by, headerGround);
-        fillArea(d, bx, by + bh, 2, headerHeight - by - bh, headerGround);
-        fillArea(d, bx + 2, 0, 1, headerHeight, headerGround);
-    }
-    fillArea(d, barsX + 12, 0, w - barsX - 12, headerHeight, headerGround);
+    fillArea(d, fieldX, 0, x - fieldX, headerHeight, headerGround);
+    fillArea(d, x, 0, w - x, y, headerGround);
+    fillArea(d, x, y + bodyH, w - x, headerHeight - y - bodyH, headerGround);
+    d.fillRect(x, y, BodyW, 1, ink);
+    d.fillRect(x, y + bodyH - 1, BodyW, 1, ink);
+    d.fillRect(x, y + 1, 1, bodyH - 2, ink);
+    d.fillRect(x + BodyW - 1, y + 1, 1, bodyH - 2, ink);
+    fillArea(d, x + 1, y + 1, filled, bodyH - 2, ink);
+    fillArea(d, x + 1 + filled, y + 1, InnerW - filled, bodyH - 2, headerGround);
+    // The terminal.
+    d.fillRect(x + BodyW, y + 2, 2, bodyH - 4, ink);
+    fillArea(d, x + BodyW, y, 2, 2, headerGround);
+    fillArea(d, x + BodyW, y + bodyH - 2, 2, 2, headerGround);
+    fillArea(d, x + BodyW + 2, y, w - x - BodyW - 2, bodyH, headerGround);
 }
 
 services::KeyLock keyLock;
@@ -384,8 +391,7 @@ enum class View : std::uint8_t
     Standby,    // the radio's main screen
     ZonePicker, // choosing a zone
     RoamStatus, // what roaming knows, refreshed each second
-    Menu,       // the settings list
-    MenuValue,  // choosing one setting's value
+    Menu,       // the menu's lists and value screens
     Gps,        // the GPS receiver's state and fix, from the menu
     Log,
     KeyTest,
@@ -396,114 +402,38 @@ enum class View : std::uint8_t
 ChannelSelector *channels = nullptr;
 StandbyScreen standby;
 ListPicker zonePicker;
-ListPicker menu;
-ListPicker menuValue;
+menu::Navigator menuNav;
 
 // The screens that show a list; the roaming status screen borrows the
 // zone list's.
 bool isList(View v)
 {
-    return v == View::ZonePicker || v == View::RoamStatus || v == View::Menu || v == View::MenuValue;
-}
-ListPicker &listOf(View v)
-{
-    return v == View::Menu ? menu : v == View::MenuValue ? menuValue
-                                                         : zonePicker;
+    return v == View::ZonePicker || v == View::RoamStatus || v == View::Menu;
 }
 
-// The settings menu: one flat list, each item a list of values.
-enum class MenuItem : std::uint8_t
-{
-    Squelch,
-    SquelchMode,
-    Power,
-    Roaming,
-    RoamZone,
-    RoamStatus, // opens the roaming status screen
-    Backlight,
-    BacklightTime,
-    BatterySave,
-    KeyLock,
-    AutoLock,
-    Gps,
-    GpsSystems,
-    GpsStatus, // opens the GPS screen
-    ClockZone,
-    Count,
-};
-MenuItem menuItem = MenuItem::Squelch;
-
-// Menu groups and their items. Settings of the current channel come first
-// and also open directly from the standby screen (Front2).
-enum class MenuGroup : std::uint8_t
-{
-    Channel,
-    Display,
-    Keys,
-    Battery,
-    Gps,
-    Count,
-};
-struct GroupInfo
-{
-    const char *name;
-    MenuItem items[6];
-    std::uint8_t count;
-};
-constexpr GroupInfo Groups[] = {
-    {"Channel",
-        {MenuItem::Squelch, MenuItem::SquelchMode, MenuItem::Power, MenuItem::Roaming, MenuItem::RoamZone,
-            MenuItem::RoamStatus},
-        6},
-    {"Display", {MenuItem::Backlight, MenuItem::BacklightTime}, 2},
-    {"Keys", {MenuItem::KeyLock, MenuItem::AutoLock}, 2},
-    {"Battery", {MenuItem::BatterySave}, 1},
-    {"GPS and time", {MenuItem::Gps, MenuItem::GpsSystems, MenuItem::GpsStatus, MenuItem::ClockZone}, 4},
-};
-static_assert(std::size(Groups) == static_cast<std::size_t>(MenuGroup::Count));
-MenuGroup menuGroup = MenuGroup::Channel;
-// Showing the group list (true) or one group's items.
-bool menuAtGroups = true;
-// The items were opened straight from the standby screen: leaving them
-// returns there.
-bool menuQuick = false;
 int backlightLevel = DefaultBacklight;
-// Backlight time choices, in seconds.
-constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
 std::uint16_t backlightS = 0; // 0 = always on
 bool backlightLit = true;
 os::Ticks lastLightUse = 0;
 std::uint8_t batterySave = 0;
-// The GPS receiver as last reported, and the codeplug's choice at start.
+// The GPS receiver as last reported, and the GPS setting: the codeplug's
+// choice at start, then the menu's.
 GpsState gpsState;
 bool gpsAtStart = false;
 std::uint8_t gpsSystems = services::gps_systems::Gps | services::gps_systems::Beidou;
 // Local time minus UTC, from the codeplug, in half-hour steps.
 int timeZoneMinutes = 0;
-constexpr int ZoneSteps = 53; // UTC-12:00 to UTC+14:00
 
-// "UTC+3:00", "UTC-9:30", "UTC".
-lib::StaticString<10> zoneText(int minutes)
-{
-    lib::StaticString<10> s;
-    s << "UTC";
-    if (minutes != 0) {
-        const int m = minutes < 0 ? -minutes : minutes;
-        s << (minutes < 0 ? '-' : '+') << m / 60 << ':' << lib::zeroPadded(static_cast<std::uint32_t>(m % 60), 2);
-    }
-    return s;
-}
-
-// The local time as "HH:MM", or empty while the clock does not know it.
-lib::StaticString<6> localClockText()
+// The local time at UTC @p utc as "HH:MM".
+lib::StaticString<6> localClockText(std::uint32_t utc)
 {
     lib::StaticString<6> s;
-    if (const auto utc = system::utcNow()) {
-        const services::DateTime t = services::dateTime(static_cast<std::uint32_t>(static_cast<std::int64_t>(*utc) + timeZoneMinutes * 60));
-        s << lib::zeroPadded(t.hour, 2) << ':' << lib::zeroPadded(t.minute, 2);
-    }
+    const services::DateTime t = services::dateTime(static_cast<std::uint32_t>(static_cast<std::int64_t>(utc) + timeZoneMinutes * 60));
+    s << lib::zeroPadded(t.hour, 2) << ':' << lib::zeroPadded(t.minute, 2);
     return s;
 }
+// What each row of the home screen shows.
+services::HomeLayout homeLayout;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
@@ -525,6 +455,11 @@ struct HeardCall
 };
 HeardCall heard;
 char callChannel[Channel::NameBytes + 1] = {};
+// The last call heard, for the home screen: the caller's name (empty when
+// not known), ID, and when the call ended (0 for none).
+char lastCaller[CodeplugSource::ContactNameBytes + 1] = {};
+std::uint32_t lastCallerId = 0;
+os::Ticks lastCallAt = 0;
 // Roaming: the roaming zone, how many repeaters it has, and the repeater
 // the radio task last reported.
 std::uint8_t roamingZone = services::RoamingSettings::NoZone;
@@ -619,6 +554,8 @@ services::KeyFunction sideShort[CodeplugSettings::SideKeys] = {};
 services::KeyFunction sideLong[CodeplugSettings::SideKeys] = {};
 bool sideLongDone[CodeplugSettings::SideKeys] = {};
 constexpr os::Ticks CallHoldMs = 5000;
+// How long the home screen shows a signal's level after it was last read.
+constexpr os::Ticks SignalHoldMs = 2000;
 constexpr std::uint32_t AllCallId = 0xFFFFFF;
 
 template <std::size_t N>
@@ -629,6 +566,41 @@ void copyName(char (&out)[N], const char *text)
         out[n] = text[n];
     }
     out[n] = '\0';
+}
+
+// The channel's contact as the home screen names it ("TG 9", and the
+// contact's name), looked up again only when the contact changes.
+char talkgroupText[16] = {};
+char talkgroupName[CodeplugSource::ContactNameBytes + 1] = {};
+services::dmr::Target talkgroupFor{services::dmr::CallType::All, 0xFFFFFFFF};
+
+// A DMR channel with a contact to call.
+bool hasTalkgroup(const Channel &c)
+{
+    return c.digital() && (c.dmr.contact.id != 0 || c.dmr.contact.type == services::dmr::CallType::All);
+}
+
+void nameTalkgroup(const services::dmr::Target &t)
+{
+    if (t == talkgroupFor) {
+        return;
+    }
+    talkgroupFor = t;
+    lib::StaticString<16> text;
+    if (t.type == services::dmr::CallType::All) {
+        text << "ALL CALL";
+    } else {
+        text << (t.type == services::dmr::CallType::Group ? "TG " : "PC ") << t.id;
+    }
+    const std::size_t n = std::min(text.view().size(), sizeof(talkgroupText) - 1);
+    std::copy_n(text.view().data(), n, talkgroupText);
+    talkgroupText[n] = '\0';
+    talkgroupName[0] = '\0';
+    std::array<char, CodeplugSource::ContactNameBytes + 1> name{};
+    if (t.type != services::dmr::CallType::All && codeplug != nullptr &&
+        codeplug->contactName(t.id, t.type == services::dmr::CallType::Group, name)) {
+        copyName(talkgroupName, name.data());
+    }
 }
 
 // Names for a call from the codeplug: the caller's own contact entry
@@ -764,27 +736,6 @@ void showLog(Display &d)
     logView.draw(d, HeaderFont.height, true);
 }
 
-lib::StaticString<12> durationText(std::uint16_t seconds)
-{
-    lib::StaticString<12> text;
-    if (seconds == 0) {
-        text << "Always";
-    } else if (seconds >= 3600) {
-        text << seconds / 3600 << " h";
-    } else if (seconds >= 60) {
-        text << seconds / 60 << " min";
-    } else {
-        text << seconds << " s";
-    }
-    return text;
-}
-
-const char *batterySaveText(std::uint8_t mode)
-{
-    constexpr const char *Texts[] = {"Off", "On", "Fast wake"};
-    return Texts[mode <= 2 ? mode : 1];
-}
-
 // A key, the knob, a signal or a transmission: the backlight comes on and
 // stays on for its time.
 void useLight(Display &d)
@@ -814,10 +765,13 @@ void uiMain(void *)
     // The codeplug: settings, and the channel the radio starts on.
     if (codeplug != nullptr) {
         static ChannelSelector selector(*codeplug);
+        selector.setAdjust(takeKeptChannel);
         selector.load();
         if (selector.current()) {
             channels = &selector;
             keyLock.setSettings(selector.settings().keyLock);
+            backlightLevel = selector.settings().backlightLevel;
+            d.setBacklight(backlightLevel);
             backlightS = selector.settings().backlightS;
             batterySave = selector.settings().batterySave;
             if (selector.settings().voiceEnhancement) {
@@ -837,6 +791,13 @@ void uiMain(void *)
             logLockSettings();
         } else {
             log::warning("ui") << "codeplug: no channel to start on";
+        }
+        if (const auto p = codeplug->preferences()) {
+            roamingOn = p->roaming;
+            homeLayout = p->home;
+        }
+        if (!roamingOn) {
+            radio::post(radio::RoamingOn{false});
         }
     }
 
@@ -876,7 +837,10 @@ void uiMain(void *)
         notice("Please wait...");
     };
     lib::StaticString<6> clockText;
-    os::Ticks lastClockMinute = 0;
+    lib::StaticString<12> lastCallerText;
+    // The home screen's live rows are checked this often.
+    constexpr os::Ticks HomeCheckMs = 250;
+    os::Ticks lastHomeCheck = 0;
     bool gpsScreenNeed = false;
     // Battery save also decides whether the GPS receiver sleeps between fixes.
     auto setBatterySave = [&](std::uint8_t mode) {
@@ -890,21 +854,70 @@ void uiMain(void *)
         s.receiving = receiving;
         s.locked = keyLock.locked() || keyLock.settings().forced;
         s.entry = std::string_view(entry, entryLength);
-        s.volume = volumeLevel;
         s.keys = quickKeys.view();
         s.gps = gpsState;
-        clockText = localClockText();
-        s.clock = clockText.view();
-        if (channels != nullptr) {
-            const std::optional<Channel> &ch = channels->current();
-            s.roaming = roamingOn && ch && ch->digital() && ch->roaming && roamingSites > 0;
+        s.layout = homeLayout;
+        services::HomeReadings &r = s.readings;
+        clockText.clear();
+        if (const auto utc = system::utcNow()) {
+            clockText = localClockText(*utc);
+            r.clockMinutes = (static_cast<std::int64_t>(*utc) + timeZoneMinutes * 60) / 60;
         }
+        s.clock = clockText.view();
+        r.volume = volumeLevel;
+        r.centivolts = (batteryState.millivolts + 5) / 10;
+        r.batteryLow = batteryState.low;
+        const Channel *ch = channels != nullptr && channels->current() ? &*channels->current() : nullptr;
+        s.roaming = roamingOn && ch != nullptr && ch->digital() && ch->roaming && roamingSites > 0;
         s.roamSearching = roam.searching;
         s.roamHz = roam.receiveHz;
         s.roamColourCode = roam.colourCode;
+        s.roamPosition = roam.site + 1;
         s.roamSite = roam.name;
+        if (ch != nullptr && hasTalkgroup(*ch)) {
+            nameTalkgroup(ch->dmr.contact);
+            s.talkgroup = talkgroupText;
+            s.talkgroupName = talkgroupName;
+        }
+        // The signal: a quiet roaming repeater's last level while it is
+        // fresh, else the level heard in the last moments.
+        const os::Ticks now = os::nowMs();
+        if (homeLayout.showsSignal()) {
+            if (s.roaming && !receiving && roam.site >= 0) {
+                radio::roamingView(roamView);
+                for (std::size_t i = 0; i < roamView.count; ++i) {
+                    const auto &e = roamView.entries[i];
+                    if (e.position == roam.site && e.fresh(now)) {
+                        r.signalKnown = true;
+                        r.signalDbm = e.levelDbm;
+                    }
+                }
+            }
+            const radio::SignalLevel level = radio::signalLevel();
+            if (!r.signalKnown && level.known && now - level.atMs < SignalHoldMs) {
+                r.signalKnown = true;
+                r.signalDbm = level.dbm;
+            }
+        }
+        if (lastCallAt != 0) {
+            r.lastCallAt = lastCallAt;
+            r.lastCallAge = services::ageOf((now - lastCallAt) / 1000);
+            s.lastCaller = lastCaller;
+            if (lastCaller[0] == '\0') {
+                lastCallerText.clear();
+                lastCallerText << lastCallerId;
+                s.lastCaller = lastCallerText.view();
+            }
+        }
+        if (gpsState.on && gpsState.fix.valid) {
+            r.positionKnown = true;
+            r.latitudeE5 = gpsState.fix.latitudeE7 / 100;
+            r.longitudeE5 = gpsState.fix.longitudeE7 / 100;
+        }
         return s;
     };
+    // The home screen is up, not the call screen.
+    auto homeShown = [&] { return view == View::Standby && !heard.shown && channels != nullptr; };
     auto callInfo = [&] {
         CallInfo c;
         c.active = heard.active;
@@ -933,6 +946,93 @@ void uiMain(void *)
         headerHeight = bar ? StandbyScreen::StatusH - 1 : HeaderFont.height;
         headerTop = bar ? 2 : 0;
     };
+    // The menu's settings as the radio has them now.
+    auto menuSettings = [&] {
+        menu::Settings s;
+        s.squelch = channels->squelch();
+        if (channels->current()) {
+            s.squelchMode = channels->current()->squelchMode;
+            s.power = channels->current()->power;
+        }
+        s.roaming = roamingOn;
+        s.roamZone = roamingZone;
+        s.backlight = static_cast<std::uint8_t>(backlightLevel);
+        s.backlightS = backlightS;
+        s.keyLock = keyLock.settings();
+        s.batterySave = batterySave;
+        s.gps = gpsState.on;
+        s.gpsSystems = gpsSystems;
+        s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
+        s.home = homeLayout;
+        return s;
+    };
+    // A row's value: the setting's, or the state of what the row opens.
+    auto rowValue = [&](menu::Row row, const menu::Settings &s) {
+        menu::ValueText t;
+        if (row.opensGroup()) {
+            return t;
+        }
+        switch (row.item) {
+        case menu::Item::RoamStatus:
+            radio::roamingView(roamView);
+            t << roamStateText(roamView).view();
+            break;
+        case menu::Item::GpsStatus:
+            t << (!gpsState.on ? "Off" : gpsState.asleep ? "Sleeping"
+                    : gpsState.fix.valid                 ? "Fix"
+                    : gpsState.receiving                 ? "Searching"
+                                                         : "No data");
+            break;
+        case menu::Item::RoamZone: {
+            std::array<char, CodeplugSource::ZoneNameBytes + 1> name{};
+            t << (roamingZone != services::RoamingSettings::NoZone && codeplug->roamingZoneName(roamingZone, name)
+                    ? std::string_view(name.data())
+                    : std::string_view("-"));
+            break;
+        }
+        default:
+            if (menu::info(row.item).kind == menu::Kind::Value) {
+                t = menu::valueText(row.item, menu::choiceOf(row.item, s));
+            }
+            break;
+        }
+        return t;
+    };
+    // The menu list: up to five rows around the one chosen, and the panel
+    // about it.
+    auto drawMenu = [&] {
+        static ListRow rows[MenuRows];
+        static menu::ValueText values[MenuRows];
+        const menu::GroupInfo &g = menuNav.groupInfo();
+        const std::size_t first = firstShown(menuNav.row(), g.rows.size(), MenuRows);
+        const menu::Settings s = menuSettings();
+        std::size_t n = 0;
+        for (; n < std::size(rows) && first + n < g.rows.size(); ++n) {
+            const menu::Row row = g.rows[first + n];
+            values[n] = rowValue(row, s);
+            rows[n] = {menu::label(row), values[n].view(), row.opensGroup() || menu::info(row.item).kind == menu::Kind::Screen};
+        }
+        std::string_view about1;
+        std::string_view about2;
+        lib::StaticString<24> uptime;
+        if (menuNav.current().item == menu::Item::Version) {
+            uptime << "up " << os::nowMs() / 60'000 << " min";
+            about1 = Version;
+            about2 = uptime.view();
+        } else {
+            menu::splitAbout(menu::about(menuNav.current()), about1, about2);
+        }
+        drawMenuScreen(d, menu::groupTitle(menuNav.group()).view(), std::span(rows, n), first, g.rows.size(), menuNav.row(),
+            about1, about2, menuNav.hint());
+    };
+    auto drawMenuValue = [&] {
+        drawValueScreen(d, menu::valueTitle(menuNav.group(), menuNav.current().item).view(), menuNav.choices(),
+            menuNav.cursor(), menuNav.inUse(), menuNav.hint());
+    };
+    // The key hint under the zone list and the roaming status.
+    auto listHint = [&]() -> std::string_view {
+        return view == View::RoamStatus ? "Menu: search   Exit: back" : "Menu: use   Exit: back";
+    };
     auto redrawView = [&] {
         // A full redraw covers any notice: the next one is drawn whole.
         noticeShown = false;
@@ -950,10 +1050,18 @@ void uiMain(void *)
             standby.drawStatus(d, standbyState());
             drawBattery(d);
             drawGpsScreen(d, gpsState, true);
+        } else if (view == View::Menu) {
+            standby.drawStatus(d, standbyState());
+            drawBattery(d);
+            if (menuNav.choosing()) {
+                drawMenuValue();
+            } else {
+                drawMenu();
+            }
         } else if (isList(view)) {
             standby.drawStatus(d, standbyState());
             drawBattery(d);
-            listOf(view).draw(d, StandbyScreen::StatusH);
+            zonePicker.draw(d, listHint());
         } else if (view == View::Log) {
             showLog(d);
         } else if (view == View::KeyTest) {
@@ -983,254 +1091,38 @@ void uiMain(void *)
             drawBattery(d);
         }
     };
-    // One item's label and current value.
-    auto itemRow = [&](MenuItem item, const char *&label, lib::StaticString<12> &value) {
-        constexpr const char *Powers[] = {"Low", "Mid", "High", "Turbo"};
-        const services::KeyLockSettings &k = keyLock.settings();
-        switch (item) {
-        case MenuItem::Squelch:
-            label = "Squelch";
-            if (channels->squelch() == 0) {
-                value << "Open";
-            } else {
-                value << channels->squelch();
-            }
-            break;
-        case MenuItem::SquelchMode:
-            label = "Sq type";
-            value << (channels->current() && channels->current()->squelchMode == SquelchMode::Tone ? "Tone" : "Carrier");
-            break;
-        case MenuItem::Power:
-            label = "Power";
-            value << (channels->current() ? Powers[static_cast<int>(channels->current()->power)] : "-");
-            break;
-        case MenuItem::Roaming:
-            label = "Roaming";
-            value << (roamingOn ? "On" : "Off");
-            break;
-        case MenuItem::RoamStatus: {
-            label = "Roam status";
-            radio::roamingView(roamView);
-            value << roamStateText(roamView).view();
-            break;
-        }
-        case MenuItem::RoamZone: {
-            label = "Roam zone";
-            std::array<char, CodeplugSource::ZoneNameBytes + 1> name{};
-            value << (roamingZone != services::RoamingSettings::NoZone && codeplug->roamingZoneName(roamingZone, name)
-                    ? std::string_view(name.data())
-                    : std::string_view("-"));
-            break;
-        }
-        case MenuItem::Backlight:
-            label = "Backlight";
-            value << backlightLevel;
-            break;
-        case MenuItem::BacklightTime:
-            label = "Light time";
-            value << durationText(backlightS).view();
-            break;
-        case MenuItem::BatterySave:
-            label = "Battery save";
-            value << batterySaveText(batterySave);
-            break;
-        case MenuItem::KeyLock:
-            label = "Lock covers";
-            value << (k.knob ? "All" : k.keypad && k.side ? "Keys+PTT"
-                    : k.keypad                            ? "Keypad"
-                                                          : "Side+PTT");
-            break;
-        case MenuItem::AutoLock:
-            label = "Auto lock";
-            if (k.autoLockMs == 0) {
-                value << "Off";
-            } else {
-                value << k.autoLockMs / 1000 << " s";
-            }
-            break;
-        case MenuItem::Gps:
-            label = "GPS";
-            value << (gpsState.on ? "On" : "Off");
-            break;
-        case MenuItem::GpsSystems:
-            label = "Systems";
-            value << services::gps_systems::name(gpsSystems);
-            break;
-        case MenuItem::ClockZone:
-            label = "Zone";
-            value << zoneText(timeZoneMinutes).view();
-            break;
-        case MenuItem::GpsStatus:
-            label = "Status";
-            value << (!gpsState.on ? "Off" : gpsState.asleep ? "Sleeping"
-                    : gpsState.fix.valid                     ? "Fix"
-                    : gpsState.receiving                     ? "Searching"
-                                                             : "No data");
-            break;
-        case MenuItem::Count:
-            break;
-        }
-    };
-    // The top of the menu: the groups.
-    auto openMenu = [&] {
-        menu.open("Menu");
-        for (std::uint8_t g = 0; g < static_cast<std::uint8_t>(MenuGroup::Count); ++g) {
-            menu.add(g, Groups[g].name, ">");
-        }
-        menu.select(static_cast<std::uint8_t>(menuGroup));
-        menuAtGroups = true;
-        menuQuick = false;
-        view = View::Menu;
-        redrawView();
-    };
-    // One group's settings, each with its current value.
-    auto openGroup = [&](MenuGroup group, bool quick) {
-        const GroupInfo &g = Groups[static_cast<int>(group)];
-        menuGroup = group;
-        menu.open(g.name);
-        for (std::uint8_t i = 0; i < g.count; ++i) {
-            const char *label = "";
-            lib::StaticString<12> value;
-            itemRow(g.items[i], label, value);
-            menu.add(static_cast<std::uint8_t>(g.items[i]), label, value.view());
-        }
-        menu.select(static_cast<std::uint8_t>(menuItem));
-        menuAtGroups = false;
-        menuQuick = quick;
-        view = View::Menu;
-        redrawView();
-    };
-    auto openMenuValue = [&](MenuItem item) {
-        menuItem = item;
-        switch (item) {
-        case MenuItem::Squelch:
-            menuValue.open("Squelch");
-            menuValue.add(0, "Open");
-            for (std::uint8_t i = 1; i <= 5; ++i) {
-                lib::StaticString<4> s;
-                s << i;
-                menuValue.add(i, s.view());
-            }
-            menuValue.select(channels->squelch());
-            break;
-        case MenuItem::SquelchMode:
-            menuValue.open("Sq type");
-            menuValue.add(0, "Carrier");
-            menuValue.add(1, "Tone");
-            if (channels->current()) {
-                menuValue.select(channels->current()->squelchMode == SquelchMode::Tone ? 1 : 0);
-            }
-            break;
-        case MenuItem::Power:
-            menuValue.open("Power");
-            menuValue.add(0, "Low");
-            menuValue.add(1, "Mid");
-            menuValue.add(2, "High");
-            menuValue.add(3, "Turbo");
-            if (channels->current()) {
-                menuValue.select(static_cast<std::uint8_t>(channels->current()->power));
-            }
-            break;
-        case MenuItem::Roaming:
-            menuValue.open("Roaming");
-            menuValue.add(0, "Off");
-            menuValue.add(1, "On");
-            menuValue.select(roamingOn ? 1 : 0);
-            break;
-        case MenuItem::RoamStatus:
-            zonePicker.open("Roaming");
-            fillRoamStatus(zonePicker);
-            show(View::RoamStatus);
-            return;
-        case MenuItem::RoamZone: {
-            menuValue.open("Roam zone");
-            std::uint8_t zones[CodeplugSource::MaxRoamingZones];
-            const std::size_t n = codeplug->roamingZones(zones);
-            for (std::size_t i = 0; i < n; ++i) {
-                std::array<char, CodeplugSource::ZoneNameBytes + 1> name{};
-                codeplug->roamingZoneName(zones[i], name);
-                menuValue.add(zones[i], name.data());
-            }
-            if (n == 0) {
-                menuValue.add(services::RoamingSettings::NoZone, "None");
-            }
-            menuValue.select(roamingZone);
-            break;
-        }
-        case MenuItem::Backlight:
-            menuValue.open("Backlight");
-            for (std::uint8_t i = 1; i <= Display::BacklightLevels; ++i) {
-                lib::StaticString<4> s;
-                s << i;
-                menuValue.add(i, s.view());
-            }
-            menuValue.select(static_cast<std::uint8_t>(backlightLevel));
-            break;
-        case MenuItem::BacklightTime:
-            menuValue.open("Light time");
-            for (std::uint8_t i = 0; i < std::size(BacklightTimes); ++i) {
-                menuValue.add(i, durationText(BacklightTimes[i]).view());
-                if (BacklightTimes[i] == backlightS) {
-                    menuValue.select(i);
-                }
-            }
-            break;
-        case MenuItem::BatterySave:
-            menuValue.open("Battery save");
-            menuValue.add(0, "Off");
-            menuValue.add(1, "On", "150 ms");
-            menuValue.add(2, "Fast wake", "70 ms");
-            menuValue.select(batterySave);
-            break;
-        case MenuItem::KeyLock:
-            menuValue.open("Lock covers");
-            menuValue.add(0, "All");
-            menuValue.add(1, "Keys+PTT");
-            menuValue.add(2, "Keypad");
-            menuValue.add(3, "Side+PTT");
-            break;
-        case MenuItem::AutoLock:
-            menuValue.open("Auto lock");
-            menuValue.add(0, "Off");
-            menuValue.add(10, "10 s");
-            menuValue.add(30, "30 s");
-            menuValue.add(60, "60 s");
-            menuValue.select(static_cast<std::uint8_t>(keyLock.settings().autoLockMs / 1000));
-            break;
-        case MenuItem::Gps:
-            menuValue.open("GPS");
-            menuValue.add(0, "Off");
-            menuValue.add(1, "On");
-            menuValue.select(gpsState.on ? 1 : 0);
-            break;
-        case MenuItem::GpsSystems: {
-            namespace g = services::gps_systems;
-            menuValue.open("Systems");
-            menuValue.add(g::Gps | g::Beidou, "GPS + BeiDou");
-            menuValue.add(g::Gps, "GPS");
-            menuValue.add(g::Beidou, "BeiDou");
-            menuValue.add(g::Gps | g::Glonass, "GPS + GLONASS");
-            menuValue.add(g::Glonass, "GLONASS");
-            menuValue.add(g::Beidou | g::Glonass, "BeiDou + GLONASS");
-            menuValue.add(g::All, "All three");
-            menuValue.select(gpsSystems);
-            break;
-        }
-        case MenuItem::ClockZone:
-            menuValue.open("Zone");
-            for (int i = 0; i < ZoneSteps; ++i) {
-                menuValue.add(static_cast<std::uint8_t>(i), zoneText((i - 24) * 30).view());
-            }
-            menuValue.select(static_cast<std::uint8_t>(timeZoneMinutes / 30 + 24));
-            break;
-        case MenuItem::GpsStatus:
-            show(View::Gps);
-            return;
-        case MenuItem::Count:
+    // Changes kept in the codeplug; the store writes them after a quiet time.
+    auto keepSettings = [&] {
+        if (settingsStore == nullptr || channels == nullptr) {
             return;
         }
-        view = View::MenuValue;
-        redrawView();
+        CodeplugSettings s = channels->settings();
+        s.keyLock = keyLock.settings();
+        s.batterySave = batterySave;
+        s.backlightS = backlightS;
+        if (backlightLevel >= 1) {
+            s.backlightLevel = static_cast<std::uint8_t>(backlightLevel);
+        }
+        s.gps = gpsAtStart;
+        s.gpsSystems = gpsSystems;
+        s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
+        s.roaming.zone = roamingZone;
+        settingsStore->keepSettings(s, os::nowMs());
+    };
+    auto keepPreferences = [&] {
+        if (settingsStore != nullptr) {
+            services::RadioPreferences p;
+            p.roaming = roamingOn;
+            p.home = homeLayout;
+            settingsStore->keepPreferences(p, os::nowMs());
+        }
+    };
+    auto keepChannel = [&] {
+        if (settingsStore != nullptr && channels != nullptr && channels->current() &&
+            channels->channelIndex() != CodeplugSource::NoChannel) {
+            const Channel &c = *channels->current();
+            settingsStore->keepChannel(channels->channelIndex(), c.power, c.squelchMode, os::nowMs());
+        }
     };
     auto useChannel = [&] {
         if (channels == nullptr || !channels->current()) {
@@ -1247,6 +1139,10 @@ void uiMain(void *)
         radio::post(radio::UseChannel{c, channels->squelch()});
         if (view == View::Standby) {
             redrawView();
+        }
+        if (settingsStore != nullptr && !channels->vfoMode()) {
+            settingsStore->keepZone(channels->sideB(), channels->zone(),
+                static_cast<std::uint16_t>(channels->position() - 1), os::nowMs());
         }
     };
     auto tuneEntry = [&] {
@@ -1272,89 +1168,168 @@ void uiMain(void *)
         zonePicker.select(channels->zone());
         show(View::ZonePicker);
     };
-    // The value chosen in the menu takes effect at once, for this session.
-    auto applyMenuValue = [&] {
-        const std::uint8_t v = menuValue.chosen();
-        switch (menuItem) {
-        case MenuItem::Squelch:
-            channels->setSquelch(v);
-            log::info("ui") << "squelch " << v;
-            break;
-        case MenuItem::SquelchMode:
-            channels->setSquelchMode(v == 1 ? SquelchMode::Tone : SquelchMode::Carrier);
-            log::info("ui") << "squelch opens on " << (v == 1 ? "the tone" : "the carrier");
-            break;
-        case MenuItem::Power:
-            channels->setPower(static_cast<PowerLevel>(v));
-            log::info("ui") << "power " << v;
-            break;
-        case MenuItem::Roaming:
-            roamingOn = v == 1;
+    // Puts the menu's settings @p s into use where they differ from the
+    // radio's.
+    auto useSettings = [&](const menu::Settings &s) {
+        const menu::Settings was = menuSettings();
+        bool channel = false;
+        if (s.squelch != was.squelch) {
+            channels->setSquelch(s.squelch);
+            log::info("ui") << "squelch " << s.squelch;
+            channel = true;
+        }
+        if (s.squelchMode != was.squelchMode) {
+            channels->setSquelchMode(s.squelchMode);
+            log::info("ui") << "squelch opens on " << (s.squelchMode == SquelchMode::Tone ? "the tone" : "the carrier");
+            channel = true;
+        }
+        if (s.power != was.power) {
+            channels->setPower(s.power);
+            log::info("ui") << "power " << static_cast<int>(s.power);
+            channel = true;
+        }
+        if (s.roaming != was.roaming) {
+            roamingOn = s.roaming;
             radio::post(radio::RoamingOn{roamingOn});
-            break;
-        case MenuItem::RoamStatus:
-            break;
-        case MenuItem::RoamZone:
-            if (v != roamingZone) {
-                roamingZone = v;
-                loadRoamingSites();
-                log::info("ui") << "roaming zone " << v << ", " << roamingSites << " repeaters";
-            }
-            break;
-        case MenuItem::Backlight:
-            backlightLevel = v;
-            d.setBacklight(v);
-            break;
-        case MenuItem::BacklightTime:
-            backlightS = BacklightTimes[v < std::size(BacklightTimes) ? v : 0];
-            log::info("ui") << "light time " << durationText(backlightS).view();
-            break;
-        case MenuItem::BatterySave:
-            setBatterySave(v);
-            break;
-        case MenuItem::KeyLock: {
-            services::KeyLockSettings s = keyLock.settings();
-            s.keypad = v != 3;
-            s.side = v != 2;
-            s.knob = v == 0;
-            keyLock.setSettings(s);
-            logLockSettings();
-            break;
+            log::info("ui") << "roaming " << (roamingOn ? "on" : "off");
+            channel = true;
         }
-        case MenuItem::AutoLock: {
-            services::KeyLockSettings s = keyLock.settings();
-            s.autoLockMs = static_cast<std::uint32_t>(v) * 1000;
-            keyLock.setSettings(s);
-            logLockSettings();
-            break;
+        if (s.roamZone != was.roamZone) {
+            roamingZone = s.roamZone;
+            loadRoamingSites();
+            log::info("ui") << "roaming zone " << roamingZone << ", " << roamingSites << " repeaters";
+            channel = true;
         }
-        case MenuItem::Gps:
+        if (s.backlight != was.backlight) {
+            backlightLevel = s.backlight;
+            d.setBacklight(backlightLevel);
+        }
+        if (s.backlightS != was.backlightS) {
+            backlightS = s.backlightS;
+            log::info("ui") << "light time " << menu::valueText(menu::Item::BacklightTime, backlightS).view();
+        }
+        if (s.keyLock != was.keyLock) {
+            keyLock.setSettings(s.keyLock);
+            logLockSettings();
+        }
+        if (s.batterySave != was.batterySave) {
+            setBatterySave(s.batterySave);
+        }
+        if (s.gps != was.gps) {
             // The menu shows the new value before the gps task reports it.
-            gpsState.on = v == 1;
-            gps::post(gps::Power{v == 1});
-            break;
-        case MenuItem::GpsSystems:
-            gpsSystems = v;
-            gps::post(gps::Systems{v});
-            break;
-        case MenuItem::ClockZone:
-            timeZoneMinutes = (v - 24) * 30;
-            log::info("ui") << "time zone " << zoneText(timeZoneMinutes).view();
-            break;
-        case MenuItem::GpsStatus:
-        case MenuItem::Count:
-            break;
+            gpsState.on = s.gps;
+            gpsAtStart = s.gps;
+            gps::post(gps::Power{s.gps});
         }
-        if (menuItem == MenuItem::Squelch || menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power ||
-            menuItem == MenuItem::Roaming || menuItem == MenuItem::RoamZone) {
+        if (s.gpsSystems != was.gpsSystems) {
+            gpsSystems = s.gpsSystems;
+            gps::post(gps::Systems{gpsSystems});
+        }
+        if (s.timeZoneMinutes != was.timeZoneMinutes) {
+            timeZoneMinutes = s.timeZoneMinutes;
+            log::info("ui") << "time zone " << menu::valueText(menu::Item::TimeZone, timeZoneMinutes).view();
+        }
+        if (s.home != was.home) {
+            homeLayout = s.home;
+            log::info("ui") << "home screen "
+                            << menu::valueText(menu::Item::HomePreset, menu::choiceOf(menu::Item::HomePreset, s)).view();
+        }
+        if (channel) {
             useChannel();
         }
-        // Back to the list it came from, showing the new value; straight to
-        // the standby screen when opened from there.
-        if (menuQuick) {
+    };
+    // The value chosen in the menu takes effect at once and is kept in the
+    // codeplug.
+    auto applyMenuValue = [&](menu::Item item, std::int32_t value) {
+        menu::Settings s = menuSettings();
+        menu::setChoice(item, value, s);
+        useSettings(s);
+        switch (menu::keptIn(item)) {
+        case menu::Kept::Settings:
+            keepSettings();
+            break;
+        case menu::Kept::Preferences:
+            keepPreferences();
+            break;
+        case menu::Kept::Channel:
+            keepChannel();
+            break;
+        case menu::Kept::No:
+            break;
+        }
+    };
+    // Lists the choices that come from the codeplug.
+    auto listCodeplugChoices = [&](menu::Item item, menu::Choices &out) {
+        if (item != menu::Item::RoamZone) {
+            return;
+        }
+        std::uint8_t zones[CodeplugSource::MaxRoamingZones];
+        const std::size_t n = codeplug->roamingZones(zones);
+        for (std::size_t i = 0; i < n; ++i) {
+            std::array<char, CodeplugSource::ZoneNameBytes + 1> name{};
+            codeplug->roamingZoneName(zones[i], name);
+            out.add(zones[i], name.data());
+        }
+        if (n == 0) {
+            out.add(services::RoamingSettings::NoZone, "None");
+        }
+    };
+    // The screen a menu row opens.
+    auto showItem = [&](menu::Item item) {
+        switch (item) {
+        case menu::Item::RoamStatus:
+            zonePicker.open("Roaming");
+            fillRoamStatus(zonePicker);
+            show(View::RoamStatus);
+            break;
+        case menu::Item::GpsStatus:
+            show(View::Gps);
+            break;
+        case menu::Item::Log:
+            show(View::Log);
+            break;
+        case menu::Item::KeyTest:
+            show(View::KeyTest);
+            break;
+        default:
+            break;
+        }
+    };
+    // Carries out what a key or the knob did in the menu.
+    auto menuStep = [&](menu::Navigator::Step step) {
+        using Step = menu::Navigator::Step;
+        switch (step) {
+        case Step::None:
+            break;
+        case Step::Moved:
+            if (menuNav.choosing()) {
+                drawMenuValue();
+            } else {
+                drawMenu();
+            }
+            break;
+        case Step::Opened:
+            show(View::Menu);
+            break;
+        case Step::Choose: {
+            const menu::Item item = menuNav.current().item;
+            if (!menu::listChoices(item, menuNav.choices())) {
+                listCodeplugChoices(item, menuNav.choices());
+            }
+            menuNav.choose(menu::choiceOf(item, menuSettings()));
+            show(View::Menu);
+            break;
+        }
+        case Step::Set:
+            applyMenuValue(menuNav.current().item, menuNav.chosen());
+            show(menuNav.isOpen() ? View::Menu : View::Standby);
+            break;
+        case Step::Show:
+            showItem(menuNav.current().item);
+            break;
+        case Step::Left:
             show(View::Standby);
-        } else {
-            openGroup(menuGroup, false);
+            break;
         }
     };
     // A key on the standby screen or the zone list, after the lock let it
@@ -1363,45 +1338,27 @@ void uiMain(void *)
         using Type = KeyDebouncer::EventType;
         const bool press = type == Type::Press;
         const bool step = press || type == Type::Repeat;
-        if (view == View::Menu || view == View::MenuValue) {
-            ListPicker &list = view == View::Menu ? menu : menuValue;
-            if (step && (key == Key::Up || key == Key::Down)) {
-                list.move(key == Key::Up ? -1 : 1);
-                list.draw(d, StandbyScreen::StatusH);
-            } else if (press && key == Key::Menu) {
-                if (view == View::MenuValue) {
-                    applyMenuValue();
-                } else if (menuAtGroups) {
-                    openGroup(static_cast<MenuGroup>(menu.chosen()), false);
-                } else {
-                    openMenuValue(static_cast<MenuItem>(menu.chosen()));
-                }
-            } else if (press && key == Key::Exit) {
-                if (view == View::MenuValue) {
-                    openGroup(menuGroup, menuQuick);
-                } else if (!menuAtGroups && !menuQuick) {
-                    openMenu();
-                } else {
-                    show(View::Standby);
-                }
+        if (view == View::Menu) {
+            if ((step && (key == Key::Up || key == Key::Down)) || (press && (key == Key::Menu || key == Key::Exit))) {
+                menuStep(menuNav.press(key));
             }
             return;
         }
         if (view == View::RoamStatus) {
             if (step && (key == Key::Up || key == Key::Down)) {
                 zonePicker.move(key == Key::Up ? -1 : 1);
-                zonePicker.draw(d, StandbyScreen::StatusH);
+                zonePicker.draw(d, listHint());
             } else if (press && key == Key::Menu && zonePicker.chosen() == SearchNowRow) {
                 radio::post(radio::RoamNow{});
             } else if (press && key == Key::Exit) {
-                openGroup(menuGroup, menuQuick);
+                show(View::Menu);
             }
             return;
         }
         if (view == View::ZonePicker) {
             if (step && (key == Key::Up || key == Key::Down)) {
                 zonePicker.move(key == Key::Up ? -1 : 1);
-                zonePicker.draw(d, StandbyScreen::StatusH);
+                zonePicker.draw(d, listHint());
             } else if (press && (key == Key::Menu || key == Key::Front1)) {
                 channels->selectZone(zonePicker.chosen());
                 show(View::Standby);
@@ -1441,7 +1398,8 @@ void uiMain(void *)
         } else if (press && key == Key::Menu && entryLength > 0) {
             tuneEntry();
         } else if (press && key == Key::Menu) {
-            openMenu();
+            menuNav.open();
+            show(View::Menu);
         } else if (press && key == Key::Exit && entryLength > 0) {
             entryLength = 0;
             redrawView();
@@ -1459,7 +1417,8 @@ void uiMain(void *)
             openZonePicker();
         } else if (press && key == Key::Front2) {
             entryLength = 0;
-            openGroup(MenuGroup::Channel, true);
+            menuNav.open(menu::Group::Channel, true);
+            show(View::Menu);
         }
     };
     // A side key's function: on the press when it has no long-press
@@ -1510,6 +1469,16 @@ void uiMain(void *)
     };
 
     while (!os::stopRequested()) {
+        if (settingsStore != nullptr) {
+            const services::SaveResult saved = settingsStore->flush(os::nowMs());
+            if (saved == services::SaveResult::Saved) {
+                log::info("ui") << "settings kept in the codeplug";
+            } else if (saved == services::SaveResult::Busy) {
+                log::info("ui") << "settings wait: the PC is programming";
+            } else if (saved == services::SaveResult::Failed) {
+                log::warning("ui") << "settings not kept: the codeplug write failed";
+            }
+        }
         Message m;
         if (inbox.receive(m, RedrawStepMs)) {
             auto refreshValues = [&] {
@@ -1529,7 +1498,8 @@ void uiMain(void *)
                            [&](const BacklightTime &t) {
                                backlightS = t.seconds;
                                useLight(d);
-                               log::info("ui") << "light time " << durationText(backlightS).view();
+                               log::info("ui") << "light time " << menu::valueText(menu::Item::BacklightTime, backlightS).view();
+                               keepSettings();
                            },
                            [&](const ShowTestPattern &) {
                                drawTestPattern(d);
@@ -1589,7 +1559,7 @@ void uiMain(void *)
                                }
                                if (view == View::Gps) {
                                    if (e.type == Type::Press && (e.key == Key::Exit || e.key == Key::Menu)) {
-                                       openGroup(MenuGroup::Gps, false);
+                                       show(View::Menu);
                                    }
                                    return;
                                }
@@ -1623,6 +1593,9 @@ void uiMain(void *)
                                } else if (heard.active) {
                                    heard.active = false;
                                    heard.ended = os::nowMs();
+                                   copyName(lastCaller, heard.caller);
+                                   lastCallerId = heard.source;
+                                   lastCallAt = heard.ended;
                                }
                                if (view == View::Standby && !noticeShown) {
                                    redrawView();
@@ -1642,6 +1615,11 @@ void uiMain(void *)
                                if (view == View::Standby && !heard.shown && !noticeShown) {
                                    redrawView();
                                }
+                               // The Roaming group's status value.
+                               if (view == View::Menu && !menuNav.choosing() && menuNav.group() == menu::Group::Roaming &&
+                                   !noticeShown) {
+                                   drawMenu();
+                               }
                            },
                            [&](const Notice &n) {
                                if (view != View::Start) {
@@ -1659,13 +1637,43 @@ void uiMain(void *)
                                logLockSettings();
                                notice(s.locked ? "Keys locked" : "Keys unlocked");
                            },
-                           [&](const BatterySave &b) { setBatterySave(b.mode); },
+                           [&](const BatterySave &b) {
+                               setBatterySave(b.mode);
+                               keepSettings();
+                           },
                            [&](const KeyLockSettings &s) {
                                keyLock.setSettings(s.settings);
                                refreshLockMark();
                                logLockSettings();
                            },
                            [&](const KeyLockReport &) { logLockSettings(); },
+                           [&](const SettingsReport &) {
+                               if (settingsStore != nullptr) {
+                                   settingsStore->report();
+                               }
+                               if (codeplug == nullptr) {
+                                   return;
+                               }
+                               // As the codeplug holds them now.
+                               if (const auto s = codeplug->settings()) {
+                                   log::info("ui") << "codeplug: squelch " << s->squelchA << '/' << s->squelchB << ", zone "
+                                                   << s->zoneA << '/' << s->zoneB << ", light " << s->backlightLevel << ' '
+                                                   << menu::valueText(menu::Item::BacklightTime, s->backlightS).view() << ", battery save "
+                                                   << s->batterySave << ", auto lock " << s->keyLock.autoLockMs / 1000
+                                                   << " s, GPS " << (s->gps ? "on" : "off") << " systems "
+                                                   << s->gpsSystems << ", " << menu::valueText(menu::Item::TimeZone, s->timeZoneMinutes).view()
+                                                   << ", roaming zone " << s->roaming.zone;
+                               }
+                               if (const auto p = codeplug->preferences()) {
+                                   const services::HomeLayout &h = p->home;
+                                   log::info("ui") << "preferences record: roaming " << (p->roaming ? "on" : "off")
+                                                   << ", home screen " << static_cast<int>(h.top) << ' ' << (h.clock ? 1 : 0)
+                                                   << ' ' << static_cast<int>(h.big) << ' ' << static_cast<int>(h.middle)
+                                                   << ' ' << static_cast<int>(h.beside) << ' ' << static_cast<int>(h.bottom);
+                               } else {
+                                   log::info("ui") << "no preferences record";
+                               }
+                           },
                            [&](const EncoderClicks &c) {
                                useLight(d);
                                if (!hardwareUp()) {
@@ -1683,10 +1691,11 @@ void uiMain(void *)
                                keyTest.setClicks(c.clicks);
                                refreshValues();
                                if (channels != nullptr && moved != 0) {
-                                   if (isList(view)) {
-                                       ListPicker &list = listOf(view);
-                                       list.move(moved);
-                                       list.draw(d, StandbyScreen::StatusH);
+                                   if (view == View::Menu) {
+                                       menuStep(menuNav.turn(moved));
+                                   } else if (isList(view)) {
+                                       zonePicker.move(moved);
+                                       zonePicker.draw(d, listHint());
                                    } else if (view == View::Standby) {
                                        entryLength = 0;
                                        if (channels->vfoMode()) {
@@ -1714,10 +1723,8 @@ void uiMain(void *)
                                }
                                volumeLevel = step;
                                if (changed && view == View::Standby) {
-                                   // Only what changes: the status bar's volume
-                                   // field, and the notice's number and bar once
-                                   // it is up.
-                                   standby.drawVolume(d, standbyState());
+                                   // Only what changes: the notice's number and
+                                   // bar once it is up.
                                    drawVolumeNotice(d, step, !(noticeShown && volumeNoticeUp));
                                    noticeShown = true;
                                    volumeNoticeUp = true;
@@ -1725,8 +1732,13 @@ void uiMain(void *)
                                }
                            },
                            [&](const Battery &b) {
+                               // The icon only when its fill or colour changes.
+                               const BatteryState before = batteryState;
                                batteryState = {b.millivolts, b.level, b.low};
-                               if (view != View::Start && view != View::TestPattern && view != View::Message) {
+                               const bool iconChanged = b.level != before.level || b.low != before.low ||
+                                   (b.millivolts > 0) != (before.millivolts > 0);
+                               if (iconChanged && view != View::Start && view != View::TestPattern &&
+                                   view != View::Message) {
                                    drawBattery(d);
                                }
                            },
@@ -1744,10 +1756,10 @@ void uiMain(void *)
                                    }
                                } else if (tagChanged) {
                                    refreshLockMark();
-                                   // The GPS group's status value, keeping the cursor.
-                                   if (view == View::Menu && !menuAtGroups && menuGroup == MenuGroup::Gps) {
-                                       menuItem = static_cast<MenuItem>(menu.chosen());
-                                       openGroup(MenuGroup::Gps, menuQuick);
+                                   // The GPS group's status value.
+                                   if (view == View::Menu && !menuNav.choosing() && menuNav.group() == menu::Group::Gps &&
+                                       !noticeShown) {
+                                       drawMenu();
                                    }
                                }
                            },
@@ -1800,15 +1812,11 @@ void uiMain(void *)
             gpsScreenNeed = view == View::Gps;
             gps::post(gps::Need{services::GpsSchedule::Client::Screen, gpsScreenNeed ? 1000u : 0u});
         }
-        // The status bar's clock moves on each minute.
-        if (const auto utc = system::utcNow()) {
-            const os::Ticks minute = *utc / 60;
-            if (minute != lastClockMinute) {
-                lastClockMinute = minute;
-                if (!noticeShown) {
-                    refreshLockMark();
-                }
-            }
+        // The home screen's rows that change by themselves: only those whose
+        // values changed are drawn again.
+        if (homeShown() && !noticeShown && os::nowMs() - lastHomeCheck >= HomeCheckMs) {
+            lastHomeCheck = os::nowMs();
+            standby.refresh(d, *channels, standbyState());
         }
         // The call screen: its time each second, back to standby a moment
         // after the call.
@@ -1827,7 +1835,7 @@ void uiMain(void *)
             if (second != lastSecond) {
                 lastSecond = second;
                 fillRoamStatus(zonePicker);
-                zonePicker.draw(d, StandbyScreen::StatusH);
+                zonePicker.draw(d, listHint());
             }
         }
         if (view == View::Log) {
@@ -1845,11 +1853,12 @@ void uiMain(void *)
 
 } // namespace
 
-void start(Display &d, CodeplugSource *c, const board::Input *i)
+void start(Display &d, CodeplugSource *c, const board::Input *i, board::SettingsStore *k)
 {
     display = &d;
     codeplug = c;
     input = i;
+    settingsStore = k;
     log::setTap(onLogLine);
     uiTask.start("ui", 4, uiMain, nullptr);
 }

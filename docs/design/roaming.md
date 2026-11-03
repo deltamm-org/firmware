@@ -382,8 +382,8 @@ on by itself, and the user only talks.
 - A move to another repeater changes that line; there is no notice.
 - `Out of range` when the range check gives up on the repeater, as often
   as the codeplug asks.
-- **A roaming screen for field debugging** (Menu > Channel > Roam
-  status): the repeater in use and its state (`2 Good`), then each
+- **A roaming screen for field debugging** (Menu > Roaming >
+  Status): the repeater in use and its state (`2 Good`), then each
   repeater heard: position, a star on the one in use, output frequency,
   beacon period once learned, level and its age. It updates every second,
   so a walk or drive shows what the radio sees. Its last row, Search

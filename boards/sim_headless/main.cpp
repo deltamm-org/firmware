@@ -156,6 +156,10 @@ int main(int argc, char *argv[])
     static SimStorage storage;
     static dmm::services::D878Uv2Calibration calibration;
     static dmm::services::D878Uv2Codeplug codeplug{storage};
+    static auto keep = [](std::span<const dmm::services::D878Uv2SettingsStore::Piece> pieces) {
+        return writeSettings(storage, codeplug, pieces);
+    };
+    static dmm::services::D878Uv2SettingsStore settingsStore{codeplug, keep};
     static SimAudio audio;
     static SimFm fm;
     static SimGps gps;
@@ -173,6 +177,7 @@ int main(int argc, char *argv[])
         .audio = &audio,
         .calibration = &calibration,
         .codeplug = &codeplug,
+        .settingsStore = &settingsStore,
         .gps = &gps,
         .rtc = &rtc,
     };
