@@ -119,6 +119,15 @@ TEST_CASE("the extended settings give the GPS satellite systems")
     e[0x35] = 9; // out of range: GPS and BeiDou
     dmm::services::decodeSettingsExtension(e, s);
     CHECK(s.gpsSystems == 3);
+    CHECK(s.fmMicrophoneLevel == 2); // a block too short for it: the middle one
+
+    e.resize(0x44);
+    e[0x43] = 4;
+    dmm::services::decodeSettingsExtension(e, s);
+    CHECK(s.fmMicrophoneLevel == 4);
+    e[0x43] = 7; // out of range: the middle one
+    dmm::services::decodeSettingsExtension(e, s);
+    CHECK(s.fmMicrophoneLevel == 2);
 }
 
 TEST_CASE("settings: squelch, zones, timeout, key lock, battery save and backlight")

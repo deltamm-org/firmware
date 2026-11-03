@@ -23,7 +23,7 @@ constexpr std::uint32_t Settings = 0x02500000;
 constexpr std::uint32_t SettingsBytes = 0x100;
 // The extended general settings, after the general settings.
 constexpr std::uint32_t SettingsExtension = 0x02501400;
-constexpr std::uint32_t SettingsExtensionBytes = 0x40;
+constexpr std::uint32_t SettingsExtensionBytes = 0x44;
 constexpr std::uint32_t ZoneSelections = 0x02500100; // u16 list position per zone, side A then B
 constexpr std::uint32_t ZoneSelectionSideB = 0x200;
 constexpr std::uint32_t ZoneNames = 0x02540000;
@@ -327,6 +327,10 @@ void decodeSettingsExtension(std::span<const std::uint8_t> b, CodeplugSettings &
 {
     // The GPS mode 0..6 is one less than the systems' bits.
     s.gpsSystems = b[0x35] <= 6 ? static_cast<std::uint8_t>(b[0x35] + 1) : 3;
+    // The FM microphone level 0..4; out of range, the middle one.
+    if (b.size() > 0x43) {
+        s.fmMicrophoneLevel = b[0x43] <= 4 ? b[0x43] : 2;
+    }
 }
 
 std::optional<CodeplugSettings> D878Uv2Codeplug::settings()

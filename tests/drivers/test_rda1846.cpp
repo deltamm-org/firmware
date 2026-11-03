@@ -125,6 +125,7 @@ constexpr Rda1846::BandWord TestBandWords[] = {
     {145'000'000, 145'000'000, 0x1111}, // never reached: the first match wins
 };
 constexpr Rda1846::DeviationStep TestDeviationSteps[] = {{0, 300'000'000, 0x8543, 0x11}, {0, 300'000'000, 0x8643, 6}};
+constexpr std::uint8_t TestMicrophoneGains[] = {7, 8, 9, 10, 12};
 constexpr Rda1846::Tuning TestTuning{
     .startUp = TestStartUp,
     .afterCalibration = TestAfterCalibration,
@@ -137,6 +138,7 @@ constexpr Rda1846::Tuning TestTuning{
     .bandWords = TestBandWords,
     .normalBand = 0x8763,
     .deviationSteps = TestDeviationSteps,
+    .microphoneGains = TestMicrophoneGains,
 };
 
 } // namespace
@@ -231,6 +233,31 @@ TEST_CASE("extra FM deviation by band setting")
     CHECK(chip.voiceDeviationExtra() == 6);
     chip.setFrequency(150'000'000); // normal
     CHECK(chip.voiceDeviationExtra() == 0);
+}
+
+TEST_CASE("the microphone level sets the transmit gain on FM channels only")
+{
+    constexpr Rda1846::WidthSetting Transmit[] = {{0x44, 0x09FF, 0x09FF, 0x0BFF}};
+    Rda1846::Tuning tuning = TestTuning;
+    tuning.transmit = Transmit;
+    LoggingBus bus;
+    Rda1846 chip(bus, tuning);
+
+    chip.setMode(Rda1846::Mode::Transmit); // no level set: the table's own
+    CHECK(bus.registers[0x44] == 0x09FF);
+    chip.setMicrophoneLevel(4);
+    chip.setMode(Rda1846::Mode::Transmit);
+    CHECK(bus.registers[0x44] == 0x0CFF);
+    chip.setMicrophoneLevel(0);
+    chip.setMode(Rda1846::Mode::Transmit);
+    CHECK(bus.registers[0x44] == 0x07FF);
+    chip.setBandwidth(Rda1846::Bandwidth::Digital); // digital keeps its own
+    chip.setMode(Rda1846::Mode::Transmit);
+    CHECK(bus.registers[0x44] == 0x0BFF);
+    chip.setBandwidth(Rda1846::Bandwidth::Narrow);
+    chip.setMicrophoneLevel(5); // out of range: the table's own
+    chip.setMode(Rda1846::Mode::Transmit);
+    CHECK(bus.registers[0x44] == 0x09FF);
 }
 
 TEST_CASE("width settings for a frequency range follow the width settings")

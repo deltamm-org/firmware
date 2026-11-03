@@ -1752,6 +1752,10 @@ void handle(Message &message)
                            log::info("baseband") << "voice enhancement " << (v.on ? "on" : "off") << (ok ? "" : ": refused");
                        });
                    },
+                   [](const FmMicrophoneLevel &m) {
+                       fm->setMicrophoneLevel(m.level);
+                       log::info("fm") << "microphone level " << m.level + 1 << " of 5";
+                   },
                    [](const Microphone &m) {
                        fm->setMicrophoneMuted(!m.on);
                        log::info("fm") << "microphone " << (m.on ? "on" : "muted");
