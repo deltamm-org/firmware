@@ -36,8 +36,8 @@ visits the others briefly to keep their levels, and with the codeplug's
 automatic roaming on it moves to a clearly better repeater by itself.
 Searches, on a side key set to roaming or when PTT finds no repeater,
 try the most likely repeaters first. The codeplug's repeater range check
-is followed. Menu > Channel turns roaming off or picks another roaming
-zone for the session, and Roam status shows what the radio hears. How to
+is followed. Menu > Roaming turns roaming off or picks another roaming
+zone, and its Status shows what the radio hears. How to
 set roaming up and use it is in `docs/roaming-setup.md`, the design in
 `docs/design/roaming.md`; moving between two real repeaters is still to
 be tested.
@@ -48,8 +48,9 @@ a frequency on the keypad.
 
 **Interface.** A first version of the user interface: a standby screen
 with zone, channel, frequency, tones, power, volume and battery, and a
-short grouped settings menu. Key lock
-covers the keypad, side keys and knob, with auto lock and forced lock.
+short grouped settings menu. Settings changed on the radio are kept in
+the codeplug (`docs/settings-storage.md`). Key lock covers the keypad,
+side keys and knob, with auto lock and forced lock.
 
 **Battery.** Battery save cycles the receiver while the radio is idle,
 with the codeplug's setting, and the backlight goes off after its light
@@ -176,14 +177,24 @@ included. Each release has a hardware checklist in `docs/hw-tests/`.
 | `0`-`9` | Type a frequency |
 | `#` | Switch between VFO and memory |
 | P1 | Zone list |
-| P2 | Channel settings |
-| Menu | Settings menu |
+| P2 | Channel settings (squelch, power) |
+| Menu | The menu |
 | Hold `*` | Lock keys; Menu then `*` unlocks |
 | Hold Exit | Cycle standby, log and key test screens |
 
-Menu, GPS and time holds the receiver's on/off setting, its satellite
-systems, its status and the time zone; choosing Status opens the GPS
-screen, and Exit or Menu goes back to the list. The console's `gps raw on`
+The menu lists what is used while operating first: Channel (squelch,
+squelch type, power), Roaming (status, on or off, roaming zone), GPS
+(status, receiver on or off) and Display (brightness, light time).
+Settings holds the setup in groups: Keys & battery (what the lock
+covers, auto lock, battery save), Clock (time zone) and GPS (satellite
+systems).
+Tools opens the log and the key test and shows the version. The panel
+under the list says what the chosen row does. Menu opens a group or a
+row's value screen, where Menu sets the value and Exit leaves it as it
+was; Exit goes back one level, onto the row it came from. A value
+changed in the menu is kept across restarts (`docs/settings-storage.md`).
+Choosing GPS > Status opens the GPS screen, and Exit or Menu goes back to
+the list. The console's `gps raw on`
 logs every sentence the receiver sends; `gps query`, `gps restart` and
 `gps send` talk to the receiver itself; `gps need <s>` asks for a
 position every so many seconds (0: none). `time` logs the clock, and

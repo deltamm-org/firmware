@@ -177,10 +177,10 @@ settings:
   held.
 - **Automatic roaming** searches by itself as set in the codeplug, and
   never during a call.
-- **Menu > Channel > Roaming:** off makes every channel use its own
-  frequency again, until the radio restarts or roaming is turned back
-  on. **Roam zone** picks another of the codeplug's roaming zones for the
-  session.
+- **Menu > Roaming > Roaming:** off makes every channel use its own
+  frequency again, until roaming is turned back on. **Roam zone** picks
+  another of the codeplug's roaming zones. Both are kept across restarts
+  (`docs/settings-storage.md`).
 - On an FM channel the key says `Not roaming`.
 
 ## Repeater beacons and the range check
@@ -216,7 +216,7 @@ repeater in use is not heard, the radio wakes it every interval (5 s to
 A good start: range check on, an interval of 10 s, 3 tries and the
 notice on.
 
-**Menu > Channel > Roam status** shows the pair in use with a star and
+**Menu > Roaming > Status** shows the pair in use with a star and
 its state, then each pair heard with its level, how long ago it was
 measured and its beacon period once learned. Search now searches
 from there.

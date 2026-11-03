@@ -20,6 +20,8 @@ struct KeyLockSettings
     /// Lock by itself after this long without a key on a lockable screen;
     /// 0 = never.
     std::uint32_t autoLockMs = 0;
+
+    bool operator==(const KeyLockSettings &) const = default;
 };
 
 /// The key lock: long * locks; Menu then * unlocks wherever keys are
