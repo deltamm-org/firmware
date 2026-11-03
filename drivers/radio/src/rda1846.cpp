@@ -81,9 +81,13 @@ constexpr Rda1846::Tuning Maker{
     .bandWords = MakerBandWords,
     .normalBand = BandNormal,
     .deviationSteps = {},
+    .microphoneGains = {},
 };
 
 constexpr std::uint8_t ControlRegister = 0x30;
+// Bits 11:8 of the volume register: the transmit gain.
+constexpr std::uint8_t VolumeRegister = 0x44;
+constexpr std::uint16_t TransmitGainBits = 0x0F00;
 constexpr std::uint8_t PageRegister = 0x7F;
 constexpr std::uint8_t RssiRegister = 0x1B;
 constexpr std::uint8_t BandRegister = 0x05;
@@ -159,6 +163,11 @@ void Rda1846::write(std::span<const WidthSetting> settings)
         }
         if (s.reg == DetectRegister) {
             value = static_cast<std::uint16_t>((value & ~DetectBits) | m_detect);
+        }
+        if (s.reg == VolumeRegister && m_bandwidth != Bandwidth::Digital &&
+            m_microphoneLevel < m_tuning->microphoneGains.size()) {
+            value = static_cast<std::uint16_t>((value & ~TransmitGainBits) |
+                (m_tuning->microphoneGains[m_microphoneLevel] & 0x0F) << 8);
         }
         m_bus.write(s.reg, value);
     }

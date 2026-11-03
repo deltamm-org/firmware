@@ -139,6 +139,9 @@ public:
         std::uint16_t normalBand;
         /// See voiceDeviationExtra().
         std::span<const DeviationStep> deviationSteps;
+        /// The transmit gain (bits 11:8 of the volume register) per
+        /// microphone level on FM channels; empty: the tables' own.
+        std::span<const std::uint8_t> microphoneGains;
     };
 
     /// The chip maker's start-up and per-width values for a 26 MHz
@@ -194,6 +197,10 @@ public:
     /// The extra FM voice deviation the tuning asks for at the frequency
     /// last set, with the band register value it took.
     std::uint8_t voiceDeviationExtra() const;
+    /// The microphone level (an index into the tuning's microphone gains)
+    /// for FM channels, from the next switch to receive or transmit. Out
+    /// of range: the tables' own gain.
+    void setMicrophoneLevel(unsigned level) { m_microphoneLevel = level; }
 
     /// The tone sent while transmitting.
     void setTransmitTone(const SubTone &tone);
@@ -228,6 +235,7 @@ private:
     const Tuning *m_tuning;
     std::uint32_t m_hz = 0;
     std::uint16_t m_band = 0;
+    unsigned m_microphoneLevel = 0xFF;
     Bandwidth m_bandwidth = Bandwidth::Narrow;
     Mode m_mode = Mode::Idle;
     // The tone detectors switched on, and the flag of the one listened for.

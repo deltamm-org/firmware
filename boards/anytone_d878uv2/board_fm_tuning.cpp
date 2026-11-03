@@ -321,6 +321,10 @@ constexpr DeviationStep DeviationSteps[] = {
     {300'000'001, 0xFFFF'FFFF, BandB, 0x06},
 };
 
+// FM channels: the transmit gain in the volume register by the codeplug's
+// analog microphone level (2, the middle one, is the tables' own).
+constexpr std::uint8_t MicrophoneGains[] = {7, 8, 9, 10, 12};
+
 constexpr Tuning TuningS{
     .startUp = StartUpS,
     .afterCalibration = AfterCalibration,
@@ -333,6 +337,7 @@ constexpr Tuning TuningS{
     .bandWords = BandWords,
     .normalBand = BandNormal,
     .deviationSteps = DeviationSteps,
+    .microphoneGains = MicrophoneGains,
 };
 constexpr Tuning TuningN{
     .startUp = StartUpN,
@@ -346,6 +351,7 @@ constexpr Tuning TuningN{
     .bandWords = BandWords,
     .normalBand = BandNormal,
     .deviationSteps = DeviationSteps,
+    .microphoneGains = MicrophoneGains,
 };
 
 bool isVersionN(dmm::services::Storage &storage)

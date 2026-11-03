@@ -94,6 +94,7 @@ public:
     void setMicrophoneMuted(bool muted);
     /// Also logs the chip's pin register, as a debug line.
     void setGpsPower(bool on);
+    void setMicrophoneLevel(unsigned level) { m_chip.setMicrophoneLevel(level); }
     /// "<reg> [value]" (hex), "tune <value>|auto", "sweep".
     bool debugCommand(std::string_view command);
     const char *debugHelp() const;

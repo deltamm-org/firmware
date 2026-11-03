@@ -32,7 +32,8 @@ ChannelLinks channelLinks(std::span<const std::uint8_t, 64> record);
 /// bytes; the roaming settings need 0xE8).
 CodeplugSettings decodeSettings(std::span<const std::uint8_t> block);
 /// Adds what the extended general settings block holds (at least 0x40
-/// bytes): the GPS satellite systems.
+/// bytes): the GPS satellite systems, and from 0x44 bytes the FM
+/// microphone level.
 void decodeSettingsExtension(std::span<const std::uint8_t> block, CodeplugSettings &settings);
 
 /// The D878UVII's codeplug on its data flash, read only. Every 128 KB
