@@ -22,6 +22,21 @@ so the task that feeds the watchdog keeps running during the write.
 | 5 | `dmrconf read -y b.yaml` | b.yaml is what QDMR's own encode and decode give for a.yaml |
 | 6 | `dmm-radio check-backup` | Calibration, radio information and system area still match the backup |
 
+## Results
+
+Run 2026-11-01 on a D878UVII PLUS, with this branch, the settings store,
+menu, home screen and microphone gain branches and the loader in one
+image.
+
+| # | Result |
+| --- | --- |
+| 1 | Pass: `crash: watchdog stall in task IDLE, detail 1500` with its pc and lr after the restart; the loader kept the image confirmed |
+| 2 | Pass |
+| 3 | Pass: the write completes in about 9 s with every write answered; the restart is a software reset, with no crash line |
+| 4 | Pass: the uptime lines keep coming through the whole write |
+| 5 | Pass: the read-back matches |
+| 6 | Pass: identical to the backup |
+
 ## If a write still stalls
 
 Note the `crash: watchdog stall` line: its task, pc and lr say what kept
