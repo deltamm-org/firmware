@@ -521,19 +521,20 @@ TEST_CASE("a roaming zone's repeaters, in the zone's order")
     storage.start();
     D878Uv2Codeplug cp(storage);
 
+    // In the repeater list's order, not the zone's.
     std::array<RoamingSite, 8> sites{};
     REQUIRE(cp.roamingSites(1, sites) == 2);
-    CHECK(sites[0].receiveHz == 438'212'500);
-    CHECK(sites[0].transmitHz == 430'612'500);
-    CHECK(sites[0].colourCode == 3);
-    CHECK(sites[1].receiveHz == 438'200'000);
-    CHECK(sites[1].transmitHz == 430'600'000);
-    CHECK(sites[1].colourCode == RoamingSite::ChannelColourCode);
+    CHECK(sites[0].receiveHz == 438'200'000);
+    CHECK(sites[0].transmitHz == 430'600'000);
+    CHECK(sites[0].colourCode == RoamingSite::ChannelColourCode);
+    CHECK(sites[1].receiveHz == 438'212'500);
+    CHECK(sites[1].transmitHz == 430'612'500);
+    CHECK(sites[1].colourCode == 3);
     std::array<char, D878Uv2Codeplug::SiteNameBytes + 1> name{};
     REQUIRE(cp.roamingSiteName(1, 0, name));
-    CHECK(std::string(name.data()) == "SITE B");
-    REQUIRE(cp.roamingSiteName(1, 1, name));
     CHECK(std::string(name.data()) == "SITE A");
+    REQUIRE(cp.roamingSiteName(1, 1, name));
+    CHECK(std::string(name.data()) == "SITE B");
     CHECK_FALSE(cp.roamingSiteName(1, 2, name));
     CHECK(cp.roamingSites(0, sites) == 0);  // zone not in use
     CHECK(cp.roamingSites(64, sites) == 0); // no such zone

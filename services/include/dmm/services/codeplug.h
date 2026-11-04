@@ -185,7 +185,8 @@ public:
     virtual std::size_t roamingZones(std::span<std::uint8_t> out) = 0;
     /// The roaming zone's name, zero-terminated; false when there is none.
     virtual bool roamingZoneName(std::uint8_t zone, std::span<char, ZoneNameBytes + 1> name) = 0;
-    /// The repeaters of roaming zone @p zone, in order; returns how many.
+    /// The repeaters of roaming zone @p zone, in the user's order of
+    /// preference; returns how many.
     virtual std::size_t roamingSites(std::uint8_t zone, std::span<RoamingSite> out) = 0;
     /// The name of the repeater at @p position in roaming zone @p zone,
     /// zero-terminated; false when there is none.

@@ -625,6 +625,9 @@ std::size_t D878Uv2Codeplug::roamingMembers(std::uint8_t zone, std::span<std::ui
             out[n++] = index;
         }
     }
+    // A zone's member list comes in frequency order. The order the user
+    // sets is that of the repeater list, so the members follow it.
+    std::sort(out.begin(), out.begin() + static_cast<std::ptrdiff_t>(n));
     return n;
 }
 
