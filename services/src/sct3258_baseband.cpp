@@ -206,6 +206,7 @@ BasebandInfo Sct3258Baseband::info()
 {
     BasebandInfo i = m_info;
     i.dataWaiting = m_chip.dataWaiting();
+    i.refusedInRow = m_chip.refusedInRow();
     return i;
 }
 

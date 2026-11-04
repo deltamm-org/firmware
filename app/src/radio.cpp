@@ -1508,6 +1508,24 @@ void bringUp()
     log::info("radio") << "ready";
 }
 
+// The baseband can stop taking commands and stay so until it restarts;
+// after this many in a row it is started again.
+constexpr int RefusedBeforeRestart = 10;
+
+void restartIfRefusing()
+{
+    int refused = 0;
+    withBaseband([&refused](auto &b) { refused = b.info().refusedInRow; });
+    if (refused < RefusedBeforeRestart) {
+        return;
+    }
+    log::warning("baseband") << refused << " commands in a row not taken; restarting it";
+    if (transmitting) {
+        stopTransmit("baseband restart");
+    }
+    bringUp();
+}
+
 const char *saveModeText(std::uint8_t mode)
 {
     constexpr const char *Texts[] = {"off", "on, 150 ms sleep", "on, 70 ms sleep"};
@@ -1828,6 +1846,7 @@ void radioMain(void *)
         }
         roamStep();
         saveStep();
+        restartIfRefusing();
         if (transmitting && timeoutS != 0 && os::nowMs() - transmitStarted >= static_cast<os::Ticks>(timeoutS) * 1000) {
             stopTransmit("timeout");
         }

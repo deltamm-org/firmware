@@ -184,6 +184,9 @@ public:
     /// After a refused sendFrame(): the reply's type and first field, or
     /// -1 when nothing came.
     int lastFrameReply() const { return m_lastFrameReply; }
+    /// Requests in a row the chip did not answer, or answered with an error
+    /// instead of taking the command; any taken command clears it.
+    int refusedInRow() const { return m_refusedInRow; }
 
     /// A packet the chip sent on its own: what it received from the far
     /// end, an event, or the note that everything queued has gone out.
@@ -195,6 +198,7 @@ public:
 
 private:
     int m_lastFrameReply = -1;
+    int m_refusedInRow = 0;
     struct Report
     {
         std::uint8_t type;

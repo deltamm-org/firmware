@@ -126,6 +126,42 @@ TEST_CASE("queries, control fields and codec writes; packets are padded to 16 bi
     CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x40, 0x00, 0x01, 0x10, 0x3A, 0x00, 0x00});
 }
 
+TEST_CASE("commands the chip does not take are counted in a row until one is taken or it boots")
+{
+    FakeSct3258 chip;
+    Sct3258 sct(chip, noDelay);
+    std::uint8_t ack = 0;
+    REQUIRE(sct.boot(Blob, ack) == Sct3258::BootResult::Ready);
+    const std::uint8_t codec[] = {Sct3258::CodecSelect, 0x01};
+    const std::uint8_t unknown[] = {0x7E, 0x00};
+    CHECK(sct.refusedInRow() == 0);
+    CHECK(sct.control(unknown) == 0x104); // an error reply
+    CHECK(sct.refusedInRow() == 1);
+    chip.silent = true; // no reply
+    CHECK(sct.control(codec, 5) == -1);
+    CHECK(sct.refusedInRow() == 2);
+    chip.silent = false;
+    chip.echoInstead = 0x18; // the reply to some other command
+    CHECK(sct.control(codec) == -1);
+    CHECK(sct.refusedInRow() == 3);
+    chip.echoInstead = 0;
+    CHECK(sct.control(codec) == 0);
+    CHECK(sct.refusedInRow() == 0);
+    // A status in the echo is still a command taken.
+    char text[16];
+    REQUIRE(sct.queryText(Sct3258::QuerySoftware, text, sizeof text));
+    CHECK(sct.refusedInRow() == 0);
+    chip.silent = true;
+    for (int i = 0; i < 4; ++i) {
+        CHECK(sct.control(codec, 5) == -1);
+    }
+    CHECK(sct.refusedInRow() == 4);
+    chip.silent = false;
+    chip.bootBytes = 0;
+    REQUIRE(sct.boot(Blob, ack) == Sct3258::BootResult::Ready);
+    CHECK(sct.refusedInRow() == 0);
+}
+
 TEST_CASE("a status line stuck at data waiting still lets the caller yield and time out")
 {
     class StuckBus final : public dmm::hal::HostPortBus
