@@ -22,6 +22,10 @@ public:
     std::vector<std::vector<std::uint8_t>> packets; // fields of each packet received, type first
     std::size_t bootBytes = 0;
     bool oddWriteSeen = false;
+    /// A chip that has stopped working: no replies at all.
+    bool silent = false;
+    /// When set, each reply echoes this field instead of the one sent.
+    std::uint8_t echoInstead = 0;
     /// Packets (type, fields) the chip sends after the next request, before
     /// its reply.
     std::vector<std::pair<std::uint8_t, std::vector<std::uint8_t>>> reportsBeforeReply;
@@ -90,8 +94,15 @@ private:
             queue(t, f);
         }
         reportsBeforeReply.clear();
+        if (silent) {
+            return;
+        }
         const std::uint8_t type = p[0];
         const std::uint8_t field = p.size() > 1 ? p[1] : 0;
+        if (echoInstead != 0) {
+            queue(0x00, {echoInstead, 0x00});
+            return;
+        }
         if (type == 0x40) {
             queue(0x40, {0x17, 0x00});
         } else if (field >= 0x30 && field <= 0x32 && type != 0x20) {

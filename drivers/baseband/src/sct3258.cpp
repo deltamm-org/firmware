@@ -81,6 +81,7 @@ Sct3258::BootResult Sct3258::boot(std::span<const std::uint8_t> blob, std::uint8
     // packet framing.
     m_bus.write(blob.data(), blob.size());
     m_parser.reset();
+    m_refusedInRow = 0;
 
     // Its status line already reads "data waiting" before the boot load, so
     // only a well-formed ACK_MESSAGE counts.
@@ -247,13 +248,19 @@ bool Sct3258::request(std::uint8_t type, std::span<const std::uint8_t> fields, P
     // number of times.
     for (int i = 0; i < MaxStalePackets; ++i) {
         if (!receive(reply, timeoutMs)) {
-            return false;
+            break;
         }
         if (!isReport(reply)) {
+            // The packet manual's error reply is ACK_MESSAGE with a failure
+            // code; any other reply means the command was taken.
+            const auto ack = reply.field(AckMessage);
+            const bool failed = !ack.empty() && ack[0] != 0 && ack[0] != AckReady && ack[0] != AckAllSent;
+            m_refusedInRow = failed ? m_refusedInRow + 1 : 0;
             return true;
         }
         keep(reply);
     }
+    ++m_refusedInRow;
     return false;
 }
 
@@ -294,6 +301,7 @@ int Sct3258::control(std::span<const std::uint8_t> fields, unsigned timeoutMs)
 int Sct3258::control(std::uint8_t type, std::span<const std::uint8_t> fields, unsigned timeoutMs)
 {
     Packet reply;
+    const int refused = m_refusedInRow;
     if (fields.empty() || !request(type, fields, reply, timeoutMs)) {
         return -1;
     }
@@ -302,7 +310,12 @@ int Sct3258::control(std::uint8_t type, std::span<const std::uint8_t> fields, un
         return echo[0];
     }
     const auto ack = reply.field(AckMessage);
-    return ack.empty() ? -1 : 0x100 | ack[0];
+    if (ack.empty()) {
+        // A reply to some other command: this one was not taken.
+        m_refusedInRow = refused + 1;
+        return -1;
+    }
+    return 0x100 | ack[0];
 }
 
 bool Sct3258::codecWrite(std::uint8_t page, std::uint8_t reg, std::uint8_t value)

@@ -22,6 +22,8 @@ struct BasebandInfo
     char software[16] = {};
     /// The chip's "data waiting" line, read when info() is called.
     bool dataWaiting = false;
+    /// Commands in a row the chip did not take.
+    int refusedInRow = 0;
 };
 
 /// Speaker volume steps: 0 = muted, 1..SpeakerVolumeSteps = quietest to
