@@ -25,6 +25,14 @@ namespace dmm::app {
 
 namespace {
 
+// Console commands for testing (zone, channel, the repeater in use); left
+// out of builds configured without DMM_DEBUG_COMMANDS.
+#ifdef DMM_DEBUG_COMMANDS
+constexpr bool DebugCommands = true;
+#else
+constexpr bool DebugCommands = false;
+#endif
+
 namespace log = services::log;
 
 Platform *platform = nullptr;
@@ -284,6 +292,12 @@ bool radioCommand(std::string_view command)
         posted = radio::post(radio::RoamStatus{});
     } else if (command == "roam now") {
         posted = radio::post(radio::RoamNow{});
+    } else if (DebugCommands && numbersAfter(command, "roam use ", 10, n, 1) && n[0] >= 1 && n[0] <= 255) {
+        // Debug feature: sets the repeater in use (1-based, as logged).
+        posted = radio::post(radio::RoamUse{static_cast<std::uint8_t>(n[0] - 1)});
+    } else if (DebugCommands && command == "roam forget") {
+        // Debug feature: a search then follows the roaming zone's order.
+        posted = radio::post(radio::RoamForget{});
     } else if (command == "roam auto on" || command == "roam auto off") {
         posted = radio::post(radio::RoamAutomatic{command == "roam auto on"});
     } else if (command == "dmr tg off") {
@@ -329,6 +343,16 @@ bool radioCommand(std::string_view command)
         posted = ui::post(ui::SetKeyLock{command == "lock"});
     } else if (command == "lock status") {
         posted = ui::post(ui::KeyLockReport{});
+    } else if (DebugCommands && command == "channel") {
+        // Debug feature: channel and zone selection from the console.
+        posted = ui::post(ui::SelectChannel{ui::SelectChannel::KeepZone, 0});
+    } else if (DebugCommands && numbersAfter(command, "channel ", 10, n, 1) && n[0] >= 1 && n[0] <= 4000) {
+        posted = ui::post(ui::SelectChannel{ui::SelectChannel::KeepZone, static_cast<std::uint16_t>(n[0])});
+    } else if (DebugCommands && numbersAfter(command, "zone ", 10, n, 2) && n[0] < ui::SelectChannel::KeepZone && n[1] >= 1 &&
+        n[1] <= 4000) {
+        posted = ui::post(ui::SelectChannel{static_cast<std::uint8_t>(n[0]), static_cast<std::uint16_t>(n[1])});
+    } else if (DebugCommands && numbersAfter(command, "zone ", 10, n, 1) && n[0] < ui::SelectChannel::KeepZone) {
+        posted = ui::post(ui::SelectChannel{static_cast<std::uint8_t>(n[0]), 0});
     } else if (lockSetting(command)) {
         posted = ui::post(ui::KeyLockSettings{lockSettings});
     } else if (numbersAfter(command, "lock auto ", 10, n, 1) && n[0] <= 3600) {
@@ -438,6 +462,9 @@ void runCommand(std::string_view command)
                                 "light 0-5, pattern, logview, keytest, panel on|off, beep <hz> <ms>, rx on|off, bb, bb restart, "
                                 "bbtone <hz> <ms>, "
                                 "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, dmr level on|off, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, log debug on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
+        if constexpr (DebugCommands) {
+            log::info("console") << "debug: channel [n], zone <n> [channel], roam use <n>, roam forget";
+        }
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
         if (const char *board = platform->system.debugHelp()) {
             log::info("console") << "board: " << board;
