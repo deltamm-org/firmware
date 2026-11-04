@@ -220,14 +220,16 @@ void withBaseband(F &&f)
     app::withBaseband(baseband, f);
 }
 
-// The squelch gate's result: the baseband passes receive audio only while
-// told a carrier is present, and the speaker opens for it.
+// What the radio does on the air now. FM is heard while the squelch gate
+// holds the speaker open; DMR also whenever its slot timing is found, a
+// call or not: decoded DMR, not a bare carrier, which may be another
+// signal.
 void updateActivity()
 {
-    airActivity.store(onAir     ? Activity::Transmit
-            : !speakerOpen      ? Activity::Idle
-            : fmChannel.digital ? Activity::DmrReceive
-                                : Activity::FmReceive);
+    airActivity.store(onAir                                     ? Activity::Transmit
+            : fmChannel.digital && (speakerOpen || timingFound) ? Activity::DmrReceive
+            : speakerOpen                                       ? Activity::FmReceive
+                                                                : Activity::Idle);
 }
 
 // The screen's and LEDs' transmit indication.
@@ -469,6 +471,7 @@ void dmrReceive()
     endCall("left");
     setSpeaker(false);
     timingFound = false;
+    updateActivity();
     timingSeen = false;
     if (system::calibration() == nullptr) {
         logDmr("receive refused: no calibration loaded");
@@ -536,6 +539,7 @@ void onDmrEvent(const services::dmr::Event &e)
                           << e.nextSlot;
         if (!timingFound && e.verified) {
             timingFound = true;
+            updateActivity();
             if (onBase && site >= 0) {
                 baseTx.dbm = fm->status().rssiDbm;
                 baseTx.measured = true;
@@ -596,6 +600,7 @@ void onDmrEvent(const services::dmr::Event &e)
     }
     case Kind::SyncLost:
         timingFound = false;
+        updateActivity();
         timingSeen = false;
         endCall("lost");
         break;
@@ -618,6 +623,7 @@ void onDmrEvent(const services::dmr::Event &e)
             carrierHeard = false;
             // A repeater that went quiet must be woken again before a call.
             timingFound = false;
+            updateActivity();
             timingSeen = false;
             endCall("lost");
         }
@@ -1059,6 +1065,7 @@ void backToBase()
     const std::uint8_t colourCode = dmrSettings.colourCode;
     carrierHeard = false;
     timingFound = false;
+    updateActivity();
     timingSeen = false;
     dmrReceive();
     const std::uint32_t arrived = os::nowMs();
