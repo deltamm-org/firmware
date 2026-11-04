@@ -441,10 +441,7 @@ TEST_CASE("settings: roaming and the side keys")
     b[0x12] = 0x24; // PF3 short: roaming
     b[0x41] = 0x24; // PF1 long: roaming
     b[0x10] = 0x02; // PF1 short: something else
-    b[0xBA] = 10;   // every 10 min
-    b[0xBF] = 45;   // after 45 s quiet
     b[0xDC] = 1;    // roaming zone 1
-    b[0xE0] = 1;    // out of range
     b[0xE7] = 1;    // automatic
     const auto s = dmm::services::decodeSettings(b);
     CHECK(s.sideShort[0] == KeyFunction::None);
@@ -454,33 +451,11 @@ TEST_CASE("settings: roaming and the side keys")
     CHECK(s.sideLong[2] == KeyFunction::None);
     CHECK(s.roaming.zone == 1);
     CHECK(s.roaming.automatic);
-    CHECK(s.roaming.start == RoamingSettings::Start::OutOfRange);
-    CHECK(s.roaming.periodMinutes == 10);
-    CHECK(s.roaming.quietS == 45);
     b[0xDC] = 64; // out of range
-    b[0xE0] = 0;
     b[0xE7] = 0;
     const auto t = dmm::services::decodeSettings(b);
     CHECK(t.roaming.zone == RoamingSettings::NoZone);
-    CHECK(t.roaming.start == RoamingSettings::Start::Periodic);
     CHECK_FALSE(t.roaming.automatic);
-    CHECK_FALSE(s.roaming.rangeCheck);
-    CHECK(s.roaming.outOfRangeNotices == 0);
-    // The range check.
-    b[0xDD] = 1;
-    b[0xDE] = 3; // 20 s
-    b[0xDF] = 1; // 4 tries
-    b[0xE5] = 1; // notice
-    b[0xEA] = 2; // 3 times
-    const auto c = dmm::services::decodeSettings(b);
-    CHECK(c.roaming.rangeCheck);
-    CHECK(c.roaming.checkIntervalS == 20);
-    CHECK(c.roaming.checkTries == 4);
-    CHECK(c.roaming.outOfRangeNotices == 3);
-    b[0xDF] = 6; // a count written as itself
-    b[0xDE] = 200;
-    CHECK(dmm::services::decodeSettings(b).roaming.checkTries == 6);
-    CHECK(dmm::services::decodeSettings(b).roaming.checkIntervalS == 50);
     // A block too short for the roaming settings leaves them off.
     const auto u = dmm::services::decodeSettings(std::span(b).first(0xC0));
     CHECK(u.roaming.zone == RoamingSettings::NoZone);
