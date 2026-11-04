@@ -541,7 +541,8 @@ void onDmrEvent(const services::dmr::Event &e)
                 baseTx.measured = true;
                 noteHeard(site, baseTx.dbm);
             }
-            log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing found"
+            log::info("dmr") << (e.baseStation ? "repeater" : "direct") << " timing found, "
+                             << (onBase && site >= 0 ? baseTx.dbm : fm->status().rssiDbm) << " dBm"
                              << (e.inboundBusy ? ", inbound busy" : "");
         } else if (!timingFound && !timingSeen) {
             timingSeen = true;
@@ -563,8 +564,8 @@ void onDmrEvent(const services::dmr::Event &e)
             for (std::size_t i = 0; i < e.length; ++i) {
                 bytes << lib::hex(e.data[i], 2);
             }
-            log::debug("dmr") << "burst " << lib::hex(e.raw, 2) << ", colour code " << e.colourCode << ": "
-                              << bytes.view();
+            log::debug("dmr") << "burst " << lib::hex(e.raw, 2) << ", colour code " << e.colourCode << ", "
+                              << fm->status().rssiDbm << " dBm: " << bytes.view();
         }
         if (!lc) {
             break;
