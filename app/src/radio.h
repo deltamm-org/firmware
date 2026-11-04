@@ -209,7 +209,7 @@ enum class Activity : std::uint8_t
 {
     Idle,
     FmReceive,  // the speaker is open on an FM signal
-    DmrReceive, // a DMR call is heard
+    DmrReceive, // DMR is heard: a call, or any transmission whose slot timing is found
     Transmit,   // on the air, FM or DMR, a repeater wake-up included
 };
 /// Any task may ask.
