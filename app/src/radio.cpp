@@ -68,6 +68,9 @@ services::dmr::ChannelSettings dmrSettings;
 bool dmrRepeater = false;
 bool inCall = false;
 os::Ticks callStarted = 0;
+// Who the call heard is from and to.
+std::uint32_t callSource = 0;
+std::uint32_t callDestination = 0;
 bool timingFound = false;
 // DMR transmit for the session: a target and own ID override the
 // channel's when set.
@@ -578,6 +581,15 @@ void onDmrEvent(const services::dmr::Event &e)
             endCall("ended");
             break;
         }
+        // Other link control (talker alias, position) carries no caller.
+        if (!lc->groupCall() && !lc->privateCall()) {
+            break;
+        }
+        // Overs can follow each other without a terminator heard between
+        // them: a new caller or target is a new call.
+        if (inCall && (lc->source != callSource || lc->destination != callDestination)) {
+            endCall("ended");
+        }
         if (!inCall && !forUs(*lc)) {
             if (!callIgnored) {
                 callIgnored = true;
@@ -588,6 +600,8 @@ void onDmrEvent(const services::dmr::Event &e)
         if (!inCall) {
             inCall = true;
             callStarted = os::nowMs();
+            callSource = lc->source;
+            callDestination = lc->destination;
             log::info("dmr") << (lc->groupCall() ? "group call" : lc->privateCall() ? "private call"
                                                                                     : "call")
                              << " from "
