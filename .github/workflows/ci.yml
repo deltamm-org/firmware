@@ -30,7 +30,7 @@ jobs:
           version: '6.8.3'
           modules: 'qtserialport'
           cache: true
-            - name: Set up MSVC (Windows)
+      - name: Set up MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
@@ -66,7 +66,7 @@ jobs:
           mkdir -p ~/arm-gnu-toolchain
           curl -sSL https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi.tar.xz \
             | tar -xJ --strip-components=1 -C ~/arm-gnu-toolchain
-- name: Configure
+      - name: Configure
         run: ARM_GNU_TOOLCHAIN=~/arm-gnu-toolchain cmake --preset ${{ matrix.preset }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
