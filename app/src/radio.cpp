@@ -956,6 +956,10 @@ enum class SearchCause : std::uint8_t
 // Tries the roaming zone's repeaters, most likely first, until one is good,
 // and works through the best that answered. @p skipCurrent leaves out the
 // repeater in use, which has just failed to answer. True when one did.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // rest of search() requires baseband hardware; unreachable on host builds
+#endif
 [[gnu::noinline]] bool search(SearchCause cause, bool skipCurrent = false)
 {
     const std::size_t count = sitesKnown();
@@ -1012,6 +1016,9 @@ enum class SearchCause : std::uint8_t
     showRoaming(false);
     return best >= 0;
 }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 // Back to the repeater in use, or to the channel's own frequencies.
 void backToBase()
