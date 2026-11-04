@@ -5,3 +5,7 @@ add_library(dmm_app STATIC src/app.cpp src/audio.cpp src/audio.h src/input.cpp s
 target_include_directories(dmm_app PUBLIC include ${DMM_PARTS_DIR})
 target_link_libraries(dmm_app PUBLIC dmm_services dmm_version)
 dmm_core_options(dmm_app)
+option(DMM_DEBUG_COMMANDS "Console commands for testing: zone, channel, roam use" ON)
+if(DMM_DEBUG_COMMANDS)
+    target_compile_definitions(dmm_app PRIVATE DMM_DEBUG_COMMANDS)
+endif()

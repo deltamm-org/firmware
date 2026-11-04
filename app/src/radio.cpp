@@ -1376,6 +1376,7 @@ void handle(Message &message)
                    [](const RoamAutomatic &r) { roam::setAutomatic(r.on); },
                    [](const RoamingSetup &r) { roam::setup(r.settings); },
                    [](const RoamStatus &) { roam::logStatus(); },
+                   [](const RoamUse &r) { roam::use(r.position); },
                    [](const BatterySave &s) {
                        saver.setMode(s.mode);
                        log::info("power") << "battery save " << saveModeText(saver.mode());

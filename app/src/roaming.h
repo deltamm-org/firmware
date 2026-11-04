@@ -47,6 +47,8 @@ void unanswered();
 bool search(SearchCause cause, bool skipCurrent = false);
 /// A search asked for by the user.
 void searchNow();
+/// Debug feature: zone position @p position becomes the repeater in use.
+void use(std::uint8_t position);
 void setOn(bool on);
 void setAutomatic(bool on);
 /// Whether the radio roams by itself: moves, and searches when a call's

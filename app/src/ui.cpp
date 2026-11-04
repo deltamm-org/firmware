@@ -1670,6 +1670,31 @@ void uiMain(void *)
                                logLockSettings();
                            },
                            [&](const KeyLockReport &) { logLockSettings(); },
+                           [&](const SelectChannel &s) {
+                               // Debug feature.
+                               if (channels == nullptr) {
+                                   return;
+                               }
+                               bool ok = !channels->vfoMode() || channels->memoryMode();
+                               if (ok && s.zone != SelectChannel::KeepZone) {
+                                   ok = channels->selectZone(s.zone);
+                               }
+                               if (ok && s.position > 0) {
+                                   ok = s.position <= channels->zoneSize() &&
+                                       channels->step(static_cast<int>(s.position) - static_cast<int>(channels->position()));
+                               }
+                               if (s.zone != SelectChannel::KeepZone || s.position > 0) {
+                                   heard.shown = false;
+                                   show(View::Standby);
+                                   useChannel();
+                               }
+                               const auto &c = channels->current();
+                               log::info("ui") << (ok ? "" : "not found; ") << "zone " << static_cast<int>(channels->zone()) << " ("
+                                               << channels->zoneName() << "), channel " << channels->position() << " of "
+                                               << channels->zoneSize() << ": " << (c ? c->name : "-") << ", "
+                                               << (c ? c->receiveHz / 1000 : 0) << " kHz"
+                                               << (c && c->roaming ? ", roaming" : "");
+                           },
                            [&](const EncoderClicks &c) {
                                useLight(d);
                                if (!hardwareUp()) {

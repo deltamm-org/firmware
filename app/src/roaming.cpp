@@ -537,6 +537,16 @@ void searchNow()
     searchZone(SearchCause::Asked, false);
 }
 
+void use(std::uint8_t position)
+{
+    if (!roamingChannel || position >= sitesKnown()) {
+        log::info("roam") << "not a roaming channel, or no such repeater";
+        return;
+    }
+    useSite(position);
+    logStatus();
+}
+
 void setOn(bool on)
 {
     roamingOn = on;
