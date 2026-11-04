@@ -261,7 +261,7 @@ void setSpeaker(bool open)
 
 // Log lines of the receive set-up are built in their own frames, kept out
 // of the deep path down to the chips.
-[[gnu::noinline, gnu::cold]] void logAnalogRefused()
+[[gnu::noinline, gnu::cold, maybe_unused]] void logAnalogRefused()
 {
     log::warning("baseband") << "analog receive set-up not accepted";
 }
@@ -511,7 +511,7 @@ void noteHeard(int i, int dbm)
     log::debug("roam") << "beacon of repeater " << site + 1 << ", " << baseTx.dbm << " dBm, " << length << " ms";
 }
 
-void onDmrEvent(const services::dmr::Event &e)
+[[maybe_unused]] void onDmrEvent(const services::dmr::Event &e)
 {
     using Kind = services::dmr::Event::Kind;
     using services::dmr::DataType;
@@ -810,7 +810,7 @@ struct Probe
     }
 }
 
-[[gnu::noinline]] void logProbeWake(int i, int attempt, bool sent, bool carrier, bool answered)
+[[gnu::noinline, maybe_unused]] void logProbeWake(int i, int attempt, bool sent, bool carrier, bool answered)
 {
     log::info("roam") << "repeater " << i + 1 << ", wake-up " << attempt << ": "
                       << (!sent ? "not sent" : answered ? "answered"
@@ -1215,7 +1215,7 @@ void roamStep()
     visit(v, state);
 }
 
-[[gnu::noinline]] void logWakeTry(int attempt, bool sent, bool answered)
+[[gnu::noinline, maybe_unused]] void logWakeTry(int attempt, bool sent, bool answered)
 {
     log::info("dmr") << "repeater wake-up " << attempt << ": " << (!sent ? "not sent" : answered ? "answered"
                                                                                                  : "no answer");
