@@ -66,34 +66,16 @@ enum class KeyFunction : std::uint8_t
     Roam, // look for the best repeater of the roaming zone now
 };
 
-/// Roaming: the repeaters roaming channels use, and when the radio looks
-/// for a better one by itself.
+/// Roaming: the repeaters roaming channels use, and whether the radio moves
+/// to a better one by itself.
 struct RoamingSettings
 {
     static constexpr std::uint8_t NoZone = 0xFF;
 
-    enum class Start : std::uint8_t
-    {
-        Periodic,   // every periodMinutes
-        OutOfRange, // when the repeater in use has not been heard for quietS
-    };
-
     /// The roaming zone, or NoZone.
     std::uint8_t zone = NoZone;
-    /// Looks by itself; else only on a key, the menu or a failed PTT.
+    /// Moves by itself; else only on a key, the menu or a failed PTT.
     bool automatic = false;
-    Start start = Start::OutOfRange;
-    std::uint16_t periodMinutes = 0;
-    std::uint16_t quietS = 0;
-    /// Checks the repeater in use, every checkIntervalS while it is not
-    /// heard, with a wake-up; checkTries unanswered in a row put it out of
-    /// range.
-    bool rangeCheck = false;
-    std::uint8_t checkIntervalS = 5;
-    std::uint8_t checkTries = 3;
-    /// How many times the user is told the repeater is out of range; 0 =
-    /// never.
-    std::uint8_t outOfRangeNotices = 0;
 };
 
 /// The general settings DeltaMM uses so far.
