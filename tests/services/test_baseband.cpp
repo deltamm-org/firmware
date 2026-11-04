@@ -245,7 +245,7 @@ TEST_CASE("the chip's console commands write codec registers and send raw packet
     CHECK_FALSE(baseband.debugCommand("restart"));
 }
 
-TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, slot, receive")
+TEST_CASE("digital receive: the old reception ends, then vocoder, layer 2, call options once, colour code, receive, slot")
 {
     FakeSct3258 chip;
     FakeBoard board;
@@ -254,47 +254,55 @@ TEST_CASE("digital receive: vocoder, layer 2, call options once, colour code, sl
     REQUIRE(baseband.start());
     chip.packets.clear();
 
+    const std::vector<std::uint8_t> carrierOff{0x00, 0x19, 0x00};
+    const std::vector<std::uint8_t> idle{0x00, 0x18, 0x00, 0x00, 0x00};
+    const std::vector<std::uint8_t> receive{0x00, 0x18, 0x01, 0x00, 0x00};
+    const std::vector<std::uint8_t> carrier{0x00, 0x19, 0x01};
     dmm::services::dmr::ChannelSettings settings;
     settings.colourCode = 7;
     settings.slot = 2;
     REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, true));
-    REQUIRE(chip.packets.size() == 10);
-    // Without a calibration source, no DC offset or demodulator gain.
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x10, 0x0C});
-    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0x00, 0x00, 0x00}); // digital levels
-    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x1A, 0x02});
-    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x00, 0x1D, 0xFF});
-    CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x00, 0x2F, 0x01});
-    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x08, 0x79, 0x41, 0x40, 0x43, 0x4C, 0x08});
-    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x08, 0x77, 0x07});
-    CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02}); // the channel's slot alone
-    CHECK(chip.packets[8] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
-    CHECK(chip.packets[9] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
+    REQUIRE(chip.packets.size() == 12);
+    // The packet manual's order. Without a calibration source, no DC offset
+    // or demodulator gain.
+    CHECK(chip.packets[0] == carrierOff);
+    CHECK(chip.packets[1] == idle);
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x10, 0x0C});
+    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0x00, 0x00, 0x00}); // digital levels
+    CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x00, 0x1A, 0x02});
+    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x1D, 0xFF});
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x00, 0x2F, 0x01});
+    CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x08, 0x79, 0x41, 0x40, 0x43, 0x4C, 0x08});
+    CHECK(chip.packets[8] == std::vector<std::uint8_t>{0x08, 0x77, 0x07});
+    CHECK(chip.packets[9] == receive);
+    CHECK(chip.packets[10] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02}); // the channel's slot alone
+    CHECK(chip.packets[11] == carrier);
 
-    // Direct: both slots; only the slot changes, so only it goes again with
-    // the receive mode and carrier.
+    // Direct: both slots.
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
-    REQUIRE(chip.packets.size() == 3);
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
-    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x18, 0x01, 0x00, 0x00});
-    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x19, 0x01});
+    REQUIRE(chip.packets.size() == 5);
+    CHECK(chip.packets[0] == carrierOff);
+    CHECK(chip.packets[1] == idle);
+    CHECK(chip.packets[2] == receive);
+    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03});
+    CHECK(chip.packets[4] == carrier);
 
-    // A retune with nothing changed: the receive mode and carrier alone.
+    // A retune with nothing changed: the reception ends and starts again.
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
-    REQUIRE(chip.packets.size() == 2);
-    // Another colour code: it goes too.
+    REQUIRE(chip.packets.size() == 5);
+    // Another colour code: it goes too, before receive mode.
     chip.packets.clear();
     settings.colourCode = 3;
     REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
-    REQUIRE(chip.packets.size() == 3);
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x77, 0x03});
+    REQUIRE(chip.packets.size() == 6);
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x08, 0x77, 0x03});
     // After anything else told to the chip, all of it again.
     REQUIRE(baseband.setCarrier(true));
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, false));
-    CHECK(chip.packets.size() == 5); // layer 2, colour code, slot, receive mode, carrier
+    CHECK(chip.packets.size() == 7); // carrier off, idle, layer 2, colour code, receive mode, slot, carrier
 
     // Back to FM: the analog vocoder first.
     chip.packets.clear();
@@ -372,21 +380,22 @@ TEST_CASE("digital receive sends the calibrated DC offset and demodulator gain")
     dmm::services::dmr::ChannelSettings settings;
     settings.slot = 2;
     REQUIRE(baseband.setDigital(settings, 438'075'000, 438'075'000, true));
-    REQUIRE(chip.packets.size() == 14);
-    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0x00, 0x00, 0x00}); // DAC 0 dB
-    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
-    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x00, 0x1C, 0x08, 0x00});
-    CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x00, 0x69, 0x05, 0x40});
-    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x2C, 0x08, 0x00}); // modulator gain before any transmission
-    CHECK(chip.packets[11] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02});      // the channel's slot alone
+    REQUIRE(chip.packets.size() == 16);
+    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x40, 0x00, 0x00, 65, 0x00, 0x00, 0x00}); // DAC 0 dB
+    CHECK(chip.packets[4] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+    CHECK(chip.packets[5] == std::vector<std::uint8_t>{0x00, 0x1C, 0x08, 0x00});
+    CHECK(chip.packets[6] == std::vector<std::uint8_t>{0x00, 0x69, 0x05, 0x40});
+    CHECK(chip.packets[7] == std::vector<std::uint8_t>{0x00, 0x2C, 0x08, 0x00}); // modulator gain before any transmission
+    CHECK(chip.packets[14] == std::vector<std::uint8_t>{0x08, 0x6F, 0x02});      // the channel's slot alone
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 145'000'000, 145'000'000, false));
-    REQUIRE(chip.packets.size() == 3);                                     // no values for this band; the vocoder stays
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03}); // direct: both slots
-    // Back to the band with values: they go again.
+    REQUIRE(chip.packets.size() == 5);                                     // no values for this band; the vocoder stays
+    CHECK(chip.packets[3] == std::vector<std::uint8_t>{0x08, 0x6F, 0x03}); // direct: both slots
+    // Back to the band with values: they go again, while the chip idles.
     chip.packets.clear();
     REQUIRE(baseband.setDigital(settings, 438'075'000, 438'075'000, false));
-    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x18, 0x00, 0x00, 0x00});
+    CHECK(chip.packets[2] == std::vector<std::uint8_t>{0x00, 0x39, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
 }
 
 TEST_CASE("a DMR call: slot, microphone, transmit, header, voice; then the terminator")

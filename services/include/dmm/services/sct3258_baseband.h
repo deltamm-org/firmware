@@ -176,7 +176,6 @@ private:
     bool m_digitalSet = false;
     std::optional<DigitalTrims> m_digitalTrimsSent;
     std::uint8_t m_colourCodeSent = 0;
-    std::uint8_t m_slotSent = 0;
 };
 
 } // namespace dmm::services

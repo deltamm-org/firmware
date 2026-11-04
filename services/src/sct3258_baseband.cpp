@@ -293,7 +293,12 @@ bool Sct3258Baseband::setDigital(
     const dmr::ChannelSettings &settings, std::uint32_t receiveHz, std::uint32_t transmitHz, bool repeater)
 {
     const bool fromAnalog = m_vocoder != Sct3258::VocoderDigital;
-    if (!m_info.running || !selectVocoder(Sct3258::VocoderDigital)) {
+    // The packet manual's receive flow: the set-up first, then receive mode,
+    // the slot and carrier ready; a reception ends with the carrier dropped.
+    // So the reception on the old frequency ends and the chip idles before
+    // anything is set up.
+    const std::uint8_t idle[] = {Sct3258::WorkMode, Sct3258::WorkIdle, 0, 0};
+    if (!m_info.running || !leaveReceive() || m_chip.control(idle) != 0 || !selectVocoder(Sct3258::VocoderDigital)) {
         return false;
     }
     // A retune within digital receive sends only the settings that change:
@@ -377,16 +382,12 @@ bool Sct3258Baseband::setDigital(
     if ((full || cc[1] != m_colourCodeSent) && m_chip.control(Sct3258::TypeDmr, cc) != 0) {
         return false;
     }
-    if ((full || slot[1] != m_slotSent) && m_chip.control(Sct3258::TypeDmr, slot) != 0) {
-        return false;
-    }
-    if (m_chip.control(work) != 0 || m_chip.control(carrier) != 0) {
+    if (m_chip.control(work) != 0 || m_chip.control(Sct3258::TypeDmr, slot) != 0 || m_chip.control(carrier) != 0) {
         return false;
     }
     m_digitalSet = true;
     m_digitalTrimsSent = trims;
     m_colourCodeSent = cc[1];
-    m_slotSent = slot[1];
     return true;
 }
 
@@ -578,7 +579,7 @@ bool Sct3258Baseband::sendFirstFrame(std::uint8_t colourCode, std::uint8_t prope
 
 bool Sct3258Baseband::leaveReceive()
 {
-    // No carrier any more: the chip is told before it transmits.
+    // No carrier any more: the chip is told before it transmits or retunes.
     const std::uint8_t carrier[] = {Sct3258::CarrierReady, 0};
     if (m_chip.control(carrier, SwitchMs) != 0) {
         warn("carrier off not taken");
