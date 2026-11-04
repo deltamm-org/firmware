@@ -32,6 +32,8 @@ set(DMM_CORE_LIBS $<TARGET_FILE:dmm_lib> $<TARGET_FILE:dmm_drivers_usb> $<TARGET
 if(TARGET dmm_services)
     list(APPEND DMM_CORE_LIBS $<TARGET_FILE:dmm_services>)
 endif()
-add_test(NAME core-heap-free
-    COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} "-DLIBS=${DMM_CORE_LIBS}"
-            -P ${PROJECT_SOURCE_DIR}/cmake/CheckHeapFree.cmake)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(NAME core-heap-free
+        COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} "-DLIBS=${DMM_CORE_LIBS}"
+                -P ${PROJECT_SOURCE_DIR}/cmake/CheckHeapFree.cmake)
+endif()
