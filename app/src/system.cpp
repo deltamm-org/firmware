@@ -369,7 +369,7 @@ void systemMain(void *)
         sinceReport += StepMs;
         if (sinceReport >= UptimeReportMs) {
             sinceReport = 0;
-            auto line = log::info("system");
+            auto line = log::debug("system");
             line << "uptime " << (os::nowMs() / 1000) << " s";
             for (std::size_t i = 0; os::taskStack(i).name != nullptr; ++i) {
                 const os::TaskStack t = os::taskStack(i);
