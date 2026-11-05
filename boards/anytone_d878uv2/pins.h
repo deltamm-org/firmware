@@ -152,9 +152,10 @@ inline constexpr unsigned BasebandResetLowMs = 500;
 // microphone while high; GPIO0 and GPIO4 turn on the receive front end
 // above and below 300 MHz; GPIO5 selects the transmit path above 300 MHz
 // and GPIO7 the transmit filter for 165-300 MHz; GPIO2 powers the GPS.
+// GPIO6 gives out the chip's squelch-open signal.
 // The receive front-end tuning is a 12-bit PWM value.
 inline constexpr dmm::hal::gd32f30x::ThreeWireBus::Pins FmTransceiverBus{{Port::B, 5}, {Port::B, 3}, {Port::B, 4}};
-inline constexpr dmm::services::Rda1846Transceiver::Pins FmPins{3, 0, 4, 5, 7, 2, 300'000'000, 165'000'000, 0xFFF};
+inline constexpr dmm::services::Rda1846Transceiver::Pins FmPins{3, 0, 4, 5, 7, 2, 6, 300'000'000, 165'000'000, 0xFFF};
 
 // GPS receiver: NMEA sentences at 9600 baud, 8N1, on USART1 (PA3 from the
 // receiver, PA2 to it). Its supply is the FM transceiver's GPIO2 (FmPins).
