@@ -36,6 +36,8 @@ os::Task<768> radioTask;
 os::Queue<Message, 8> inbox;
 // What the radio does on the air, kept for other tasks.
 std::atomic<Activity> airActivity{Activity::Idle};
+// A carrier on the channel's own frequency, for the green LED.
+std::atomic<bool> carrierShown{false};
 bool onAir = false;
 // The chips are up: set after the start or a restart of the baseband.
 std::atomic<bool> chipsReady{false};
@@ -49,6 +51,8 @@ constexpr int ChipTonePercent = 50;
 // channel with a receive tone opens the speaker on the tone alone, else
 // on the carrier; squelch level 0 forces only the carrier open.
 constexpr os::Ticks FmPollMs = 10;
+// On a DMR channel the receiver's carrier is read this often.
+constexpr os::Ticks DmrCarrierPollMs = 50;
 constexpr os::Ticks IdleWaitMs = 1000;
 constexpr int DefaultSquelchLevel = 3;
 services::FmChannel fmChannel;
@@ -233,6 +237,13 @@ void updateActivity()
             : fmChannel.digital && (speakerOpen || timingFound) ? Activity::DmrReceive
             : speakerOpen                                       ? Activity::FmReceive
                                                                 : Activity::Idle);
+}
+
+// The receiver's carrier decision, on the channel's own frequency only:
+// a roaming check elsewhere shows nothing.
+void showCarrier(bool heard)
+{
+    carrierShown.store(!away && heard);
 }
 
 // The screen's and LEDs' transmit indication.
@@ -482,6 +493,7 @@ void dmrReceive()
     }
     const char *problem = fm->receive(fmChannel, 1);
     saver.reset();
+    carrierGate.reset();
     if (problem != nullptr) {
         logReceiveRefused(problem);
         return;
@@ -658,6 +670,13 @@ void onDmrEvent(const services::dmr::Event &e)
 // One pass over what the baseband heard.
 void pollDmr()
 {
+    // The carrier only for the green LED: read less often than on FM.
+    static os::Ticks carrierPolled = 0;
+    if (os::nowMs() - carrierPolled >= DmrCarrierPollMs) {
+        carrierPolled = os::nowMs();
+        carrierGate.update(fm->status().carrier);
+        showCarrier(carrierGate.heard());
+    }
     withBaseband([](auto &b) {
         services::dmr::Event e;
         for (int i = 0; i < 8 && b.nextEvent(e); ++i) {
@@ -690,6 +709,7 @@ void pollFm()
 {
     const services::FmReceiveStatus s = fm->status();
     carrierGate.update(s.carrier);
+    showCarrier(carrierGate.heard());
     // A carrier, debounced, keeps battery save off, so a tone detector has
     // time to lock before the speaker opens. A single poll does not: the
     // first one after the receiver wakes can read a carrier that is not
@@ -1906,6 +1926,11 @@ void setReceiveGroups(std::span<const std::uint32_t> ids)
 Activity activity()
 {
     return airActivity.load();
+}
+
+bool carrier()
+{
+    return carrierShown.load();
 }
 
 bool ready()
