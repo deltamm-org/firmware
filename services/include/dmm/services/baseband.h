@@ -63,6 +63,8 @@ enum class BasebandWorkMode : std::uint8_t
 ///   repeater, or both slots direct. False if the chip did not take it.
 /// - nextEvent(event): the next thing heard on a digital channel; false
 ///   when there is none.
+/// - searchSlot(slot): after the timing of @p slot (1 or 2) was lost, looks
+///   for it again, keeping the rest of the digital reception as it is.
 /// - startDigitalCall(settings, lc, transmitHz, timed, level): transmits
 ///   the call's header, then voice from the microphone; with @p timed (a
 ///   repeater's timing just received) in the channel's slot on that
@@ -92,6 +94,7 @@ concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, s
     { bb.setMicrophone(on) } -> std::same_as<bool>;
     { bb.setDigital(dmrSettings, receiveHz, receiveHz, on) } -> std::same_as<bool>;
     { bb.nextEvent(event) } -> std::same_as<bool>;
+    { bb.searchSlot(step) } -> std::same_as<bool>;
     { bb.startDigitalCall(dmrSettings, lc, receiveHz, on, level) } -> std::same_as<bool>;
     { bb.endDigitalCall(dmrSettings, lc) } -> std::same_as<bool>;
     { bb.wakeRepeater(dmrSettings, receiveHz) } -> std::same_as<bool>;
