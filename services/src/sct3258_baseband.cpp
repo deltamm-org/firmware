@@ -43,11 +43,15 @@ constexpr int WakeBursts = 1;
 // slot alone.
 constexpr std::uint8_t BothSlots = 3;
 // CARRIER_READY: a carrier is there, with the demodulated signal as is or
-// reversed; with the chip's own squelch detection this starts it.
+// reversed; with the chip's own squelch detection this starts it. Bit 4
+// restarts the sync search of slot 1 only, with bit 3 that of slot 2.
 constexpr std::uint8_t CarrierReady = 1;
 constexpr std::uint8_t CarrierReadyReversed = 2;
+constexpr std::uint8_t CarrierSearchSlot1 = 0x10;
+constexpr std::uint8_t CarrierSearchSlot2 = 0x18;
 // NEW_EVENT codes.
 constexpr std::uint8_t EventSyncLost = 8;
+constexpr std::uint8_t EventSyncLostSlot2 = 17;
 constexpr std::uint8_t EventCarrierFound = 12;
 constexpr std::uint8_t EventCarrierLost = 13;
 // DMR_SLOT_FOUND bits.
@@ -408,7 +412,9 @@ bool Sct3258Baseband::toEvent(const drivers::baseband::Packet &p, dmr::Event &e)
     if (p.length >= 2 && p.fields[0] == Sct3258::NewEvent) {
         switch (p.fields[1]) {
         case EventSyncLost:
+        case EventSyncLostSlot2:
             e.kind = Kind::SyncLost;
+            e.slot = p.fields[1] == EventSyncLostSlot2 ? 2 : 1;
             return true;
         case EventCarrierFound:
             e.kind = Kind::CarrierFound;
@@ -609,6 +615,17 @@ bool Sct3258Baseband::nextEvent(dmr::Event &event)
         }
     }
     return false;
+}
+
+bool Sct3258Baseband::searchSlot(int slot)
+{
+    if (!m_info.running || !m_digitalSet) {
+        return false;
+    }
+    const std::uint8_t ready = m_audio.demodulatorInverted ? CarrierReadyReversed : CarrierReady;
+    const std::uint8_t carrier[] = {
+        Sct3258::CarrierReady, static_cast<std::uint8_t>(ready | (slot == 2 ? CarrierSearchSlot2 : CarrierSearchSlot1))};
+    return m_chip.control(carrier) == 0;
 }
 
 bool Sct3258Baseband::setVoiceEnhancement(bool on)

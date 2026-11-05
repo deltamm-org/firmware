@@ -125,6 +125,8 @@ public:
     /// sets the DMR call options once after start().
     bool setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, std::uint32_t transmitHz, bool repeater);
     bool nextEvent(dmr::Event &event);
+    /// False unless the digital reception is set up and the chip took it.
+    bool searchSlot(int slot);
     bool startDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc, std::uint32_t transmitHz, bool timed,
         PowerLevel level);
     bool endDigitalCall(const dmr::ChannelSettings &settings, const dmr::FullLc &lc);

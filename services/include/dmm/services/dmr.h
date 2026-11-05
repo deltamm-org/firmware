@@ -74,7 +74,7 @@ struct Event
         /// A burst: a data burst of @c type, or the first voice burst of a
         /// call, with its contents.
         Burst,
-        /// The signal's timing was lost: the call is over.
+        /// The timing of one slot was lost (@c slot); a call on it is over.
         SyncLost,
         CarrierFound,
         CarrierLost,
@@ -93,6 +93,8 @@ struct Event
     bool inverted = false;     // earlier slot numbers were the other way round
     bool inboundBusy = false;  // a repeater's inbound channel is in use
     std::uint8_t nextSlot = 0; // a repeater's next outbound slot, 1 or 2
+    // SyncLost.
+    std::uint8_t slot = 0; // 1 or 2
     // Burst.
     std::uint8_t colourCode = 0;
     bool voice = false;

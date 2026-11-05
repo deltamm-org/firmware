@@ -310,6 +310,34 @@ TEST_CASE("digital receive: the old reception ends, then vocoder, layer 2, call 
     CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x10, 0x10});
 }
 
+TEST_CASE("a slot's sync search restarts only on a digital reception")
+{
+    FakeSct3258 chip;
+    FakeBoard board;
+    Sct3258 sct(chip, noDelay);
+    Sct3258Baseband baseband(sct, board, Blob, TestAudio, testTrims);
+    REQUIRE(baseband.start());
+    CHECK_FALSE(baseband.searchSlot(1));
+
+    dmm::services::dmr::ChannelSettings settings;
+    settings.slot = 1;
+    REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, true));
+    chip.packets.clear();
+    REQUIRE(baseband.searchSlot(1));
+    REQUIRE(baseband.searchSlot(2));
+    REQUIRE(chip.packets.size() == 2);
+    CHECK(chip.packets[0] == std::vector<std::uint8_t>{0x00, 0x19, 0x11});
+    CHECK(chip.packets[1] == std::vector<std::uint8_t>{0x00, 0x19, 0x19});
+    // The reception is unchanged: a retune with the same settings still
+    // sends only the reception's restart.
+    chip.packets.clear();
+    REQUIRE(baseband.setDigital(settings, 433'450'000, 433'450'000, true));
+    CHECK(chip.packets.size() == 5);
+
+    REQUIRE(baseband.setCarrier(false));
+    CHECK_FALSE(baseband.searchSlot(1));
+}
+
 TEST_CASE("the chip's reports become DMR events")
 {
     using Kind = dmm::services::dmr::Event::Kind;
@@ -324,7 +352,8 @@ TEST_CASE("the chip's reports become DMR events")
     chip.queue(0x30, {0x1B, 0x05}); // voice sync: passed on as an undecoded report
     chip.queue(0x30, {0x77, 0x01, 0x43, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x89, 0x74, 0xCB, 0xB1});
     chip.queue(0x30, {0x77, 0x01, 0x43, 0x11, 0x09, 0x00, 0x00, 0x00, 0x00, 0x09, 0x89, 0x74, 0xCB, 0xB1});
-    chip.queue(0x30, {0x1B, 0x08}); // timing lost
+    chip.queue(0x30, {0x1B, 0x08}); // timing lost, slot 1
+    chip.queue(0x30, {0x1B, 0x11}); // timing lost, slot 2
     chip.queue(0x20, {0x17, 0x0A}); // all sent
 
     dmm::services::dmr::Event e;
@@ -357,6 +386,10 @@ TEST_CASE("the chip's reports become DMR events")
 
     REQUIRE(baseband.nextEvent(e));
     CHECK(e.kind == Kind::SyncLost);
+    CHECK(e.slot == 1);
+    REQUIRE(baseband.nextEvent(e));
+    CHECK(e.kind == Kind::SyncLost);
+    CHECK(e.slot == 2);
     REQUIRE(baseband.nextEvent(e));
     CHECK(e.kind == Kind::AllSent);
     CHECK_FALSE(baseband.nextEvent(e));

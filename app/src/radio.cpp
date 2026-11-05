@@ -624,12 +624,31 @@ void onDmrEvent(const services::dmr::Event &e)
         }
         break;
     }
-    case Kind::SyncLost:
-        timingFound = false;
-        updateActivity();
-        timingSeen = false;
-        endCall("lost");
+    case Kind::SyncLost: {
+        // Through a repeater a call is on the channel's slot. Direct, the
+        // call's slot is not known: the call is left to its terminator and
+        // the carrier.
+        if (inCall && !dmrRepeater) {
+            break;
+        }
+        const bool ownSlot = !dmrRepeater || e.slot == dmrSettings.slot;
+        if (ownSlot) {
+            timingFound = false;
+            updateActivity();
+            timingSeen = false;
+        }
+        if (inCall && ownSlot) {
+            endCall("lost");
+            break;
+        }
+        // A slot without a call: its timing is searched for again.
+        withBaseband([&e](auto &b) {
+            if (!b.searchSlot(e.slot)) {
+                log::debug("dmr") << "slot " << e.slot << " search not taken";
+            }
+        });
         break;
+    }
     case Kind::CarrierFound:
         idleLogged = false;
         carrierHeard = true;
