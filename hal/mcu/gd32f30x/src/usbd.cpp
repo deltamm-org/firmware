@@ -115,7 +115,7 @@ void Usbd::start(UsbDeviceEvents &events)
     gd32f30x::write(m_pullUp, false);
     configure(m_pullUp, PinMode::Output);
 
-    reg(rcu::AddCtl) &= ~1u; // 48 MHz from the PLL divider, not IRC48M
+    reg(rcu::AddCtl) &= ~rcu::Usb48mFromIrc48m; // 48 MHz from the PLL divider
     reg(rcu::Apb1En) |= rcu::UsbdClock;
     [[maybe_unused]] const std::uint32_t enabled = reg(rcu::Apb1En);
 

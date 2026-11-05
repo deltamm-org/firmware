@@ -55,4 +55,25 @@ ClockSource startSystemClock(std::uint32_t crystalHz)
     return crystal ? ClockSource::Crystal : ClockSource::Internal;
 }
 
+bool selectUsbClock(UsbClockSource source)
+{
+    if (source == UsbClockSource::Pll) {
+        reg(rcu::AddCtl) &= ~rcu::Usb48mFromIrc48m;
+        reg(rcu::AddCtl) &= ~rcu::Irc48mOn;
+        return true;
+    }
+    reg(rcu::AddCtl) |= rcu::Irc48mOn;
+    if (!waitFor(rcu::AddCtl, rcu::Irc48mStable, rcu::Irc48mStable, CrystalStartPolls)) {
+        reg(rcu::AddCtl) &= ~rcu::Irc48mOn;
+        return false;
+    }
+    reg(rcu::AddCtl) |= rcu::Usb48mFromIrc48m;
+    return true;
+}
+
+UsbClockSource usbClock()
+{
+    return (reg(rcu::AddCtl) & rcu::Usb48mFromIrc48m) != 0 ? UsbClockSource::Internal48m : UsbClockSource::Pll;
+}
+
 } // namespace dmm::hal::gd32f30x
