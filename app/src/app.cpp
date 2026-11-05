@@ -439,6 +439,9 @@ void runCommand(std::string_view command)
                                 "bbtone <hz> <ms>, "
                                 "fm rx|rxw <kHz[.ddd]> (12.5|25 kHz), fm off, fm sq 0-5, fm status, fm tx <kHz>|off, fm tone tx|rx off|<0.1 Hz>|d<octal>[n|i], fm power low|mid|high|turbo, fm tot <s>, fm txaudio both|bb|direct, dmr rx <kHz> <colour code> <slot 1|2, 0 = both direct>, dmr tg|pc <id>, dmr tg off, dmr id <id>, roam, roam now, roam auto on|off, ptt <100-10000 ms>, mic on|off, lock, unlock, lock status, lock set knob|keypad|side|forced on|off, lock auto <s>, save [0-2], light time <s>";
         log::info("console") << "FM chip: " << platform->fm.debugHelp();
+        if (const char *board = platform->system.debugHelp()) {
+            log::info("console") << "board: " << board;
+        }
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
         log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>; clock: time, time set YYYY-MM-DD HH:MM:SS (UTC)";
         log::info("console") << "GPS receiver: " << gps::debugHelp();
@@ -478,6 +481,11 @@ void runCommand(std::string_view command)
         ui::post(ui::ShowLog{});
     } else if (command == "keytest") {
         ui::post(ui::ShowKeyTest{});
+    } else if (lib::startsWith(command, "board ")) {
+        if (!platform->system.debugCommand(std::string_view(command.data() + 6, command.size() - 6))) {
+            const char *help = platform->system.debugHelp();
+            log::info("console") << "board: " << (help != nullptr ? help : "none");
+        }
     } else if (command == "panel on" || command == "panel off") {
         ui::post(ui::PanelPower{command == "panel on"});
     } else if (command == "time") {

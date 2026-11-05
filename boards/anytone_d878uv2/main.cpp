@@ -221,6 +221,22 @@ public:
     {
         cm::triggerTestFault();
     }
+    bool debugCommand(std::string_view command) override
+    {
+        if (command != "usb clock pll" && command != "usb clock internal") {
+            return false;
+        }
+        const bool ok = hal::selectUsbClock(command == "usb clock pll" ? hal::UsbClockSource::Pll
+                                                                       : hal::UsbClockSource::Internal48m);
+        dmm::services::log::info("board") << "USB clock "
+                                          << (hal::usbClock() == hal::UsbClockSource::Pll ? "from the PLL" : "internal 48 MHz")
+                                          << (ok ? "" : "; the internal oscillator did not start");
+        return true;
+    }
+    const char *debugHelp() const override
+    {
+        return "board usb clock pll|internal";
+    }
 
 private:
     dmm::services::ResetReport m_reset;

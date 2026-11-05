@@ -76,6 +76,11 @@ inline constexpr std::uint32_t PmuClock = 1u << 28;
 inline constexpr std::uint32_t UsbdClock = 1u << 23;
 inline constexpr std::uint32_t DacClock = 1u << 29;
 
+// RCU_ADDCTL
+inline constexpr std::uint32_t Usb48mFromIrc48m = 1u << 0; // CK48MSEL
+inline constexpr std::uint32_t Irc48mOn = 1u << 16;
+inline constexpr std::uint32_t Irc48mStable = 1u << 17;
+
 // RCU_RSTSCK
 inline constexpr std::uint32_t ClearResetFlags = 1u << 24;
 inline constexpr std::uint32_t ResetByPin = 1u << 26;

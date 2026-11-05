@@ -22,4 +22,15 @@ enum class ClockSource : std::uint8_t
 /// accuracy. Call once, before anything depends on a clock.
 ClockSource startSystemClock(std::uint32_t crystalHz);
 
+/// Where USB's 48 MHz comes from: the PLL divided by 2.5, or the internal
+/// 48 MHz oscillator (IRC48M, untrimmed). Switches while USB runs, which
+/// may upset the link. False if the oscillator did not start.
+enum class UsbClockSource : std::uint8_t
+{
+    Pll,
+    Internal48m,
+};
+bool selectUsbClock(UsbClockSource source);
+UsbClockSource usbClock();
+
 } // namespace dmm::hal::gd32f30x

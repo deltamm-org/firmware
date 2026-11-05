@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace dmm::services {
 
@@ -54,6 +55,10 @@ public:
     virtual ResetReport lastReset() = 0;
     /// Crashes on purpose, to test crash capture. Does not return on a radio.
     virtual void testFault() = 0;
+    /// The board's own console commands, for experiments; false if
+    /// @p command is none of them. debugHelp(): their summary, or nullptr.
+    virtual bool debugCommand(std::string_view) { return false; }
+    virtual const char *debugHelp() const { return nullptr; }
 
 protected:
     ~SystemControl() = default;
