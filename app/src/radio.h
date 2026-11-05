@@ -218,6 +218,9 @@ Activity activity();
 /// on a roaming channel): the receiver's squelch decision, steadied. Any
 /// task may ask.
 bool carrier();
+/// Logs each minute the lowest, middle and highest level read on a DMR
+/// channel's own frequency. Off from start; any task may switch it.
+void setLevelLog(bool on);
 
 /// True once the radio's chips are up and it takes commands that reach the
 /// air; false while they start or restart. Any task may ask.

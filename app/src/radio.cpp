@@ -687,14 +687,59 @@ void onDmrEvent(const services::dmr::Event &e)
 }
 
 // One pass over what the baseband heard.
+// The level summary: every reading of a minute on a DMR channel's own
+// frequency, in 1 dB steps, then the lowest tenth, the middle and the
+// highest logged. Shows the noise and a signal such as a beacon apart.
+std::atomic<bool> levelLog{false};
+constexpr int LevelLowestDbm = -140;
+constexpr std::size_t LevelSteps = 100;
+constexpr os::Ticks LevelPeriodMs = 60'000;
+
+void noteLevel(int dbm)
+{
+    static std::uint16_t counts[LevelSteps] = {};
+    static unsigned readings = 0;
+    static os::Ticks started = 0;
+    if (!levelLog.load(std::memory_order_relaxed)) {
+        readings = 0;
+        return;
+    }
+    if (readings == 0) {
+        std::fill(std::begin(counts), std::end(counts), 0);
+        started = os::nowMs();
+    }
+    const int step = std::clamp(dbm - LevelLowestDbm, 0, static_cast<int>(LevelSteps) - 1);
+    ++counts[step];
+    ++readings;
+    if (os::nowMs() - started < LevelPeriodMs) {
+        return;
+    }
+    // The level at which @p share of the readings lie at or below.
+    auto at = [&](unsigned share) {
+        unsigned seen = 0;
+        for (std::size_t i = 0; i < LevelSteps; ++i) {
+            seen += counts[i];
+            if (seen * 100 >= readings * share) {
+                return static_cast<int>(i) + LevelLowestDbm;
+            }
+        }
+        return LevelLowestDbm + static_cast<int>(LevelSteps) - 1;
+    };
+    log::info("dmr") << "level over " << (os::nowMs() - started) / 1000 << " s: low " << at(10) << ", middle " << at(50)
+                     << ", high " << at(100) << " dBm, " << readings << " readings";
+    readings = 0;
+}
+
 void pollDmr()
 {
-    // The carrier only for the green LED: read less often than on FM.
+    // The carrier for the green LED: read less often than on FM.
     static os::Ticks carrierPolled = 0;
     if (os::nowMs() - carrierPolled >= DmrCarrierPollMs) {
         carrierPolled = os::nowMs();
-        carrierGate.update(fm->status().carrier);
+        const services::FmReceiveStatus s = fm->status();
+        carrierGate.update(s.carrier);
         showCarrier(carrierGate.heard());
+        noteLevel(s.rssiDbm);
     }
     withBaseband([](auto &b) {
         services::dmr::Event e;
@@ -1950,6 +1995,11 @@ Activity activity()
 bool carrier()
 {
     return carrierShown.load();
+}
+
+void setLevelLog(bool on)
+{
+    levelLog.store(on, std::memory_order_relaxed);
 }
 
 bool ready()
