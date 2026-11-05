@@ -357,11 +357,13 @@ void systemMain(void *)
             return;
         }
 
-        // Green while FM is heard, blue while DMR is, red on the air;
-        // while the battery is low the red LED blinks when not transmitting.
+        // Green while a carrier or FM is heard, blue while DMR is, red on
+        // the air; while the battery is low the red LED blinks when not
+        // transmitting.
         const radio::Activity air = radio::activity();
         const bool lowBlink = battery().low() && now % (2 * LowBatteryBlinkMs) < LowBatteryBlinkMs;
-        platform->leds.set(Leds::Led::Green, air == radio::Activity::FmReceive);
+        platform->leds.set(Leds::Led::Green,
+            air == radio::Activity::FmReceive || (air != radio::Activity::Transmit && radio::carrier()));
         platform->leds.set(Leds::Led::Blue, air == radio::Activity::DmrReceive);
         platform->leds.set(Leds::Led::Red, air == radio::Activity::Transmit || lowBlink);
 

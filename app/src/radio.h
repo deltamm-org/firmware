@@ -214,6 +214,10 @@ enum class Activity : std::uint8_t
 };
 /// Any task may ask.
 Activity activity();
+/// A carrier is heard on the channel's own frequency (the repeater in use's,
+/// on a roaming channel): the receiver's squelch decision, steadied. Any
+/// task may ask.
+bool carrier();
 
 /// True once the radio's chips are up and it takes commands that reach the
 /// air; false while they start or restart. Any task may ask.
