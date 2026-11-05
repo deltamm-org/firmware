@@ -66,6 +66,11 @@ inline Line error(std::string_view module)
 using Tap = void (*)(Level level, std::string_view line);
 void setTap(Tap tap);
 
+/// Whether debug lines are queued for the sink (on from start). Off, the
+/// queue keeps the other lines longer while nothing reads it.
+void setDebugQueued(bool on);
+bool debugQueued();
+
 /// Moves every queued line to @p sink, oldest first. Lines that did not fit
 /// the queue are reported as one summary line. Returns the lines written.
 std::size_t drain(LogSink &sink);

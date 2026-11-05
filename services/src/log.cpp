@@ -6,6 +6,8 @@
 #include "dmm/lib/ring_buffer.h"
 #include "dmm/os/os.h"
 
+#include <atomic>
+
 namespace dmm::services::log {
 
 namespace {
@@ -18,6 +20,7 @@ std::size_t droppedLines = 0;
 os::Mutex queueLock;
 
 Tap tap = nullptr;
+std::atomic<bool> queueDebug{true};
 
 char levelLetter(Level level)
 {
@@ -41,6 +44,16 @@ void setTap(Tap t)
     tap = t;
 }
 
+void setDebugQueued(bool on)
+{
+    queueDebug.store(on, std::memory_order_relaxed);
+}
+
+bool debugQueued()
+{
+    return queueDebug.load(std::memory_order_relaxed);
+}
+
 Line::Line(Level level, std::string_view module)
     : m_level(level)
 {
@@ -55,7 +68,9 @@ Line::~Line()
 {
     const std::string_view text = m_text.view();
     queueLock.lock();
-    if (pending.freeSpace() < text.size() + 1) {
+    if (m_level == Level::Debug && !queueDebug.load(std::memory_order_relaxed)) {
+        // Not queued; the tap still sees it.
+    } else if (pending.freeSpace() < text.size() + 1) {
         ++droppedLines;
     } else {
         for (char c : text) {
