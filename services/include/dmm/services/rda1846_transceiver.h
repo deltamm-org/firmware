@@ -26,6 +26,7 @@ public:
         unsigned transmitHighBand; // transmit path above splitHz
         unsigned transmitMidBand;  // transmit filter for midLowHz..splitHz
         unsigned gpsPower;         // high = on
+        unsigned squelchOutput;    // gives out the chip's squelch-open signal
         std::uint32_t splitHz;
         std::uint32_t midLowHz;
         std::uint16_t receiveTuneMax;

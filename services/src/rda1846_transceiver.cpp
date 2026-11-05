@@ -99,6 +99,7 @@ std::uint16_t Rda1846Transceiver::startGpio() const
     for (unsigned pin : {m_pins.receiveHighBand, m_pins.receiveLowBand, m_pins.transmitHighBand, m_pins.transmitMidBand}) {
         v = static_cast<std::uint16_t>(v | field(pin, Mode::Low));
     }
+    v = static_cast<std::uint16_t>(v | field(m_pins.squelchOutput, Mode::Function));
     return static_cast<std::uint16_t>(v | field(m_pins.gpsPower, m_gpsOn ? Mode::High : Mode::Low));
 }
 

@@ -83,7 +83,7 @@ public:
 
 void noSleep(unsigned) {}
 
-constexpr Rda1846Transceiver::Pins BoardPins{3, 0, 4, 5, 7, 2, 300'000'000, 165'000'000, 0xFFF};
+constexpr Rda1846Transceiver::Pins BoardPins{3, 0, 4, 5, 7, 2, 6, 300'000'000, 165'000'000, 0xFFF};
 
 D878Uv2Calibration calibration()
 {
@@ -195,8 +195,9 @@ TEST_CASE("start leaves the microphone muted and every RF switch off")
     Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
     REQUIRE(fm.start());
     const std::uint16_t gpio = bus.registers[0x1F];
-    CHECK(gpio == 0x8AE2);
+    CHECK(gpio == 0x9AE2);
     CHECK(gpioField(gpio, 3) == 3); // mic muted
+    CHECK(gpioField(gpio, 6) == 1); // squelch signal out
     for (unsigned pin : {0u, 2u, 4u, 5u, 7u}) {
         CHECK(gpioField(gpio, pin) == 2); // low
     }
