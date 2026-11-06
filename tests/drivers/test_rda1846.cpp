@@ -341,8 +341,10 @@ TEST_CASE("DCS transmit tones")
     using Tone = Rda1846::SubTone;
     chip.setTransmitTone(Tone{Tone::Kind::Dcs, 023, false});
     CHECK(bus.registers[0x4A] == 13'440);
-    CHECK(bus.registers[0x4B] == 0x0076);
-    CHECK(bus.registers[0x4C] == 0x3813);
+    CHECK(bus.registers[0x4D] == 13'440);
+    // The codeword 0x763813 with its 23 bits reversed.
+    CHECK(bus.registers[0x4B] == 0x0064);
+    CHECK(bus.registers[0x4C] == 0x0E37);
     CHECK(bus.registers[0x4E] == 0x2482);
     chip.setTransmitTone(Tone{Tone::Kind::Dcs, 023, true});
     CHECK(bus.registers[0x4E] == 0x2582);
@@ -362,11 +364,14 @@ TEST_CASE("a receive tone switches on its own detector and flag, kept across wid
     chip.setBandwidth(Rda1846::Bandwidth::Wide);
     CHECK(bus.registers[0x3A] == 0x44C1);
     chip.setReceiveTone(Tone{Tone::Kind::Dcs, 0754, true});
-    CHECK(bus.registers[0x3A] == 0x44C4);
+    CHECK(bus.registers[0x3A] == 0x44EC);
+    CHECK(bus.registers[0x4B] == 0x001B);
+    CHECK(bus.registers[0x4C] == 0xCF82);
     CHECK(bus.registers[0x4E] == 0x2582);
     CHECK(chip.receiveToneHeard(Rda1846::DcsInvertedMatch));
     CHECK_FALSE(chip.receiveToneHeard(Rda1846::DcsMatch));
     chip.setReceiveTone(Tone{Tone::Kind::Dcs, 023, false});
+    CHECK(bus.registers[0x3A] == 0x44EA);
     CHECK(chip.receiveToneHeard(Rda1846::DcsMatch));
     chip.setReceiveTone(Tone{});
     CHECK(bus.registers[0x3A] == 0x44C0);
@@ -399,4 +404,11 @@ TEST_CASE("a digital channel takes the tuning's digital column, idle like a narr
     CHECK(bus.registers[0x30] == 0x4026);
     chip.setBandwidth(Rda1846::Bandwidth::Narrow);
     CHECK(bus.registers[0x3C] == 0x0408);
+}
+
+TEST_CASE("23-bit words are reversed bit for bit")
+{
+    CHECK(Rda1846::reversed23(0x763813u) == 0x640E37u);
+    CHECK(Rda1846::reversed23(1u) == 1u << 22);
+    CHECK(Rda1846::reversed23(Rda1846::reversed23(0x1234567u & 0x7FFFFFu)) == (0x1234567u & 0x7FFFFFu));
 }

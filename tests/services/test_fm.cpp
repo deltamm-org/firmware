@@ -406,7 +406,7 @@ TEST_CASE("a receive tone has its own detector and flag, apart from the carrier"
 
     channel.receiveTone = Tone{Tone::Kind::Dcs, 023, true};
     REQUIRE(fm.receive(channel, 1) == nullptr);
-    CHECK((bus.registers[0x3A] & 0x1F) == 0x04);
+    CHECK((bus.registers[0x3A] & 0x3F) == 0x2C);
     CHECK(bus.registers[0x4E] == 0x2582);
     bus.registers[0x1C] = 0x0081; // normal DCS: not this tone
     CHECK_FALSE(fm.status().toneHeard);
@@ -435,8 +435,8 @@ TEST_CASE("DCS transmit uses the DCS deviation")
     channel.transmitTone = Tone{Tone::Kind::Dcs, 023, false};
     REQUIRE(fm.transmit(channel, PowerLevel::Low) == nullptr);
     CHECK(bus.registers[0x4E] == 0x2482);
-    CHECK(bus.registers[0x4B] == 0x0076);
-    CHECK(bus.registers[0x4C] == 0x3813);
+    CHECK(bus.registers[0x4B] == 0x0064);
+    CHECK(bus.registers[0x4C] == 0x0E37);
     CHECK(bus.registers[0x59] == ((0x2A << 6) | 0x0C));
     fm.endTransmit();
     CHECK(bus.registers[0x4E] == 0x2002);
