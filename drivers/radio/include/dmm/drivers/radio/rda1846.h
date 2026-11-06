@@ -221,6 +221,8 @@ public:
     /// The 23-bit DCS word for a nine-bit @p code, as the chip takes it:
     /// eleven Golay (23,12) parity bits, then 100, then the code.
     static std::uint32_t dcsWord(std::uint16_t code);
+    /// @p word's 23 bits in reverse order.
+    static std::uint32_t reversed23(std::uint32_t word);
 
     /// Changes one GPIO pin (0..7), keeping the others as the chip has
     /// them. Returns the register value written.

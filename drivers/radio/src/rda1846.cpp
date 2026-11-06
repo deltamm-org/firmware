@@ -97,16 +97,20 @@ constexpr std::uint8_t SquelchRegister = 0x49;
 constexpr std::uint8_t NoiseSquelchRegister = 0x48;
 constexpr std::uint8_t DeviationRegister = 0x59;
 constexpr std::uint8_t Ctcss1Register = 0x4A;
+constexpr std::uint8_t Ctcss2Register = 0x4D;
 constexpr std::uint8_t DcsHighRegister = 0x4B;
 constexpr std::uint8_t DcsLowRegister = 0x4C;
 constexpr std::uint8_t ToneModeRegister = 0x4E;
-// The low five bits of this register switch the tone detectors on; the
+// The low six bits of this register switch the tone detectors on; the
 // driver owns them, whatever a tuning table writes there.
 constexpr std::uint8_t DetectRegister = 0x3A;
-constexpr std::uint16_t DetectBits = 0x1F;
+constexpr std::uint16_t DetectBits = 0x3F;
 constexpr std::uint16_t DetectCtcss = 1u << 0;
-constexpr std::uint16_t DetectDcs = 1u << 1;
-constexpr std::uint16_t DetectDcsInverted = 1u << 2;
+// DCS: the normal or inverted code, with the second tone detector (on
+// the DCS bit clock) and the tone output selection set as well.
+constexpr std::uint16_t DetectDcsClock = 1u << 3 | 1u << 5;
+constexpr std::uint16_t DetectDcs = 1u << 1 | DetectDcsClock;
+constexpr std::uint16_t DetectDcsInverted = 1u << 2 | DetectDcsClock;
 
 // Control register: reference 26 MHz, chip powered, and for wide channels
 // both the analog and the DSP filters at 25 kHz.
@@ -124,7 +128,7 @@ constexpr std::uint16_t ToneModeOff = 0x2002;
 constexpr std::uint16_t ToneModeCtcss = 0x2602;
 constexpr std::uint16_t ToneModeDcs = 0x2482;
 constexpr std::uint16_t ToneModeDcsInverted = 0x2582;
-// DCS runs on the CTCSS generator at 134.4 Hz.
+// DCS runs on both tone generators at 134.4 Hz.
 constexpr std::uint16_t DcsClockCentiHz = 13'440;
 // Golay (23,12) generator for the DCS parity bits.
 constexpr std::uint32_t GolayGenerator = 0xC75;
@@ -324,6 +328,15 @@ std::uint32_t Rda1846::dcsWord(std::uint16_t code)
     return (remainder & 0x7FFu) << 12 | data;
 }
 
+std::uint32_t Rda1846::reversed23(std::uint32_t word)
+{
+    std::uint32_t r = 0;
+    for (int bit = 0; bit < 23; ++bit) {
+        r = r << 1 | ((word >> bit) & 1u);
+    }
+    return r;
+}
+
 void Rda1846::setTone(const SubTone &tone)
 {
     switch (tone.kind) {
@@ -335,8 +348,11 @@ void Rda1846::setTone(const SubTone &tone)
         m_bus.write(ToneModeRegister, ToneModeCtcss);
         break;
     case SubTone::Kind::Dcs: {
-        const std::uint32_t word = dcsWord(tone.value);
+        // This transceiver takes the 23-bit word in the reverse bit order
+        // of the codeword as its maker's example writes it.
+        const std::uint32_t word = reversed23(dcsWord(tone.value));
         m_bus.write(Ctcss1Register, DcsClockCentiHz);
+        m_bus.write(Ctcss2Register, DcsClockCentiHz);
         m_bus.write(DcsHighRegister, static_cast<std::uint16_t>(word >> 16));
         m_bus.write(DcsLowRegister, static_cast<std::uint16_t>(word & 0xFFFF));
         m_bus.write(ToneModeRegister, tone.inverted ? ToneModeDcsInverted : ToneModeDcs);
