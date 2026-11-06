@@ -325,6 +325,9 @@ constexpr DeviationStep DeviationSteps[] = {
 // analog microphone level (2, the middle one, is the tables' own).
 constexpr std::uint8_t MicrophoneGains[] = {7, 8, 9, 10, 12};
 
+// DCS receive: the tone detector's match threshold 8, unmatch threshold 7.
+constexpr std::uint16_t DcsToneThreshold = 0x0807;
+
 constexpr Tuning TuningS{
     .startUp = StartUpS,
     .afterCalibration = AfterCalibration,
@@ -338,6 +341,7 @@ constexpr Tuning TuningS{
     .normalBand = BandNormal,
     .deviationSteps = DeviationSteps,
     .microphoneGains = MicrophoneGains,
+    .dcsToneThreshold = DcsToneThreshold,
 };
 constexpr Tuning TuningN{
     .startUp = StartUpN,
@@ -352,6 +356,7 @@ constexpr Tuning TuningN{
     .normalBand = BandNormal,
     .deviationSteps = DeviationSteps,
     .microphoneGains = MicrophoneGains,
+    .dcsToneThreshold = DcsToneThreshold,
 };
 
 bool isVersionN(dmm::services::Storage &storage)

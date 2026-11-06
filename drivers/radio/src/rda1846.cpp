@@ -101,6 +101,7 @@ constexpr std::uint8_t Ctcss2Register = 0x4D;
 constexpr std::uint8_t DcsHighRegister = 0x4B;
 constexpr std::uint8_t DcsLowRegister = 0x4C;
 constexpr std::uint8_t ToneModeRegister = 0x4E;
+constexpr std::uint8_t ToneThresholdRegister = 0x5B;
 // The low six bits of this register switch the tone detectors on; the
 // driver owns them, whatever a tuning table writes there.
 constexpr std::uint8_t DetectRegister = 0x3A;
@@ -211,6 +212,7 @@ bool Rda1846::start(void (*sleepMs)(unsigned), std::uint16_t gpio)
     m_bus.write(ControlRegister, ControlNarrow);
     sleepMs(10);
     write(m_tuning->afterCalibration, sleepMs);
+    m_startThreshold = m_bus.read(ToneThresholdRegister);
     m_mode = Mode::Idle;
     setBandwidth(Bandwidth::Narrow);
     return true;
@@ -385,6 +387,13 @@ void Rda1846::setReceiveTone(const SubTone &tone)
     }
     const std::uint16_t detect = m_bus.read(DetectRegister);
     m_bus.write(DetectRegister, static_cast<std::uint16_t>((detect & ~DetectBits) | m_detect));
+    if (m_tuning->dcsToneThreshold != Keep) {
+        const std::uint16_t threshold =
+            tone.kind == SubTone::Kind::Dcs ? m_tuning->dcsToneThreshold : m_startThreshold;
+        if (threshold != Keep) {
+            m_bus.write(ToneThresholdRegister, threshold);
+        }
+    }
 }
 
 void Rda1846::setDeviation(std::uint16_t voice, std::uint8_t tone)
