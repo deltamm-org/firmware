@@ -412,3 +412,31 @@ TEST_CASE("23-bit words are reversed bit for bit")
     CHECK(Rda1846::reversed23(1u) == 1u << 22);
     CHECK(Rda1846::reversed23(Rda1846::reversed23(0x1234567u & 0x7FFFFFu)) == (0x1234567u & 0x7FFFFFu));
 }
+
+TEST_CASE("a DCS receive tone sets the tuning's tone threshold, other tones the one from start")
+{
+    constexpr Rda1846::Tuning DcsTuning = [] {
+        Rda1846::Tuning t = TestTuning;
+        t.dcsToneThreshold = 0x0807;
+        return t;
+    }();
+    using Tone = Rda1846::SubTone;
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    bus.registers[0x5B] = 0x1234;
+    Rda1846 chip(bus, DcsTuning);
+    REQUIRE(chip.start(sleep, 0));
+    chip.setReceiveTone(Tone{Tone::Kind::Dcs, 023, false});
+    CHECK(bus.registers[0x5B] == 0x0807);
+    chip.setReceiveTone(Tone{Tone::Kind::Ctcss, 8850, false});
+    CHECK(bus.registers[0x5B] == 0x1234);
+    chip.setReceiveTone(Tone{Tone::Kind::Dcs, 0754, true});
+    CHECK(bus.registers[0x5B] == 0x0807);
+    chip.setReceiveTone(Tone{});
+    CHECK(bus.registers[0x5B] == 0x1234);
+
+    FakeBus makerBus;
+    Rda1846 maker(makerBus);
+    maker.setReceiveTone(Tone{Tone::Kind::Dcs, 023, false});
+    CHECK(makerBus.registers.count(0x5B) == 0);
+}

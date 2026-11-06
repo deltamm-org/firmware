@@ -142,6 +142,11 @@ public:
         /// The transmit gain (bits 11:8 of the volume register) per
         /// microphone level on FM channels; empty: the tables' own.
         std::span<const std::uint8_t> microphoneGains;
+        /// The tone detector's match and unmatch thresholds (register
+        /// 0x5B) while a DCS code is received; Keep leaves the register
+        /// alone. Other receive tones get back the value it had after
+        /// start().
+        std::uint16_t dcsToneThreshold = Keep;
     };
 
     /// The chip maker's start-up and per-width values for a 26 MHz
@@ -243,6 +248,8 @@ private:
     // The tone detectors switched on, and the flag of the one listened for.
     std::uint16_t m_detect = 0;
     std::uint16_t m_toneFlag = 0;
+    // The tone detector's thresholds as start() left them.
+    std::uint16_t m_startThreshold = Keep;
 };
 
 } // namespace dmm::drivers::radio
