@@ -261,7 +261,7 @@ void setSpeaker(bool open)
 
 // Log lines of the receive set-up are built in their own frames, kept out
 // of the deep path down to the chips.
-[[gnu::noinline, gnu::cold]] void logAnalogRefused()
+[[gnu::noinline, gnu::cold, maybe_unused]] void logAnalogRefused()
 {
     log::warning("baseband") << "analog receive set-up not accepted";
 }
@@ -517,7 +517,7 @@ void noteHeard(int i, int dbm)
     log::debug("roam") << "beacon of repeater " << site + 1 << ", " << baseTx.dbm << " dBm, " << length << " ms";
 }
 
-void onDmrEvent(const services::dmr::Event &e)
+[[maybe_unused]] void onDmrEvent(const services::dmr::Event &e)
 {
     using Kind = services::dmr::Event::Kind;
     using services::dmr::DataType;
@@ -816,7 +816,7 @@ struct Probe
     }
 }
 
-[[gnu::noinline]] void logProbeWake(int i, int attempt, bool sent, bool carrier, bool answered)
+[[gnu::noinline, maybe_unused]] void logProbeWake(int i, int attempt, bool sent, bool carrier, bool answered)
 {
     log::info("roam") << "repeater " << i + 1 << ", wake-up " << attempt << ": "
                       << (!sent ? "not sent" : answered ? "answered"
@@ -962,6 +962,10 @@ enum class SearchCause : std::uint8_t
 // Tries the roaming zone's repeaters, most likely first, until one is good,
 // and works through the best that answered. @p skipCurrent leaves out the
 // repeater in use, which has just failed to answer. True when one did.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // rest of search() requires baseband hardware; unreachable on host builds
+#endif
 [[gnu::noinline]] bool search(SearchCause cause, bool skipCurrent = false)
 {
     const std::size_t count = sitesKnown();
@@ -1018,6 +1022,9 @@ enum class SearchCause : std::uint8_t
     showRoaming(false);
     return best >= 0;
 }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 // Back to the repeater in use, or to the channel's own frequencies.
 void backToBase()
@@ -1221,7 +1228,7 @@ void roamStep()
     visit(v, state);
 }
 
-[[gnu::noinline]] void logWakeTry(int attempt, bool sent, bool answered)
+[[gnu::noinline, maybe_unused]] void logWakeTry(int attempt, bool sent, bool answered)
 {
     log::info("dmr") << "repeater wake-up " << attempt << ": " << (!sent ? "not sent" : answered ? "answered"
                                                                                                  : "no answer");
