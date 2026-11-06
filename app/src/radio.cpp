@@ -586,7 +586,9 @@ void onDmrEvent(const services::dmr::Event &e)
             log::debug("dmr") << "burst " << lib::hex(e.raw, 2) << ", colour code " << e.colourCode << ", "
                               << fm->status().rssiDbm << " dBm: " << bytes.view();
         }
-        if (!lc) {
+        // Only the channel's colour code carries calls for us; a weak
+        // burst can also come with a wrong one.
+        if (!lc || e.colourCode != dmrSettings.colourCode) {
             break;
         }
         if (!e.voice && e.type == DataType::TerminatorWithLc) {
