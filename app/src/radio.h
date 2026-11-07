@@ -240,7 +240,7 @@ struct RoamingView
     bool roaming = false; // a roaming channel is in use
     bool searching = false;
     int site = -1; // the repeater in use, -1 for none
-    services::roaming::Health health = services::roaming::Health::Unknown;
+    services::roaming::Health health = services::roaming::Health::Quiet;
     std::uint8_t count = 0;
     services::roaming::HeardList::Entry entries[services::roaming::HeardList::Capacity];
     std::uint32_t receiveHz[services::roaming::HeardList::Capacity] = {};
