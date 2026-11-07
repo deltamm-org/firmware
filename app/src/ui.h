@@ -70,6 +70,7 @@ struct DmrCall
 struct Roaming
 {
     bool searching;
+    bool lost; // the repeater in use did not answer a wake-up, and has not been heard since
     std::int8_t site;
     std::uint32_t receiveHz;
     std::uint8_t colourCode;

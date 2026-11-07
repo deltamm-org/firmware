@@ -534,6 +534,7 @@ bool roamingOn = true;
 struct RoamState
 {
     bool searching = false;
+    bool lost = false;
     int site = -1;
     std::uint32_t receiveHz = 0;
     std::uint8_t colourCode = 0;
@@ -558,7 +559,7 @@ void loadRoamingSites()
 // is doing instead.
 lib::StaticString<9> roamStateText(const radio::RoamingView &v)
 {
-    constexpr const char *States[] = {"?", "Good", "Weak", "Fail", "Lost"};
+    constexpr const char *States[] = {"Good", "Weak", "Quiet", "Lost"};
     lib::StaticString<9> t;
     if (!v.roaming) {
         t << "Off";
@@ -572,8 +573,8 @@ lib::StaticString<9> roamStateText(const radio::RoamingView &v)
     return t;
 }
 // Fills @p list with what roaming knows: the repeater in use, then each
-// repeater heard with its level, the age of that level and its beacon
-// period, and a row that searches now. The cursor stays on the same row.
+// repeater heard with its level and the age of that level, and a row that
+// searches now. The cursor stays on the same row.
 constexpr std::uint8_t SearchNowRow = 0xFF;
 void fillRoamStatus(ListPicker &list)
 {
@@ -585,8 +586,8 @@ void fillRoamStatus(ListPicker &list)
     const std::uint32_t now = os::nowMs();
     for (std::uint8_t k = 0; k < v.count; ++k) {
         const services::roaming::HeardList::Entry &e = v.entries[k];
-        // "2*438.2125 60.0": position, a star for the one in use, output
-        // frequency, beacon period in seconds.
+        // "2*438.2125": position, a star for the one in use, output
+        // frequency.
         lib::StaticString<24> text;
         const std::uint32_t frac = v.receiveHz[k] / 100 % 10'000;
         text << e.position + 1 << (e.position == v.site ? '*' : ' ') << v.receiveHz[k] / 1'000'000 << '.'
@@ -594,9 +595,6 @@ void fillRoamStatus(ListPicker &list)
              << static_cast<char>('0' + frac / 10 % 10);
         if (frac % 10 != 0) {
             text << static_cast<char>('0' + frac % 10);
-        }
-        if (e.periodCs != 0) {
-            text << ' ' << e.periodCs / 100 << '.' << static_cast<char>('0' + e.periodCs % 100 / 10);
         }
         // "-35 12s": level and its age.
         const std::uint32_t age = (now - e.measuredMs) / 1000;
@@ -901,6 +899,7 @@ void uiMain(void *)
             s.roaming = roamingOn && ch && ch->digital() && ch->roaming && roamingSites > 0;
         }
         s.roamSearching = roam.searching;
+        s.roamLost = roam.lost;
         s.roamHz = roam.receiveHz;
         s.roamColourCode = roam.colourCode;
         s.roamSite = roam.name;
@@ -1292,6 +1291,8 @@ void uiMain(void *)
         case MenuItem::Roaming:
             roamingOn = v == 1;
             radio::post(radio::RoamingOn{roamingOn});
+            // Takes effect when the channel is used again.
+            useChannel();
             break;
         case MenuItem::RoamStatus:
             break;
@@ -1300,6 +1301,7 @@ void uiMain(void *)
                 roamingZone = v;
                 loadRoamingSites();
                 log::info("ui") << "roaming zone " << v << ", " << roamingSites << " repeaters";
+                useChannel();
             }
             break;
         case MenuItem::Backlight:
@@ -1631,6 +1633,7 @@ void uiMain(void *)
                            },
                            [&](const Roaming &r) {
                                roam.searching = r.searching;
+                               roam.lost = r.lost;
                                roam.site = r.site;
                                roam.receiveHz = r.receiveHz;
                                roam.colourCode = r.colourCode;

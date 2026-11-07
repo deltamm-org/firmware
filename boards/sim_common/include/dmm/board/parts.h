@@ -33,6 +33,13 @@ using GpsReceiver = services::CasicReceiver;
 using Gps = SimGps;
 using Rtc = SimRtc;
 
+/// The floor for roaming: repeater levels are judged in dB above it. The
+/// simulator hears nothing anywhere.
+constexpr int roamingFloorDbm(std::uint32_t)
+{
+    return -120;
+}
+
 static_assert(services::FmTransceiver<Fm>);
 static_assert(services::Calibration<Calibration>);
 static_assert(services::Programming<Programming>);
