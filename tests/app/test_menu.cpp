@@ -315,6 +315,25 @@ TEST_CASE("the lock covers each set of keys and the time zone reads as an offset
     CHECK(valueText(Item::AutoLock, 5).view() == "5 s");
 }
 
+TEST_CASE("the squelch type opens on the carrier or on the channel's CTCSS/DCS")
+{
+    Settings s;
+    Choices choices;
+    REQUIRE(listChoices(Item::SquelchMode, choices));
+    REQUIRE(choices.size() == 2);
+    CHECK(choices.text(0) == "Carrier");
+    CHECK(choices.text(1) == "CTCSS/DCS");
+    CHECK(styleOf(choices) == Style::Buttons);
+    setChoice(Item::SquelchMode, choices.value(1), s);
+    CHECK(s.squelchMode == dmm::services::SquelchMode::Tone);
+    CHECK(valueText(Item::SquelchMode, choiceOf(Item::SquelchMode, s)).view() == "CTCSS/DCS");
+    std::string_view first;
+    std::string_view second;
+    REQUIRE(splitAbout(about(Row{Item::SquelchMode}), first, second));
+    CHECK(first == "Carrier: any signal;");
+    CHECK(second == "CTCSS/DCS: its tone/code");
+}
+
 TEST_CASE("an about text too long for two lines does not fit")
 {
     std::string_view first;

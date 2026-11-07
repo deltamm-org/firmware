@@ -48,7 +48,7 @@ two clicks anticlockwise. Each step starts where the one before ended.
 | 4 | Press Menu; look | `Channel > Squelch`, the level large between arrows, a scale of six steps lit up to it, `In use: <n>` under it |
 | 5 | Press Up; look; knob 2 back; look; press Exit | Up raises the level by one, the knob two clicks back lowers it; Exit: the list shows the old value, no `squelch` line in the log |
 | 6 | Press Menu, Up, Menu | `ui: squelch <n+1>`; the list shows it; 3 s later `settings kept in the codeplug` |
-| 7 | Press Down, Menu; look | `Squelch type` (the group left out of the title, which would not fit): two large buttons, the one in use starred |
+| 7 | Press Down, Menu; look | `Squelch type` (the group left out of the title, which would not fit): two large buttons, `Carrier` and `CTCSS/DCS`, the one in use starred |
 | 8 | Press Exit, Down, Menu; look; press Down, Menu | Power: four buttons, the power in use starred and chosen; `ui: power <n>`; back on Power with the new value; `settings kept` 3 s later |
 | 9 | Press Exit; look | `Menu`, Channel chosen |
 | 10 | Press Down, Menu, Menu; look; press Exit | The roaming status list in the menu's style, hint `Menu: search   Exit: back`; Exit: `Menu > Roaming` on Status |
