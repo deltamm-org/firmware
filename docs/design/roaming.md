@@ -1,11 +1,11 @@
 # DMR roaming: design
 
-How a roaming channel chooses and keeps a repeater. The basic roaming in
-place today tries every repeater of the roaming zone with a wake-up and
-takes the strongest answer (`docs/hw-tests/roaming.md`). This document is
-the plan for what comes next: listen for repeater beacons first, keep the
-repeaters in a learned order instead of trying them from the top of the
-list, and change repeater only on clear, lasting evidence.
+How a roaming channel chooses and keeps a repeater: listen first, wake a
+repeater only when the user is about to talk, and move only on clear
+evidence. The design is kept small on purpose. It is based on real world
+measurements and simulation; the simulation used real repeater
+information from BrandMeister, with invented towns and dense networks
+added, so that it does not fit one place.
 
 The codeplug stays in the D878UVII format, so codeplug tools such as
 QDMR keep writing it. Everything learned on the air lives in the radio.
@@ -115,336 +115,179 @@ without transmitting. It names nothing but the colour code. Each
 repeater is set up with its own beacon period, 10 s to 210 s, and length,
 0.72 s to 16.32 s; 60 s and about 4.3 s are the usual setting.
 
-### Measured on the radio
-
-A D878UVII listening to a hotspot sending beacons (every 60 s, for 3 s),
-console `dmr rx` and `fm status` every 250 ms, October 2026:
-
-- Beacons came every 60.0 s, within 30 ms over five intervals. Each
-  lasted 3.4 s on the air: idle bursts with the colour code on both
-  slots.
-- A transmission in between (another radio's traffic) did not shift the
-  beacon times.
-- The baseband reported the repeater's slot timing 20 to 60 ms after the
-  carrier appeared, and confirmed it 70 to 160 ms after. Seven
-  transmissions, beacons and traffic alike, all fell in this range.
-- Hopping during a beacon, with the console's `dmr rx` (the full receive
-  set-up, not a bare retune): leaving drops the carrier within 10 ms.
-  Coming back, the carrier shows 20 ms after the retune, slot timing 40
-  to 80 ms after, and is confirmed 80 to 140 ms after (eight hops). A
-  visit to a beacon that is already on the air therefore costs about
-  150 ms; a 0.5 s window around a predicted beacon leaves a wide margin.
-- Over 15 minutes the beacon period was 60.02 s: a known beacon's time
-  has to be learned from the beacons themselves, not taken as exactly
-  60 s, or the prediction drifts about 1 s every 45 minutes.
-- With nothing on the air the signal level reads -98 to -105 dBm, so
-  levels below about -100 dBm cannot be told from no signal. The
-  thresholds in section 4 have to sit above that floor, or use the
-  chip's noise or quality figure too.
-- Without beacons the hotspot transmits only when used, for the traffic
-  plus 3 to 20 s of hang time.
-
 ## 2. Our situation
 
-| | Tier III / TETRA / LTE | Our conventional repeaters |
+| | Tier III / TETRA / LTE | Conventional DMR repeaters |
 |---|---|---|
 | Serving site on the air | always (control channel) | only during calls, hang time, beacons |
-| Neighbour list | broadcast by the network | none; learn it |
+| Neighbour list | broadcast by the network | none |
 | Site identity | system code, cell ID | frequency and colour code |
 | Measuring a neighbour | in gaps of the serving channel | leaves the serving channel: deaf to it meanwhile |
-| Asking a site to answer | not needed | wake-up block: a transmission per site |
-
-The network is sparse. Finland has 32 DMR-only repeaters on the air (25
-on 70 cm, 7 on 2 m); multimode repeaters (FM and DMR) are not counted
-here. Sites are high, so a repeater reaches about 50 km. Within
-50 km of a repeater there are no other DMR repeaters for 12 of them, one
-or two for 14, and at most 6, in the capital area. A cellular network
-plans for many overlapping cells; here the radio keeps track of a
-handful.
+| Asking a site to answer | not needed | wake-up: a transmission per repeater |
 
 What follows from this:
 
-1. A quiet repeater looks the same as one out of range. The serving
-   repeater can be measured only when it transmits, so missed beacons are
-   the main sign that it has been lost.
+1. A quiet repeater looks the same as one out of reach. The repeater in
+   use can be measured only when it transmits.
 2. One receiver: every moment on another frequency is a moment the radio
-   cannot hear its own repeater. Such visits must be short (Vote Now has
-   the same cost).
-3. A wake-up costs a transmission and battery, and keys a repeater for
-   everyone. Listening comes first; waking only when listening has not
-   found a repeater and one is needed now (PTT) or the serving one is
-   lost.
-4. A radio spends most of its time idle, waiting for traffic. That idle
-   time pays for the listening. With so few neighbours, a list of their
-   levels can be kept fresh at a small cost (3.3).
+   cannot hear its own repeater.
+3. A wake-up keys a repeater for everyone and costs battery. Listening
+   comes first; waking only when the user is about to talk.
+4. Networks are sparse: most repeaters have no other repeater, or one or
+   two, within reach. Some send beacons, many do not, and beacon periods
+   and lengths vary. Nothing may depend on beacon timing.
+5. The radio sits idle most of the time. Listening is done in bursts so
+   that the battery saver still gets its time.
 
 ## 3. Design
 
-### 3.1 The heard list
+### 3.1 Levels
 
-The radio keeps a short list of the repeaters it has heard, not a table
-of the whole zone: with at most a handful in reach (section 2), 8
-entries are plenty. The zone's frequencies stay in the codeplug and are
-read from flash when a repeater is visited, rather than copied to RAM.
+The radio judges a repeater by the level it receives from it. Each radio
+model sets a floor for each band, from real world measurements with that
+model: a reference the thresholds count from. Two radio models in the
+same place read different levels, so the floor belongs to the model, not
+to roaming. It is not the receiver's noise floor; an empty channel often
+reads below it, and the noise differs from channel to channel:
 
-Each entry, 16 bytes:
-
-| Field | Size | |
+| Name | Value | |
 |---|---|---|
-| Position in the roaming zone | 1 | frequencies and colour code from the codeplug |
-| Level | 1 | dBm, smoothed |
-| Misses | 1 | beacons missed in a row |
-| Samples | 1 | levels measured while fresh |
-| Beacon period | 2 | 10 ms steps: the period has to be learned to the tens of ms (measured, section 1) |
-| Beacon length | 2 | 10 ms steps, measured on the repeater in use |
-| Last beacon heard | 4 | ms |
-| Last measured | 4 | ms; older than 60 s counts as unknown, as in TETRA; after a beacon, older than 60 s and the longest beacon (16.5 s), so the next beacon of the usual period comes first; once the period is known, older than a period and the longest beacon |
+| Good | floor + 10 dB | a search stops here; no listening at or above it |
+| Weak | below floor + 6 dB | look for a better repeater; move to one 6 dB better |
 
-8 entries take 128 bytes. The basic roaming in place today holds the
-whole zone's frequencies and one probe result per repeater, about 1.3 kB
-for a 64-repeater zone. The new list replaces both.
+These are fixed thresholds, as commercial DMR radios use: there the
+installer sets them per system after a coverage test. A floor learned on
+the air would measure the noise around the radio, but whether a
+repeater hears the radio depends on the path to it and on the noise at
+its site, which the radio cannot measure. The only test of that is a
+wake-up: answered, the repeater heard the radio. So the thresholds only
+steer listening and moving; a call always wakes the repeater first.
 
-When the list is full, the entry heard least recently gives way. The
-list is the neighbour list: with so few repeaters in reach, there is no
-need to learn which repeater lies next to which.
+### 3.2 The repeater in use
 
-### 3.2 The search order
-
-When the radio looks for a repeater it goes through these stages, as in
-Tier III hunting and LTE's stored information selection:
-
-1. **Resume**: the repeater last used in this zone. At power-on too, if
-   it was kept across the power-off (see 3.7).
-2. **The heard list**, best level first.
-3. **The rest of the zone** in codeplug order, starting after the
-   position where the last full pass stopped, not at entry 0. The
-   codeplug order still tells the radio what the user prefers.
-
-Each stage is tried in two passes, as in the Tier III short hunt example.
-The first pass stops at the first repeater above *Good*. The second
-accepts the best one above *Usable*. A pass does not run through all 15
-repeaters when the first two will do.
-
-### 3.3 Listening in the background (passive)
-
-While a roaming channel sits idle, the radio uses that time to visit the
-other repeaters of the zone and keep their levels fresh. It never
-transmits for this, and it needs nothing from the user.
-
-**Voice comes first.** The serving repeater is the *base*. The radio
-stays on the base and leaves it only for one short visit at a time,
-always coming straight back, and only while the base is quiet:
-
-```
-base ... visit A ... base ......... visit B ... base ......... visit A
-         ≤ 1 s        ≥ 10 s quiet   ≤ 1 s       ≥ 10 s quiet
-```
-
-- It leaves only when the base has carried nothing for at least 10 s.
-  Conversations come in overs with short gaps, and the reply to an over
-  comes within seconds.
-- After every visit it returns to the base, never to a second neighbour.
-- Back on the base, any carrier holds the radio there until the call and
-  its hang time are over.
-- A visit gives up and returns as soon as the expected beacon is not
-  there: no carrier within 0.5 s of its expected start.
-
-When a repeater keys up for a call, there is usually about a second of
-signal (the wake-up, the call's header) before anyone speaks. A visit of
-at most 1 s therefore brings the radio back before the first words in
-most cases. If a call did start meanwhile, the radio joins it in
-progress (see section 6).
-
-A **visit**: tune to the other repeater's output, wait for carrier, slot
-timing and a burst with the expected colour code, read the signal level,
-tune back. The baseband reports all of these (carrier, `SlotFound`,
-`Burst` with its colour code). Only the start of a beacon is needed:
-slot timing comes within 160 ms of the carrier (measured, section 1).
-A retune and back takes about 20 ms each way. Arriving 200 ms before a
-beacon that keeps its time to within 30 ms, a visit takes about 0.5 s
-with a margin.
-
-- **Known timing**: once two beacons of a repeater have been heard, the
-  next one is expected at a known time, and the radio visits just then.
-- **First contact (phase sweep)**: before the radio knows when a
-  repeater beacons, each visit covers a different part of the beacon
-  interval. A 1 s visit catches a beacon that starts anywhere in a
-  window of about 3.5 s (the visit plus the 3 s beacon, less the half
-  second needed to measure it), so about 17 visits cover a 60 s
-  interval. One visit a minute finds a repeater's timing within about 17
-  minutes, with the radio away from its base under 2 % of the time.
-  While the radio has no repeater at all, or right after power-on,
-  nothing is lost by staying longer: it listens to a whole interval at
-  once.
-- **How often**, per neighbour whose timing is known:
-  - base good: every 5 minutes, to keep the list fresh. With 2
-    neighbours that is 2 s away in 5 minutes, under 1 % of the time; with
-    6, the most anywhere, 2 %;
-  - serving repeater weak: at every beacon, so a better one is found in a
-    minute or two;
-  - serving repeater lost: continuously, until one is found (3.5).
-- **Visits wait** while a call is heard or made, during hang time, while
-  the user is using the radio (keys, menus), and while a packet waits to
-  be sent.
-- **Traffic counts too**: a call heard on another repeater during a visit
-  is a measurement like a beacon.
-- A beacon that fails to come at the expected time counts once. After
-  two misses in a row the radio forgets its timing and sweeps again.
-  Traffic on a repeater can shift its beacon, since the beacon timer
-  waits until the repeater is idle.
-
-Visits run whenever a roaming channel is in use, since they transmit
-nothing. Whether the radio then *moves* to a better repeater by itself
-follows the codeplug's automatic roaming setting (3.6). With automatic
-roaming off, the list is still kept, so a search from the PF key or PTT
-starts from the best known repeater.
-
-Beacons keep a steady period: measured, within tens of milliseconds over
-15 minutes (section 1).
-
-### 3.4 Waking (active)
-
-The wake-up search stays, used later and more sparingly:
-
-- on PTT when no repeater is known, or the serving one does not answer
-  the call's wake-up (the current behaviour);
-- when the serving repeater is lost (3.5) and listening has found no
-  usable repeater;
-- from the PF key set to roaming, which always searches now.
-
-It follows the order of 3.2 and stops at the first repeater above
-*Good*, rather than waking the whole zone every time.
-
-### 3.5 Keeping or leaving the serving repeater
-
-The serving repeater is measured whenever it transmits: its beacons,
-calls, hang time, answers to the radio's own wake-ups. Its state follows
-TETRA:
-
-| State | Condition | Action |
-|---|---|---|
-| Good | level at or above *Weak* | visits only to keep the list fresh (3.3) |
-| Weak | below *Weak* | visits at every beacon; move to one *Hyst slow* better |
-| Failing | below *Failing* | move to one *Hyst fast* better |
-| Lost | two beacons missed and nothing heard for two periods, or out of range by the range check | move to any repeater heard; else search after 30 s, then 1 and at most 2 minutes apart while nothing is found |
-| Unknown | not heard for 60 s and no beacon timing | visits as when good; the codeplug's period or quiet time start a search, as without beacons, 30 s, then 1 and at most 2 minutes apart until beacons judge the repeater (a search finding it does not start the wait over, so a repeater that beacons a fixed time after its last transmission is not kept busy) |
-
-- The level is the latest smoothed one: each measurement of the repeater
-  in use comes from a transmission, so a level below a threshold has
-  already lasted from one transmission to the next.
-- No move within 15 s of the last one.
-- A repeater must have been measured at least twice while fresh (see
-  Validity) before the radio moves to it (once, when the one in use is lost).
-- The radio moves by itself only when the codeplug's automatic roaming
-  is on; `roam auto on|off` overrides it for a session.
-- A beacon of the repeater in use is a transmission of idle bursts only,
-  at most 16.5 s long, not starting within 3 s of the radio's own wake-up
-  and not already on when the radio came back from a visit.
-
-### 3.6 Codeplug settings used
-
-From the D878UVII general settings (`d878uv2_codeplug.cpp` has where
-each lives); the range check's values are still to be confirmed on the
-radio:
-
-| Setting | Use |
+| State | When |
 |---|---|
-| Default roaming zone | the zone at start |
-| Automatic roaming | whether the radio moves by itself (3.5) |
-| Start: periodic or out of range | periodic: a full search every period; out of range: when the repeater in use has been quiet for the delay. Either only while that repeater cannot be judged by its beacons |
-| Period (min) | for the periodic start |
-| Delay (s) | quiet time before a search, without a range check |
-| Repeater range check | wake the repeater in use while it is not heard |
-| Range check interval | how often: 5 s to 50 s |
-| Range check tries | unanswered in a row before out of range: 3 to 5 |
-| Out-of-range notice and count | `Out of range` notices, one an interval, 1 to 10 times |
-| Side keys | the roaming key |
+| Good | heard lately at or above Weak |
+| Weak | heard lately below Weak, or heard lately but a wake-up went unanswered |
+| Quiet | not heard for 2 minutes, last heard at or above Weak; or none in use yet |
+| Lost | not heard for 2 minutes, and last heard below Weak or a wake-up went unanswered |
 
-The codeplug has no signal thresholds, hysteresis or beacon settings.
-These are constants in the firmware for now (section 4). A later DeltaMM
-settings area could hold them.
+Silence alone never makes it lost: a quiet repeater looks the same as one
+out of reach, and many repeaters never send beacons. How it was last heard
+tells them apart: one that went silent while strong is likely idle, one
+that faded first likely out of reach. A full heard list never drops the
+repeater in use, so that this stays known.
 
-### 3.7 Kept across power-off
+### 3.3 The heard list
 
-The repeater last used per zone, so a power-on starts at *Resume*, as in
-Tier III. The heard list itself starts empty; it fills in a minute or two
-of listening. Not done yet: DeltaMM has no settings of its own that
-survive a power-off. Until it has, a power-on starts with the repeater
-whose frequencies the channel itself has, if it is one of the zone's.
+Up to 8 repeaters heard lately, each with its level (the average of the
+last two readings), how many readings and when. A level is current for 2
+minutes. It is read when the slot timing of a transmission is found.
+While a repeater keeps transmitting (calls back to back), each DMR burst
+from it keeps its level current; a carrier alone does not, since it may
+be another signal or noise.
 
-### 3.8 What the user sees
+### 3.4 Busy and idle
 
-Roaming is meant to be invisible: the radio keeps a repeater and moves
-on by itself, and the user only talks.
+From the DMR heard on the repeater in use: **busy** while DMR came in the
+last 2 s, or a call in the last 10 s (the gap between overs); **idle**
+while it has been on the air for 1.5 s with idle bursts only (a beacon,
+or hang time long after a call). A call starts with idle bursts too; its
+header follows well within 1.5 s.
 
-- Under the channel name: the repeater in use, as today, or
-  `Searching...`.
-- A move to another repeater changes that line; there is no notice.
-- `Out of range` when the range check gives up on the repeater, as often
-  as the codeplug asks.
-- **A roaming screen for field debugging** (Menu > Channel > Roam
-  status): the repeater in use and its state (`2 Good`), then each
-  repeater heard: position, a star on the one in use, output frequency,
-  beacon period once learned, level and its age. It updates every second,
-  so a walk or drive shows what the radio sees. Its last row, Search
-  now, searches.
-- The console: `roam` logs the same list with the next beacon's time;
-  each visit, missed beacon and move is logged too.
+### 3.5 Listening (no transmitting)
 
-## 4. Values
+A **check** tunes to another repeater's output for a moment: a carrier,
+then slot timing, then a burst with its colour code, whose level is
+read. An empty frequency costs about 0.1 s.
 
-As built; to be tuned on the air. Levels are as the radio reads them;
-with nothing on the air it reads -98 to -105 dBm (section 1), so the
-thresholds sit above that. A repeater whose slot timing and colour code
-were found counts as usable at any level.
+- **The repeater in use is Good at the Good level:** no listening.
+- **Good below the Good level, or Weak:** single checks, only while the
+  repeater in use is idle, at most one every 400 ms. The radio hears
+  nothing on its own repeater then anyway.
+- **Quiet or Lost:** passes, check after check without going back in
+  between, in bursts: 1 minute, long enough to span a beacon period, then
+  gaps of 2 minutes doubling up to 5, so that a repeater met after a long
+  stretch without any is found within minutes. While Lost the gaps stay
+  at 2 minutes: no call on the repeater in use can be missed then, and
+  the next repeater, even one that only carries a call now and then, is
+  found sooner. After each pass the radio stays 0.5 s on the repeater in
+  use. No pass starts while it is busy.
+- **Order of a pass:** the repeaters heard lately, strongest first, then
+  the rest of the zone in its order. Each frequency once a pass.
 
-| Name | Value | Meaning |
-|---|---|---|
-| *Good* | -90 dBm | a search stops here |
-| *Weak* | -95 dBm | below: visit at every beacon, move to a clearly better one |
-| *Failing* | -105 dBm | below: move to any better one |
-| *Hyst slow* | 6 dB | better by this to move while weak |
-| *Hyst fast* | 3 dB | better by this to move while failing |
-| Guard | 15 s | no move within this time of the last one |
-| Validity | 60 s; 76.5 s after a beacon; a beacon period and 16.5 s once the period is known | older measurements count as unknown |
-| Beacon miss | 2 | misses before a beacon's timing is forgotten |
-| Base quiet | 10 s | the repeater in use quiet this long before a visit |
-| User quiet | 5 s | no key this long before a visit |
-| Timed visit | 0.3 s before the beacon to 0.5 s after | |
-| Sweep visit | 1 s; every 63.5 s (good), 16 s (weak), 2 s (lost) | |
-| Follow-up | 4.5 s, 56 s after a sweep found a beacon under way | |
-| Refresh | 5 min | a timed repeater's level, while the one in use is good |
+### 3.6 Moving by itself
 
-## 5. Order of work
+Only with the codeplug's automatic roaming on (`roam auto on|off`
+overrides it for a session), and never while the repeater in use is busy:
 
-1. Done (0.20.3-6HL-2): the heard list and search order (3.1, 3.2), with
-   the wake-up search using the new order, and the roaming screen (3.8).
-2. Done: visits (3.3), first contact by phase sweep, then known beacon
-   timing.
-3. Done: the state of the repeater in use (3.5), and moving by itself.
-   Still to test with two repeaters at different distances.
-4. Done: the codeplug's range check settings (3.6) and its notices.
-5. Open: keeping the last repeater across power-off (3.7) needs settings
-   that survive a power-off.
+- Weak: to one heard twice and 6 dB better;
+- Quiet: only to one heard at the Good level;
+- Lost: to the strongest heard; after fading out, only to one stronger
+  than the repeater in use was last heard.
 
-## 6. Open questions
+Moving back needs the same margin the other way, so the radio does not
+swing between two repeaters.
 
-- Does the D878's receiver read signal level well enough at the
-  thresholds above, and how fast does it settle after a retune?
-- How long do visits take in practice (retune, carrier, slot timing),
-  and how much of a beacon do they need?
-- Do the repeaters in use send timed or network beacons, and how steady
-  is their period?
-- Sweep visits and the follow-up are spaced for the usual 60 s period;
-  with other periods they cover the beacon interval unevenly. A setting
-  for the period, or a spacing that adapts, would help there.
-- A call that starts on the base while the radio is away is heard from
-  the radio's return. Does the radio join a call already running (late
-  entry, from the call information repeated in the voice bursts), and
-  how much of the first words is lost? How long is the signal before the
-  first words on our repeaters, really?
-- The automatic roaming setting and the range check fields: confirm what
-  each value does on the radio.
+### 3.7 Waking (on PTT or the roam key)
+
+PTT wakes the repeater in use. If it does not answer and automatic
+roaming is on, or the roam key is pressed, the radio searches; with
+automatic roaming off, PTT only reports `No answer`, as a manual roaming
+radio would:
+
+1. the repeater in use, two tries;
+2. the repeaters heard lately, strongest first;
+3. the rest of the zone in its order, one try each.
+
+It stops at the first repeater at or above Good; otherwise it takes the
+strongest that answered. A repeater that answers is judged by its level
+in the heard list, so a current reading from before (a beacon) counts
+with the new one: one reading can be a few dB off. A repeater already on
+the air needs no wake-up; one that shows a carrier but no timing yet
+after a wake-up is slower to start and gets as long as one already on
+the air. Calls and searches wake a repeater the same way. A repeater in
+use that does not answer is marked: weak while it is still heard, lost
+once it is not.
+
+### 3.8 The zone's order
+
+A roaming zone's repeaters follow the order of the codeplug's roaming
+repeater list (the zone itself stores them by frequency). The user puts
+the most used ones first: that order decides where a search and a pass
+begin until the radio has heard which repeaters are strong.
+
+### 3.9 What the user sees
+
+- Under the channel name: the repeater in use, or `Searching...`.
+- `No repeater` while the repeater in use is lost; `No repeater answered`
+  when a search found none.
+- Menu > Channel > Roam status: the repeater in use and its state, then
+  each repeater heard with its level and age.
+- Menu > Channel > Roaming off and on, and Roam zone, take effect at
+  once.
+- The console: `roam` logs the state and the heard list; each check
+  (with the level read, also on an empty channel), search and move is
+  logged.
+
+### 3.10 Left out on purpose
+
+Simulation and testing showed these cost more than they gave:
+learning beacon timing and visiting other repeaters at their beacons,
+automatic searches that wake repeaters, the codeplug's range check,
+a second weak level with its own margin, listening while the repeater in
+use is at the Good level, taking silence alone as lost, a minimum time
+between moves, resuming a search where the last one stopped, and learned
+noise floors.
+
+## 4. Open questions
+
+- The thresholds are fixed per band, from measurements at one place. A
+  setting may be needed where they do not fit.
+- A repeater that never sends beacons can be found only from its traffic
+  or by a wake-up.
+- Keeping the repeater in use across power-off needs settings that
+  survive a power-off.
 
 ## Sources
 
@@ -459,5 +302,5 @@ were found counts as usable at any level.
   reselection criteria), 18.5.4 (reselection parameters).
 - 3GPP TS 36.304, LTE idle mode: clauses 5.2.3 (cell selection),
   5.2.4.2 (measurement rules), 5.2.4.6 (ranking).
-- The Finnish amateur radio station list (automatic.sral.fi), October
-  2026: locations of the DMR repeaters on the air.
+- BrandMeister's public repeater information: the sites and frequencies
+  the simulation used.

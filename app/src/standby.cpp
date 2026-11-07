@@ -304,6 +304,8 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
             lib::StaticString<40> rl;
             if (s.roamSearching) {
                 rl << "Searching...";
+            } else if (s.roamLost) {
+                rl << "No repeater";
             } else {
                 rl << mhz(s.roamHz != 0 ? s.roamHz : c->receiveHz).view() << "  TS" << c->dmr.slot << "  CC"
                    << s.roamColourCode;

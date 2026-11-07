@@ -70,6 +70,7 @@ struct DmrCall
 struct Roaming
 {
     bool searching;
+    bool lost; // the repeater in use did not answer a wake-up, and has not been heard since
     std::int8_t site;
     std::uint32_t receiveHz;
     std::uint8_t colourCode;
@@ -102,6 +103,15 @@ struct KeyLockSettings
 /// Logs the key lock's state and settings.
 struct KeyLockReport
 {
+};
+/// Debug feature (console): picks a memory channel as the keys would, then
+/// logs where the radio is. @p zone KeepZone keeps the zone; @p position 0
+/// keeps the zone's channel.
+struct SelectChannel
+{
+    static constexpr std::uint8_t KeepZone = 0xFF;
+    std::uint8_t zone;
+    std::uint16_t position;
 };
 struct EncoderClicks
 {
@@ -142,7 +152,7 @@ struct Gps
 };
 
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, Notice, Gps>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, SelectChannel, Notice, Gps>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels.

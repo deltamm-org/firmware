@@ -180,6 +180,12 @@ struct RoamingSetup
 struct RoamStatus
 {
 };
+/// Debug feature: takes zone position @p position as the repeater in use,
+/// as a channel on its frequencies would.
+struct RoamUse
+{
+    std::uint8_t position;
+};
 /// Moving to a better repeater by itself on or off for this session,
 /// whatever the codeplug says; for tests.
 struct RoamAutomatic
@@ -194,7 +200,7 @@ struct GpsPower
     bool on;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingOn, RoamingSetup, RoamStatus, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingOn, RoamingSetup, RoamStatus, RoamUse, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.
@@ -240,7 +246,7 @@ struct RoamingView
     bool roaming = false; // a roaming channel is in use
     bool searching = false;
     int site = -1; // the repeater in use, -1 for none
-    services::roaming::Health health = services::roaming::Health::Unknown;
+    services::roaming::Health health = services::roaming::Health::Quiet;
     std::uint8_t count = 0;
     services::roaming::HeardList::Entry entries[services::roaming::HeardList::Capacity];
     std::uint32_t receiveHz[services::roaming::HeardList::Capacity] = {};
