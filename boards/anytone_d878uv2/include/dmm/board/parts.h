@@ -30,6 +30,16 @@ using GpsReceiver = services::CasicReceiver;
 using Gps = ::board::BoardGps;
 using Rtc = ::board::BoardRtc;
 
+/// The reference for roaming at @p hz: repeater levels are judged in dB
+/// above it. -100 dBm on both bands, selected based on simulation and field
+/// testing. A reference for the thresholds, not the receiver's noise floor.
+constexpr int RoamingFloor70cmDbm = -100;
+constexpr int RoamingFloor2mDbm = -100;
+constexpr int roamingFloorDbm(std::uint32_t hz)
+{
+    return hz > 300'000'000 ? RoamingFloor70cmDbm : RoamingFloor2mDbm;
+}
+
 static_assert(services::FmTransceiver<Fm>);
 static_assert(services::Baseband<Baseband>);
 static_assert(services::Calibration<Calibration>);
