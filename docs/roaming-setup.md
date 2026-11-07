@@ -35,6 +35,10 @@ pair serves channels on either slot.
 The radio cannot tell apart two repeaters on the same pair and colour
 code; in places where both are in reach it hears them as one.
 
+**Order matters:** put the pairs you use most at the top of the roaming
+channel list. The radio tries and listens to them first until it has
+heard which repeaters are strong where it is.
+
 ### 2. A roaming zone with all the pairs
 
 A roaming zone lists the frequency pairs the radio may move between, up
@@ -76,29 +80,21 @@ the best repeater now.
 
 ### 5. Automatic roaming (optional)
 
-With automatic roaming on, the radio also looks by itself (QDMR:
-`settings.anytone.roamingSettings`):
+With automatic roaming on (QDMR: `settings.anytone.roamingSettings.autoRoam`),
+the radio also moves by itself to a better repeater it has heard, and a
+call whose repeater does not answer searches for another. It never
+transmits to find one by itself: it only listens. The codeplug's start,
+delay, period and range check settings are not used.
 
-| Item (QDMR key) | Meaning | Start with |
-| --- | --- | --- |
-| Automatic roaming (`autoRoam`) | On or off | On |
-| Start (`roamStart`) | `OutOfRange`: when the repeater in use has been quiet for the delay; `Periodic`: every period | `OutOfRange` |
-| Delay (`autoRoamDelay`) | Seconds of quiet before a search; at least 30 s is used | 30 s (0 also gives 30 s) |
-| Period (`autoRoamPeriod`) | Minutes between searches; at least 1 min is used | 1 min (0 also gives 1 min) |
-
-The values in the last column are a good start for most networks; a
-longer delay makes the radio stay longer on a repeater that has gone
-quiet.
-
-An automatic search moves only to a repeater clearly stronger than the
-one in use, so the radio does not swap back and forth between two that
-are heard about equally.
+With automatic roaming off the radio stays on the repeater in use, for
+example to keep hearing that repeater's local calls (TG 9); the roam key
+still searches when you ask.
 
 ### Example
 
 A network on three frequency pairs, each shared by several repeaters,
-and two talkgroups, the second on both slots, in QDMR's YAML (the frequencies, IDs and names are
-made up):
+and two talkgroups, the second on both slots, in QDMR's YAML (the
+frequencies, IDs and names are made up):
 
 ```yaml
 roamingChannels:
@@ -152,9 +148,6 @@ settings:
       funcKeyCShort: Roaming
     roamingSettings:
       autoRoam: true
-      roamStart: OutOfRange
-      autoRoamDelay: 30 s
-      autoRoamPeriod: 1 min
       defaultZone: roam1
 ```
 
@@ -166,63 +159,39 @@ settings:
 - **The working screen** shows `DMR ROAMING`, and under the channel name
   the pair in use: its frequency, the slot, the colour code and the
   roaming channel's name. While the radio looks for a repeater, the line
-  says `Searching...`.
+  says `Searching...`; `No repeater` means the repeater in use faded out or
+  did not answer a wake-up, and has not been heard since. A repeater that
+  is merely quiet is no reason for a warning: many never send beacons.
 - **Searching on the key:** press the side key set to Roaming. The radio
-  tries the zone's pairs in turn, listening for a repeater already on
-  the air and waking quiet ones, and uses the strongest that answered.
-  `No repeater` means none answered.
+  tries the repeater in use, then the ones it heard lately, strongest
+  first, then the rest of the list, waking quiet ones, and stops at the
+  first with a good signal. `No repeater answered` means none answered.
 - **PTT:** before a call the radio wakes the repeater in use. If it does
-  not answer, or no repeater is in use yet, the radio searches and the
-  call goes out through the repeater it found, as long as PTT is still
-  held.
-- **Automatic roaming** searches by itself as set in the codeplug, and
-  never during a call.
+  not answer, or no repeater is in use yet, with automatic roaming on the
+  radio searches and the call goes out through the repeater it found, as
+  long as PTT is still held. With automatic roaming off it stays and shows
+  `No answer` (`No repeater` with none in use); the roam key searches.
+- **Listening:** while the repeater in use is not clearly good, the radio
+  briefly listens to the other pairs, without transmitting: during the
+  repeater's own beacons or hang time while it is heard, and in bursts
+  while it is quiet, at least every 5 minutes, and every 2 minutes once
+  it is lost. It never leaves during a call or within 10 s of one.
+- **Automatic roaming** moves to a repeater heard clearly stronger (6 dB)
+  when the one in use is weak; from a quiet one only to a repeater heard
+  with a good signal; after an unanswered wake-up, to the strongest
+  heard; after the one in use faded out, to the strongest heard if it is
+  stronger than that one was. Never during a call.
 - **Menu > Channel > Roaming:** off makes every channel use its own
-  frequency again, until the radio restarts or roaming is turned back
-  on. **Roam zone** picks another of the codeplug's roaming zones for the
-  session.
+  frequency again at once, until the radio restarts or roaming is turned
+  back on. **Roam zone** picks another of the codeplug's roaming zones for
+  the session. **Roam status** shows the pair in use and its state, then
+  each pair heard with its level and how long ago.
 - On an FM channel the key says `Not roaming`.
-
-## Repeater beacons and the range check
-
-Roaming works best when the network's repeaters send beacons: a short
-transmission at a fixed period, set up on the repeater by its keeper
-(any period from 10 s to 210 s, up to 16.5 s long). The radio learns
-the beacon timing of the repeater it hears on each pair by itself;
-nothing in the codeplug is needed for it.
-
-- **Judging the repeater in use:** from its beacons and calls the radio
-  rates it Good, Weak, Failing or Lost. Missed beacons tell it a
-  repeater has gone quiet or out of reach before a call is tried.
-- **Visits:** while the channel is quiet (no call for 10 s and no key
-  for 5 s), the radio briefly listens on the zone's other pairs, one at
-  a time, timed to their beacons, so it knows how they are heard. It
-  never leaves during a call, and PTT cuts a visit short.
-- **Automatic roaming** then moves to another pair when the one in use
-  gets weak (below about -95 dBm) and the other is clearly better
-  (6 dB). The delay and period settings are used only while beacons
-  cannot judge the repeater, and searches that find nothing come further
-  and further apart, up to 2 minutes.
-- **Searches** try the pairs most likely to answer first and stop at a
-  good one.
-
-The codeplug's **repeater range check** is followed too (QDMR:
-`rangeCheck`, `checkInterval`, `retryCount`, `notification` and
-`notificationCount` under `settings.anytone.roamingSettings`): while the
-repeater in use is not heard, the radio wakes it every interval (5 s to
-50 s), and after the set number of unanswered tries says
-`Out of range`.
-
-A good start: range check on, an interval of 10 s, 3 tries and the
-notice on.
-
-**Menu > Channel > Roam status** shows the pair in use with a star and
-its state, then each pair heard with its level, how long ago it was
-measured and its beacon period once learned. Search now searches
-from there.
 
 ## Notes
 
+- Repeaters that send beacons are found by listening; ones that do not
+  are found from their traffic or by a search.
 - Each search wakes quiet repeaters with a short transmission at the
   channel's power, so it uses a little battery and air time; a search
   over many pairs takes a few seconds.
