@@ -1079,7 +1079,7 @@ void uiMain(void *)
         }
         if (s.squelchMode != was.squelchMode) {
             channels->setSquelchMode(s.squelchMode);
-            log::info("ui") << "squelch opens on " << (s.squelchMode == SquelchMode::Tone ? "the tone" : "the carrier");
+            log::info("ui") << "squelch opens on " << (s.squelchMode == SquelchMode::Tone ? "CTCSS/DCS" : "the carrier");
             channel = true;
         }
         if (s.power != was.power) {

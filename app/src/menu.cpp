@@ -40,7 +40,7 @@ static_assert(std::size(Groups) == static_cast<std::size_t>(Group::Count));
 
 constexpr ItemInfo Items[] = {
     {"Squelch", "Open, or 1 to 5: higher needs a stronger signal", Kind::Value},
-    {"Squelch type", "Carrier opens on any signal, Tone on its tone", Kind::Value},
+    {"Squelch type", "Carrier: any signal; CTCSS/DCS: its tone/code", Kind::Value},
     {"Power", "Transmit power of this channel", Kind::Value},
     {"Status", "Repeaters heard and their levels; search now", Kind::Screen},
     {"Roaming", "Off: the radio does nothing on its own", Kind::Value},
@@ -69,7 +69,7 @@ struct Fixed
 };
 constexpr Fixed OffOn[] = {{0, "Off"}, {1, "On"}};
 constexpr Fixed SquelchModes[] = {{static_cast<std::int32_t>(services::SquelchMode::Carrier), "Carrier"},
-    {static_cast<std::int32_t>(services::SquelchMode::Tone), "Tone"}};
+    {static_cast<std::int32_t>(services::SquelchMode::Tone), "CTCSS/DCS"}};
 constexpr Fixed Powers[] = {{0, "Low"}, {1, "Mid"}, {2, "High"}, {3, "Turbo"}};
 constexpr Fixed LockCovers[] = {{0, "All"}, {1, "Keys+PTT"}, {2, "Keypad"}, {3, "Side+PTT"}};
 constexpr Fixed AutoLocks[] = {{0, "Off"}, {10, "10 s"}, {30, "30 s"}, {60, "60 s"}};
