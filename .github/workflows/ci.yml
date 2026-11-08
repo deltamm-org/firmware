@@ -11,26 +11,39 @@ permissions:
 
 jobs:
   host:
-    name: Host build and tests
-    runs-on: ubuntu-24.04
+    name: Host build and tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v5
-      - name: Install Ninja and GL headers
+      - name: Install Ninja and GL headers (Ubuntu)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-dev
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           modules: 'qtserialport'
           cache: true
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
+        shell: bash
         run: cmake --preset host -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
       - name: Build
+        shell: bash
         run: cmake --build --preset host
       - name: Test
+        shell: bash
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --preset host --output-on-failure
-
   firmware:
     name: Firmware build (D878UVII)
     runs-on: ubuntu-24.04
@@ -57,7 +70,6 @@ jobs:
         run: ARM_GNU_TOOLCHAIN=~/arm-gnu-toolchain cmake --preset ${{ matrix.preset }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
-
   checks:
     name: Formatting and licences
     runs-on: ubuntu-24.04
