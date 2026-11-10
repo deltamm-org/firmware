@@ -203,6 +203,9 @@ header follows well within 1.5 s.
 
 ### 3.5 Listening (no transmitting)
 
+Only with auto roaming on; off, the radio never leaves the repeater in
+use by itself.
+
 A **check** tunes to another repeater's output for a moment: a carrier,
 then slot timing, then a burst with its colour code, whose level is
 read. An empty frequency costs about 0.1 s.
@@ -224,8 +227,9 @@ read. An empty frequency costs about 0.1 s.
 
 ### 3.6 Moving by itself
 
-Only with the codeplug's automatic roaming on (`roam auto on|off`
-overrides it for a session), and never while the repeater in use is busy:
+Only with auto roaming on (the codeplug's setting, which Menu > Roaming >
+Roaming and `roam auto on|off` change), and never while the repeater in
+use is busy:
 
 - Weak: to one heard twice and 6 dB better;
 - Quiet: only to one heard at the Good level;
@@ -237,10 +241,8 @@ swing between two repeaters.
 
 ### 3.7 Waking (on PTT or the roam key)
 
-PTT wakes the repeater in use. If it does not answer and automatic
-roaming is on, or the roam key is pressed, the radio searches; with
-automatic roaming off, PTT only reports `No answer`, as a manual roaming
-radio would:
+PTT wakes the repeater in use. If it does not answer, or the roam key or
+Search now is pressed, the radio searches, with auto roaming on or off:
 
 1. the repeater in use, two tries;
 2. the repeaters heard lately, strongest first;
@@ -273,10 +275,13 @@ frequencies, as at the start. A pass starts afresh in the new order.
 - Under the channel name: the repeater in use, or `Searching...`.
 - `No repeater` while the repeater in use is lost; `No repeater answered`
   when a search found none.
-- Menu > Channel > Roam status: the repeater in use and its state, then
-  each repeater heard with its level and age.
-- Menu > Channel > Roaming off and on, and Roam zone, take effect at
-  once.
+- Menu > Roaming > Status: the repeater in use and its state, then each
+  repeater heard with its level and age.
+- Menu > Roaming > Roaming (auto roaming) and Roam zone take effect at
+  once and are written to the codeplug. With auto roaming off the radio
+  does nothing on its own: no listening and no moves. PTT, the roam key
+  and Search now still search, in the order of what those searches heard
+  and then the zone's own order.
 - The console: `roam` logs the state and the heard list; each check
   (with the level read, also on an empty channel), search and move is
   logged.

@@ -5,6 +5,7 @@
 
 #include "dmm/drivers/baseband/sct3258.h"
 #include "dmm/services/baseband.h"
+#include "dmm/services/microphone_gain.h"
 
 #include <array>
 #include <optional>
@@ -33,6 +34,8 @@ public:
         std::uint8_t reg;
         std::uint8_t value;
     };
+    /// The codec writes for one microphone gain.
+    using MicrophoneGainWrites = std::array<CodecWrite, 2>;
 
     /// The codec as the board wires it.
     struct Audio
@@ -45,7 +48,8 @@ public:
         /// Receive levels on digital channels, where the voice comes from
         /// the chip's vocoder.
         std::span<const CodecWrite> digitalReceive;
-        /// Connects the microphone for transmit, in order.
+        /// Connects the microphone for transmit, in order, after the
+        /// microphone gain's writes.
         std::span<const CodecWrite> transmit;
         /// The speaker volume register, its muted value and its value for
         /// each step 1..SpeakerVolumeSteps.
@@ -74,6 +78,9 @@ public:
             float levelDb;
         };
         std::array<EqualizerBand, 3> transmitEqualizer{};
+        /// The codec writes for a microphone gain in dB (microphone_gain);
+        /// nullptr: the transmit writes alone set the gain.
+        MicrophoneGainWrites (*microphoneGain)(int db) = nullptr;
     };
 
     /// The radio's calibrated values for the chip and codec.
@@ -121,6 +128,7 @@ public:
     bool setVoiceEnhancement(bool on);
     bool setCarrier(bool present);
     bool setMicrophone(bool on);
+    void setMicrophoneGain(int digitalDb, int analogDb);
     /// Also switches the vocoder over (a few seconds the first time) and
     /// sets the DMR call options once after start().
     bool setDigital(const dmr::ChannelSettings &settings, std::uint32_t receiveHz, std::uint32_t transmitHz, bool repeater);
@@ -158,6 +166,8 @@ private:
     bool enterTransmit();
     /// The codec's receive levels for the current mode.
     std::span<const CodecWrite> receiveWrites() const;
+    /// The microphone gain for the current mode, then the transmit writes.
+    bool writeTransmit();
     void writeTrims(const Trims &trims);
     bool selectVocoder(std::uint8_t vocoder);
     bool toEvent(const drivers::baseband::Packet &report, dmr::Event &event) const;
@@ -178,6 +188,8 @@ private:
     bool m_digitalSet = false;
     std::optional<DigitalTrims> m_digitalTrimsSent;
     std::uint8_t m_colourCodeSent = 0;
+    int m_digitalMicGainDb = microphone_gain::StandardDb;
+    int m_analogMicGainDb = microphone_gain::StandardDb;
 };
 
 } // namespace dmm::services

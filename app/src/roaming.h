@@ -54,11 +54,9 @@ void searchNow();
 void use(std::uint8_t position);
 /// Debug feature: every repeater heard is forgotten.
 void forget();
-void setOn(bool on);
+/// Auto roaming: whether the radio listens to the other repeaters and moves
+/// to a better one by itself.
 void setAutomatic(bool on);
-/// Whether the radio roams by itself: moves, and searches when a call's
-/// repeater does not answer.
-bool automaticOn();
 void setup(const services::RoamingSettings &settings);
 void logStatus();
 /// Roaming between calls; called on every turn of the radio task.

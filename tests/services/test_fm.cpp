@@ -378,6 +378,48 @@ TEST_CASE("FM transmit adds the band setting's extra voice deviation; digital st
     CHECK(bus.registers[0x59] == 0);
 }
 
+TEST_CASE("the FM microphone gain takes the nearest level and makes up the rest with the voice gain")
+{
+    constexpr Rda1846::WidthSetting Transmit[] = {{0x41, 0x070F, 0x070F, 0x070F}, {0x44, 0x09FF, 0x09FF, 0x0BFF}};
+    constexpr std::uint8_t Gains[] = {7, 8, 9, 10, 12};
+    Rda1846::Tuning tuning = Rda1846::makerTuning();
+    tuning.transmit = Transmit;
+    tuning.microphoneGains = Gains;
+    FakeBus bus;
+    bus.registers[0x00] = 0x1846;
+    Rda1846 chip(bus, tuning);
+    FakeRf rf;
+    Rda1846Transceiver fm(chip, rf, BoardPins, noSleep, TestTrims);
+    REQUIRE(fm.start());
+    const D878Uv2Calibration cal = calibration();
+    testCalibration = &cal;
+    const FmChannel analog{145'000'000, 145'000'000, false, {}, {}, false};
+    auto transmit = [&](int db, const FmChannel &channel) {
+        fm.setMicrophoneGain(db);
+        REQUIRE(fm.transmit(channel, dmm::services::PowerLevel::Low) == nullptr);
+        fm.endTransmit();
+    };
+
+    transmit(16, analog); // the middle level: the tables' own
+    CHECK(bus.registers[0x44] == 0x09FF);
+    CHECK(bus.registers[0x41] == 0x070F);
+    transmit(21, analog); // the top level
+    CHECK(bus.registers[0x44] == 0x0CFF);
+    CHECK(bus.registers[0x41] == 0x070F);
+    transmit(24, analog); // the top level, 3 dB more
+    CHECK(bus.registers[0x44] == 0x0CFF);
+    CHECK(bus.registers[0x41] == 0x0715);
+    transmit(13, analog); // between 12 and 14 dB: the lower level, 1 dB more
+    CHECK(bus.registers[0x44] == 0x07FF);
+    CHECK(bus.registers[0x41] == 0x0711);
+    transmit(0, analog); // the lowest level, 12 dB less
+    CHECK(bus.registers[0x44] == 0x07FF);
+    CHECK(bus.registers[0x41] == 0x0704);
+    transmit(0, FmChannel{433'450'000, 433'450'000, false, {}, {}, true}); // digital keeps its own
+    CHECK(bus.registers[0x44] == 0x0BFF);
+    CHECK(bus.registers[0x41] == 0x070F);
+}
+
 TEST_CASE("a receive tone has its own detector and flag, apart from the carrier")
 {
     FakeBus bus;

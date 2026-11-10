@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Tommi Tauriainen
 
 #include "dmm/drivers/baseband/sct3258.h"
+#include "dmm/drivers/baseband/tlv320aic3204.h"
 #include "fake_sct3258.h"
 
 #include <doctest/doctest.h>
@@ -223,4 +224,22 @@ TEST_CASE("a DMR data frame goes out with the colour code and is acknowledged")
         std::vector<std::uint8_t>{0x08, 0x77, 0x01, 0x43, 0x01, 0x09, 0, 0, 0, 0, 0, 0xF4, 0x12, 0xD6, 0x87});
     const std::vector<std::uint8_t> tooLong(37, 0);
     CHECK_FALSE(sct.sendFrame(1, 0x01, tooLong));
+}
+
+TEST_CASE("the codec's microphone amplifier and AGC codes count half dB steps within their ranges")
+{
+    namespace aic = dmm::drivers::baseband::tlv320aic3204;
+    CHECK(aic::micPgaVolume(0) == 0);
+    CHECK(aic::micPgaVolume(8) == 16);
+    CHECK(aic::micPgaVolume(16) == 32);
+    CHECK(aic::micPgaVolume(30) == 60);
+    CHECK(aic::micPgaVolume(60) == 94); // 47 dB, below the 47.5 dB top
+    CHECK(aic::micPgaVolume(-3) == 0);
+    CHECK(aic::agcMaxGain(16) == 32);
+    CHECK(aic::agcMaxGain(24) == 48);
+    CHECK(aic::agcMaxGain(58) == 116);
+    CHECK(aic::agcMaxGain(70) == 116);
+    CHECK((aic::AgcOn | aic::AgcTargetMinus10Db) == 0xA0);
+    CHECK(aic::hplDb(-6) == 0x3A);
+    CHECK(aic::hplDb(23) == 23);
 }
