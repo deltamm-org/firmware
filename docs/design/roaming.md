@@ -238,9 +238,8 @@ swing between two repeaters.
 
 ### 3.7 Waking (on PTT or the roam key)
 
-PTT wakes the repeater in use. If it does not answer and auto roaming
-is on, or the roam key is pressed, the radio searches; with auto roaming
-off, PTT only reports `No answer`, as a manual roaming radio would:
+PTT wakes the repeater in use. If it does not answer, or the roam key or
+Search now is pressed, the radio searches, with auto roaming on or off:
 
 1. the repeater in use, two tries;
 2. the repeaters heard lately, strongest first;
@@ -277,7 +276,7 @@ frequencies, as at the start. A pass starts afresh in the new order.
   each repeater heard with its level and age.
 - Menu > Channel > Roaming (auto roaming) and Roam zone take effect at
   once and are written to the codeplug. With auto roaming off the radio
-  does nothing on its own; the roam key and Search now still search.
+  does nothing on its own; PTT, the roam key and Search now still search.
 - The console: `roam` logs the state and the heard list; each check
   (with the level read, also on an empty channel), search and move is
   logged.

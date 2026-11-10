@@ -44,7 +44,7 @@ std::uint32_t channelReceiveHz = 0;
 std::uint32_t channelTransmitHz = 0;
 std::uint8_t channelColourCode = 1;
 // Auto roaming (the codeplug's, then the menu's): whether the radio moves
-// and searches by itself.
+// to a better repeater by itself.
 bool automatic = false;
 
 constexpr roaming::Levels Levels{};
@@ -619,11 +619,6 @@ void setAutomatic(bool on)
 {
     automatic = on;
     log::info("roam") << "automatic " << (on ? "on" : "off");
-}
-
-bool automaticOn()
-{
-    return automatic;
 }
 
 void setup(const services::RoamingSettings &settings)
