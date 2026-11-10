@@ -3,6 +3,8 @@
 
 #include "standby.h"
 
+#include "menu_screen.h"
+
 #include "dmm/lib/format.h"
 #include "dmm/services/font.h"
 
@@ -22,77 +24,6 @@ const Font &Small = fonts::Spleen5x8;
 const Font &Body = fonts::Spleen6x12;
 const Font &Medium = fonts::Spleen8x16;
 const Font &Large = fonts::Spleen12x24;
-
-int textWidth(const Font &f, std::string_view s)
-{
-    return static_cast<int>(s.size()) * f.width;
-}
-
-// At most @p chars characters of @p s.
-std::string_view cut(std::string_view s, int chars)
-{
-    return {s.data(), chars <= 0 ? 0 : std::min(s.size(), static_cast<std::size_t>(chars))};
-}
-
-// A filled rectangle; nothing when it is empty.
-void fillArea(Display &d, int x, int y, int w, int h, Color c)
-{
-    if (w > 0 && h > 0) {
-        d.fillRect(x, y, w, h, c);
-    }
-}
-
-// One text of a band: where it goes, in which font and colour.
-struct Piece
-{
-    int x;
-    int y;
-    std::string_view text;
-    const Font *font;
-    Color ink;
-};
-
-// A full-width band of the screen, [y, y + h): each piece of text is drawn
-// with its own background first, then every other pixel of the band is
-// painted ground. Nothing is cleared before it is drawn over, so a redraw
-// does not flicker, and text of any size fits as long as it lies inside
-// the band. The pieces must not overlap side by side.
-void band(Display &d, int y, int h, std::initializer_list<Piece> pieces)
-{
-    const int w = d.width();
-    Piece sorted[4];
-    std::size_t n = 0;
-    for (const Piece &pc : pieces) {
-        if (!pc.text.empty() && n < std::size(sorted)) {
-            sorted[n++] = pc;
-        }
-    }
-    // Left to right; at most a few pieces.
-    for (std::size_t i = 1; i < n; ++i) {
-        for (std::size_t k = i; k > 0 && sorted[k].x < sorted[k - 1].x; --k) {
-            std::swap(sorted[k], sorted[k - 1]);
-        }
-    }
-    int cursor = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        const Piece &pc = sorted[i];
-        const int x = std::max(pc.x, cursor);
-        const int end = std::min(drawText(d, *pc.font, x, pc.y, pc.text, pc.ink, p::Ground), w);
-        fillArea(d, cursor, y, x - cursor, h, p::Ground);
-        fillArea(d, x, y, end - x, pc.y - y, p::Ground);
-        fillArea(d, x, pc.y + pc.font->height, end - x, y + h - pc.y - pc.font->height, p::Ground);
-        cursor = end;
-    }
-    fillArea(d, cursor, y, w - cursor, h, p::Ground);
-}
-
-void line(Display &d, const Font &f, int x, int y, int w, std::string_view text, Color ink)
-{
-    const int end = drawText(d, f, x, y, text, ink, p::Ground);
-    if (end < x + w) {
-        d.fillRect(end, y, x + w - end, f.height, p::Ground);
-    }
-}
 
 // A filled tag such as "TX" in the status bar, from @p x; returns the x
 // after it. The text goes first, with the tag's colour behind it, then the
@@ -549,34 +480,15 @@ void ListPicker::move(int steps)
     m_cursor = static_cast<std::size_t>(((static_cast<int>(m_cursor) + steps) % n + n) % n);
 }
 
-void ListPicker::draw(Display &d, int top)
+void ListPicker::draw(Display &d, std::string_view hint)
 {
-    const int w = d.width();
-    const int rowH = Body.height + 2;
-    d.fillRect(0, top, w, rowH - 1, p::Ground);
-    drawText(d, Body, 4, top + 1, m_title, p::Dim, p::Ground);
-    d.fillRect(0, top + rowH - 1, w, 1, p::Rule);
-    const int first = m_cursor < static_cast<std::size_t>(Rows) ? 0 : static_cast<int>(m_cursor) - Rows + 1;
-    for (int r = 0; r < Rows; ++r) {
-        const int y = top + rowH * (r + 1);
-        const int i = first + r;
-        if (i >= static_cast<int>(m_count)) {
-            d.fillRect(0, y, w, rowH, p::Ground);
-            continue;
-        }
-        const bool on = static_cast<std::size_t>(i) == m_cursor;
-        const Color fill = on ? p::Text : p::Ground;
-        d.fillRect(0, y, w, rowH, fill);
-        drawText(d, Body, 6, y + 1, m_text[i], on ? p::Ground : p::Text, fill);
-        const std::string_view value(m_value[i]);
-        if (!value.empty()) {
-            drawText(d, Body, w - 6 - textWidth(Body, value), y + 1, value, on ? p::Ground : p::Dim, fill);
-        }
+    ListRow rows[ListRows];
+    const std::size_t first = firstShown(m_cursor, m_count, ListRows);
+    std::size_t n = 0;
+    for (; n < std::size(rows) && first + n < m_count; ++n) {
+        rows[n] = {m_text[first + n], m_value[first + n]};
     }
-    const int end = top + rowH * (Rows + 1);
-    if (end < d.height()) {
-        d.fillRect(0, end, w, d.height() - end, p::Ground);
-    }
+    drawListScreen(d, m_title, std::span(rows, n), first, m_count, m_cursor, hint);
 }
 
 } // namespace dmm::app::ui

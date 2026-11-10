@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "dmm/services/d878uv2_codeplug.h"
+#include "dmm/services/d878uv2_settings_store.h"
 #include "dmm/services/storage.h"
 
 #include <cstdint>
@@ -20,6 +22,7 @@ public:
 
     dmm::services::StorageInfo info() override;
     dmm::services::StorageResult read(std::uint32_t address, std::span<std::uint8_t> data, bool physical) override;
+    void write(std::uint32_t address, std::span<const std::uint8_t> data);
 
 private:
     void put(std::uint32_t address, std::uint8_t value) { m_bytes[address] = value; }
@@ -32,3 +35,8 @@ private:
     std::mutex m_lock;
     std::map<std::uint32_t, std::uint8_t> m_bytes;
 };
+
+/// Writes the settings store's pieces into the valid copies of their
+/// blocks, for this run only.
+dmm::services::SaveResult writeSettings(SimStorage &storage, dmm::services::D878Uv2Codeplug &codeplug,
+    std::span<const dmm::services::D878Uv2SettingsStore::Piece> pieces);

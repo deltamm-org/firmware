@@ -95,6 +95,11 @@ struct BatterySave
 {
     std::uint8_t mode;
 };
+/// Turns auto roaming on or off as Menu > Roaming > Roaming does (console).
+struct SetAutoRoaming
+{
+    bool on;
+};
 /// What the key lock covers.
 struct KeyLockSettings
 {
@@ -112,6 +117,10 @@ struct SelectChannel
     static constexpr std::uint8_t KeepZone = 0xFF;
     std::uint8_t zone;
     std::uint16_t position;
+};
+/// Logs what the settings store keeps and the preferences record.
+struct SettingsReport
+{
 };
 struct EncoderClicks
 {
@@ -152,11 +161,13 @@ struct Gps
 };
 
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, SelectChannel, Notice, Gps>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, SetAutoRoaming, KeyLockSettings, KeyLockReport, SelectChannel, SettingsReport, Notice, Gps>;
 
 /// Starts the ui task, which owns @p display.
-/// @p input (may be nullptr) gives the key labels.
-void start(services::Display &display, services::CodeplugSource *codeplug, const board::Input *input);
+/// @p input (may be nullptr) gives the key labels; @p settingsStore (may
+/// be nullptr) keeps settings changed on the radio.
+void start(services::Display &display, services::CodeplugSource *codeplug, const board::Input *input,
+    board::SettingsStore *settingsStore);
 
 /// Queues a message for the ui task; false when the queue is full or there
 /// is no display.

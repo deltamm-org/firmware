@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "draw.h"
+
 #include "dmm/services/channel_selector.h"
 #include "dmm/services/display.h"
 #include "dmm/services/nmea.h"
@@ -11,19 +13,6 @@
 #include <string_view>
 
 namespace dmm::app::ui {
-
-/// The palette of the radio's own screens: black ground, white primary
-/// text, grey secondary text, thin grey rules between areas, and colour
-/// only for state.
-namespace palette {
-inline constexpr services::Color Ground = services::rgb(0, 0, 0);
-inline constexpr services::Color Text = services::rgb(255, 255, 255);
-inline constexpr services::Color Dim = services::rgb(150, 150, 150);
-inline constexpr services::Color Rule = services::rgb(70, 70, 70);
-inline constexpr services::Color Transmit = services::rgb(210, 40, 30);
-inline constexpr services::Color Receive = services::rgb(40, 170, 60);
-inline constexpr services::Color Warn = services::rgb(230, 160, 0);
-} // namespace palette
 
 /// The GPS receiver as the screens show it.
 struct GpsState
@@ -114,12 +103,11 @@ public:
 /// drawn over the old ones.
 void drawGpsScreen(services::Display &d, const GpsState &gps, bool full);
 
-/// A list to pick one item from, drawn over the screen body: a title bar
-/// and up to Rows rows, the chosen one inverted.
+/// A list to pick one item from, drawn as the menu's lists are, under the
+/// status bar.
 class ListPicker
 {
 public:
-    static constexpr int Rows = 7;
     static constexpr std::size_t MaxItems = 250;
     static constexpr std::size_t TextBytes = 17;
 
@@ -132,7 +120,8 @@ public:
     void move(int steps);
     bool empty() const { return m_count == 0; }
     std::uint8_t chosen() const { return m_ids[m_cursor]; }
-    void draw(services::Display &d, int top);
+    /// The list with @p hint naming the keys.
+    void draw(services::Display &d, std::string_view hint);
 
 private:
     char m_title[TextBytes] = {};

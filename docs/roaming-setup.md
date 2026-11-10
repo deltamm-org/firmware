@@ -58,10 +58,9 @@ talkgroup), time slot and colour code. Turn roaming on for it (QDMR:
 `roaming` set to the default zone, which is QDMR's default for a digital
 channel; in the CPS, the channel's roaming option left on).
 
-The channel's own frequency is used only while roaming is off. Setting
-it to one of the roaming zone's pairs, such as your local repeater's, is
-a good choice: the radio then starts there, and with roaming off the
-channel still works there.
+The channel's own frequency is used only until a repeater is in use.
+Setting it to one of the roaming zone's pairs, such as your local
+repeater's, is a good choice: the radio then starts there.
 
 A talkgroup that you use on both time slots, for example one that some
 repeaters carry on slot 1 and others on slot 2, needs two channels: the
@@ -79,17 +78,21 @@ Set a side key's short or long press to Roaming (QDMR: one of
 keys PF1 to PF3, set to `Roaming`). Pressing it makes the radio look for
 the best repeater now.
 
-### 5. Automatic roaming (optional)
+### 5. Auto roaming (optional)
 
-With automatic roaming on (QDMR: `settings.anytone.roamingSettings.autoRoam`),
-the radio also moves by itself to a better repeater it has heard, and a
-call whose repeater does not answer searches for another. It never
-transmits to find one by itself: it only listens. The codeplug's start,
-delay, period and range check settings are not used.
+With auto roaming on (QDMR: `settings.anytone.roamingSettings.autoRoam`),
+the radio also listens to the other pairs between calls and moves by
+itself to a better repeater it has heard. It never transmits to find one
+by itself: it only listens. The codeplug's start, delay, period and range
+check settings are not used.
 
-With automatic roaming off the radio stays on the repeater in use, for
-example to keep hearing that repeater's local calls (TG 9); the roam key
-still searches when you ask.
+With auto roaming off the radio does nothing on its own: it stays tuned
+to the repeater in use, for example to keep hearing that repeater's
+local calls (TG 9), and never listens elsewhere. PTT on a repeater that
+does not answer, the roam key and Search now still search; with nothing
+heard by listening, a search follows the roaming zone's order after the
+repeaters earlier searches heard. Menu > Roaming > Roaming changes this
+setting on the radio.
 
 ### Example
 
@@ -168,26 +171,25 @@ settings:
   first, then the rest of the list, waking quiet ones, and stops at the
   first with a good signal. `No repeater answered` means none answered.
 - **PTT:** before a call the radio wakes the repeater in use. If it does
-  not answer, or no repeater is in use yet, with automatic roaming on the
-  radio searches and the call goes out through the repeater it found, as
-  long as PTT is still held. With automatic roaming off it stays and shows
-  `No answer` (`No repeater` with none in use); the roam key searches.
-- **Listening:** while the repeater in use is not clearly good, the radio
-  briefly listens to the other pairs, without transmitting: during the
+  not answer, or no repeater is in use yet, the radio searches and the
+  call goes out through the repeater it found, as long as PTT is still
+  held. This is the same with auto roaming off.
+- **Listening** (auto roaming on): while the repeater in use is not
+  clearly good, the radio briefly listens to the other pairs, without
+  transmitting: during the
   repeater's own beacons or hang time while it is heard, and in bursts
   while it is quiet, at least every 5 minutes, and every 2 minutes once
   it is lost. It never leaves during a call or within 10 s of one.
-- **Automatic roaming** moves to a repeater heard clearly stronger (6 dB)
+- **Auto roaming** moves to a repeater heard clearly stronger (6 dB)
   when the one in use is weak; from a quiet one only to a repeater heard
   with a good signal; after an unanswered wake-up, to the strongest
   heard; after the one in use faded out, to the strongest heard if it is
   stronger than that one was. Never during a call.
-- **Menu > Channel > Roaming:** off makes every channel use its own
-  frequency again at once, until the radio restarts or roaming is turned
-  back on. **Roam zone** picks another of the codeplug's roaming zones for
-  the session; the pair in use stays in use when the new roaming zone
-  has it. **Roam status** shows the pair in use and its state, then
-  each pair heard with its level and how long ago.
+- **Menu > Roaming > Roaming** turns auto roaming on or off. **Roam
+  zone** picks another of the codeplug's roaming zones; the pair in use
+  stays in use when the new roaming zone has it. Both are written to the
+  codeplug (`docs/settings-storage.md`). **Status** shows the pair in use
+  and its state, then each pair heard with its level and how long ago.
 - On an FM channel the key says `Not roaming`.
 
 ## Notes

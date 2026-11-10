@@ -1028,8 +1028,8 @@ void backHere()
 }
 
 // A call on a roaming channel goes through the repeater in use. With none,
-// or when it does not answer, automatic roaming searches for one and the
-// call gets one more try; without it the radio stays and says so.
+// or when it does not answer, the radio searches for one and the call gets
+// one more try.
 void startRoamingCall()
 {
     const bool known = roam::inUse() >= 0;
@@ -1038,11 +1038,6 @@ void startRoamingCall()
     }
     if (known) {
         roam::unanswered();
-    }
-    if (!roam::automaticOn()) {
-        logDmrRefused(known ? "the repeater did not answer (automatic roaming off)" : "no repeater in use (automatic roaming off)",
-            known ? "No answer" : "No repeater");
-        return;
     }
     if (!roam::search(roam::SearchCause::Ptt, known) || pttReleasedMeanwhile()) {
         return;
@@ -1377,7 +1372,6 @@ void handle(Message &message)
                        roam::show(false);
                    },
                    [](const RoamNow &) { roam::searchNow(); },
-                   [](const RoamingOn &r) { roam::setOn(r.on); },
                    [](const RoamAutomatic &r) { roam::setAutomatic(r.on); },
                    [](const RoamingSetup &r) { roam::setup(r.settings); },
                    [](const RoamStatus &) { roam::logStatus(); },

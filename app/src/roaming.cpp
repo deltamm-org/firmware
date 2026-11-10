@@ -34,17 +34,17 @@ std::size_t newSiteCount = 0;
 bool sitesChanged = false;
 roaming::HeardList heardList;
 
-// Roaming on (the menu), a roaming channel in use, and the repeater in use
-// (-1: none yet). A roaming channel takes its frequencies and colour code
-// from that repeater, unless the repeater leaves the colour code to the
-// channel; with none in use, the channel's own.
-bool roamingOn = true;
+// A roaming channel in use, and the repeater in use (-1: none yet). A
+// roaming channel takes its frequencies and colour code from that repeater,
+// unless the repeater leaves the colour code to the channel; with none in
+// use, the channel's own.
 bool roamingChannel = false;
 int site = -1;
 std::uint32_t channelReceiveHz = 0;
 std::uint32_t channelTransmitHz = 0;
 std::uint8_t channelColourCode = 1;
-// The codeplug's automatic roaming: whether the radio moves by itself.
+// Auto roaming (the codeplug's, then the menu's): whether the radio listens
+// to the other repeaters and moves to a better one by itself.
 bool automatic = false;
 
 constexpr roaming::Levels Levels{};
@@ -437,11 +437,11 @@ void scanPass()
     backToBase();
 }
 
-// Roaming between calls. Nothing moves, and no pass starts, while the
-// repeater in use is busy. Moves follow the codeplug's automatic roaming;
-// listening runs while the repeater in use is not clearly good: single
-// checks during its idle transmissions while it is heard, passes in bursts
-// while it is quiet or lost.
+// Roaming between calls, with auto roaming on only. Nothing moves, and no
+// pass starts, while the repeater in use is busy. Listening runs while the
+// repeater in use is not clearly good: single checks during its idle
+// transmissions while it is heard, passes in bursts while it is quiet or
+// lost.
 void roamStep()
 {
     if (!roamingChannel || !canRoam()) {
@@ -458,8 +458,8 @@ void roamStep()
     const bool busy = activity.busy(now);
     const bool passes = state == roaming::Health::Quiet || state == roaming::Health::Lost;
     const int to = automatic && !busy ? roaming::moveTo(heardList, site, state, Levels, now) : -1;
-    const bool listen =
-        to < 0 && !(passes && busy) && listener.due(heardList, site, Levels, activity.idle(now), now);
+    const bool listen = automatic && to < 0 && !(passes && busy) &&
+        listener.due(heardList, site, Levels, activity.idle(now), now);
     int next = -1;
     if (listen && !passes) {
         for (std::size_t i = 0; i < siteCount; ++i) {
@@ -514,7 +514,7 @@ void useChannel(const services::Channel &c)
     takeNewZone();
     // A roaming channel keeps the repeater in use; else it starts on its own
     // frequencies when they are one of the zone's repeaters.
-    roamingChannel = roamingOn && c.digital() && c.roaming && sitesKnown() > 0;
+    roamingChannel = c.digital() && c.roaming && sitesKnown() > 0;
     if (roamingChannel && site < 0) {
         site = findSite([&](const services::RoamingSite &s) {
             return s.receiveHz == c.receiveHz && s.transmitHz == c.transmitHz;
@@ -615,21 +615,10 @@ void forget()
     log::info("roam") << "heard list cleared";
 }
 
-void setOn(bool on)
-{
-    roamingOn = on;
-    log::info("roam") << "roaming " << (on ? "on" : "off");
-}
-
 void setAutomatic(bool on)
 {
     automatic = on;
-    log::info("roam") << "automatic " << (on ? "on" : "off") << " for this session";
-}
-
-bool automaticOn()
-{
-    return automatic;
+    log::info("roam") << "automatic " << (on ? "on" : "off");
 }
 
 void setup(const services::RoamingSettings &settings)
@@ -641,7 +630,7 @@ void setup(const services::RoamingSettings &settings)
 
 void logStatus()
 {
-    log::info("roam") << (roamingOn ? "on, " : "off, ") << (roamingChannel ? "roaming channel" : "not a roaming channel")
+    log::info("roam") << (roamingChannel ? "roaming channel" : "not a roaming channel")
                       << ", " << sitesKnown() << " repeaters, in use: " << site + 1 << " ("
                       << mhz(tunedHz()).view() << " MHz, colour code " << tunedColourCode()
                       << "), automatic " << (automatic ? "on" : "off");
