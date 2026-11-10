@@ -508,6 +508,33 @@ TEST_CASE("lost: the gaps between bursts stay at the first")
     }
 }
 
+TEST_CASE("lost with nothing at all heard for SilentMs: the gaps grow")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 3, Floor, 1000); // faded below the fair level, then silent: lost
+    Listening v;
+    const std::uint32_t t0 = 1000 + HeardList::ValidMs;
+    REQUIRE(roaming::health(h, 0, l, t0) == Health::Lost);
+    // The start of each burst, asked every second for two hours and a half.
+    std::uint32_t starts[64] = {};
+    std::size_t n = 0;
+    bool was = false;
+    for (std::uint32_t t = t0; t < t0 + 2 * Listening::SilentMs + Listening::SilentMs / 2 && n < 64; t += 1000) {
+        const bool now = v.due(h, 0, l, false, t);
+        if (now && !was) {
+            starts[n++] = t;
+        }
+        was = now;
+    }
+    REQUIRE(n > 4);
+    // Within the first SilentMs: a burst every BurstMs + FirstGapMs.
+    CHECK(starts[1] - starts[0] == Listening::BurstMs + Listening::FirstGapMs);
+    CHECK(starts[2] - starts[1] == Listening::BurstMs + Listening::FirstGapMs);
+    // Later the gaps grow to MaxGapMs.
+    CHECK(starts[n - 1] - starts[n - 2] == Listening::BurstMs + Listening::MaxGapMs);
+}
+
 TEST_CASE("quiet or lost: passes in bursts, with a dwell on the repeater in use between them")
 {
     const Levels l;

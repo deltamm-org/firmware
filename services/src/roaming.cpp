@@ -304,10 +304,17 @@ bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool
         m_scanning = true;
         m_burstEndMs = nowMs + BurstMs;
         m_gapMs = FirstGapMs;
+        m_passesFromMs = nowMs;
     }
     if (static_cast<std::int32_t>(nowMs - m_burstEndMs) >= 0) {
-        // Lost: no call on the repeater in use to miss, so the gaps do not grow.
-        const bool lost = state == Health::Lost;
+        // Lost: no call on the repeater in use to miss, so the gaps do not
+        // grow; unless nothing at all was heard for SilentMs: out of reach
+        // for that long, a repeater is not likely to turn up any minute.
+        bool heardLately = nowMs - m_passesFromMs < SilentMs;
+        for (const HeardList::Entry &e : heard.entries()) {
+            heardLately = heardLately || (e.samples > 0 && nowMs - e.measuredMs < SilentMs);
+        }
+        const bool lost = state == Health::Lost && heardLately;
         if (nowMs - m_burstEndMs < (lost ? FirstGapMs : m_gapMs)) {
             return false;
         }

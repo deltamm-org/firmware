@@ -198,10 +198,13 @@ public:
     /// doubling from FirstGapMs up to MaxGapMs, kept short so that a
     /// repeater met after a long stretch without any is found soon. Lost:
     /// always FirstGapMs, as no call on the repeater in use can be missed
-    /// then.
+    /// then, until nothing at all was heard for SilentMs.
     static constexpr std::uint32_t BurstMs = 60'000;
     static constexpr std::uint32_t FirstGapMs = 120'000;
     static constexpr std::uint32_t MaxGapMs = 300'000;
+    /// Lost with nothing at all heard for this long: the gaps grow, as while
+    /// quiet.
+    static constexpr std::uint32_t SilentMs = 3'600'000;
     /// Between passes the radio stays this long on the repeater in use, to
     /// hear it if it is on the air.
     static constexpr std::uint32_t DwellMs = 500;
@@ -249,6 +252,7 @@ private:
     std::uint32_t m_scanLastMs = 0;
     std::uint32_t m_scanEndMs = 0;
     int m_scanSite = -1;
+    std::uint32_t m_passesFromMs = 0;
 };
 
 } // namespace dmm::services::roaming
