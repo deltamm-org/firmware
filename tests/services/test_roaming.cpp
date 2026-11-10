@@ -445,6 +445,76 @@ TEST_CASE("bursts: the next one starts though the last was not seen to end; a mo
     CHECK_FALSE(v.passing());
 }
 
+TEST_CASE("heard only below the fair level for as long as a level stays current: poor")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 8, Floor, 1000);
+    h.heard(0, Floor + 2, Floor, 30'000); // averaged below the fair level
+    CHECK(roaming::health(h, 0, l, 30'000) == Health::Fair);
+    h.heard(0, Floor + 2, Floor, 90'000);
+    CHECK(roaming::health(h, 0, l, 90'000) == Health::Fair);
+    h.heard(0, Floor + 2, Floor, 1000 + HeardList::ValidMs);
+    CHECK(roaming::health(h, 0, l, 1000 + HeardList::ValidMs) == Health::Poor);
+    h.heard(0, Floor + 22, Floor, 130'000); // back at the fair level or above
+    CHECK(roaming::health(h, 0, l, 130'000) == Health::Good);
+    // Silent after fading while poor: lost.
+    HeardList f;
+    f.heard(0, Floor + 2, Floor, 1000);
+    f.heard(0, Floor + 2, Floor, 61'000);
+    f.heard(0, Floor + 2, Floor, 121'000);
+    REQUIRE(roaming::health(f, 0, l, 121'000) == Health::Poor);
+    CHECK(roaming::health(f, 0, l, 121'000 + HeardList::ValidMs) == Health::Lost);
+}
+
+TEST_CASE("poor: to the strongest heard once, better by the margin")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 2, Floor, 1000);
+    h.heard(0, Floor + 2, Floor, 61'000);
+    const std::uint32_t t = 1000 + HeardList::ValidMs;
+    h.heard(0, Floor + 2, Floor, t);
+    REQUIRE(roaming::health(h, 0, l, t) == Health::Poor);
+    h.heard(1, Floor + 5, Floor, t); // 3 dB better
+    CHECK(moveTo(h, 0, Health::Poor, l, t) == -1);
+    h.heard(2, Floor + 8, Floor, t); // 6 dB better, heard once
+    CHECK(moveTo(h, 0, Health::Poor, l, t) == 2);
+}
+
+TEST_CASE("poor: passes in bursts, the gaps growing as while quiet")
+{
+    const Levels l;
+    HeardList h;
+    std::uint32_t last = 1000;
+    h.heard(0, Floor + 1, Floor, last);
+    // Heard below the fair level every 30 s, as from its beacons.
+    auto hearUntil = [&](std::uint32_t t) {
+        while (last + 30'000 <= t) {
+            last += 30'000;
+            h.heard(0, Floor + 1, Floor, last);
+        }
+    };
+    Listening v;
+    std::uint32_t t = 1000 + HeardList::ValidMs;
+    hearUntil(t);
+    REQUIRE(roaming::health(h, 0, l, t) == Health::Poor);
+    CHECK(v.due(h, 0, l, false, t));
+    CHECK(v.passing());
+    t += Listening::BurstMs;
+    std::uint32_t gap = Listening::FirstGapMs;
+    for (int k = 0; k < 3; ++k) {
+        hearUntil(t + gap - 1);
+        CHECK_FALSE(v.due(h, 0, l, false, t + gap - 1));
+        hearUntil(t + gap);
+        REQUIRE(roaming::health(h, 0, l, t + gap) == Health::Poor);
+        CHECK(v.due(h, 0, l, false, t + gap));
+        t += gap + Listening::BurstMs;
+        gap = std::min(gap * 2, Listening::MaxGapMs);
+    }
+    CHECK(gap == Listening::MaxGapMs);
+}
+
 TEST_CASE("lost: the gaps between bursts stay at the first")
 {
     const Levels l;

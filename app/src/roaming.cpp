@@ -113,7 +113,7 @@ void noteHeard(int i, int dbm)
 {
     const int floorDbm = floorAt(i); // takes sitesLock itself
     sitesLock.lock();
-    heardList.heard(static_cast<std::uint8_t>(i), dbm, floorDbm, os::nowMs());
+    heardList.heard(static_cast<std::uint8_t>(i), dbm, floorDbm, os::nowMs(), Levels.fairDb);
     sitesLock.unlock();
 }
 
@@ -369,7 +369,7 @@ lib::StaticString<12> seconds(std::uint32_t ms)
 
 [[gnu::noinline]] void logMove(int to, roaming::Health state)
 {
-    constexpr const char *States[] = {"strong", "good", "fair", "quiet", "lost"};
+    constexpr const char *States[] = {"strong", "good", "fair", "poor", "quiet", "lost"};
     log::info("roam") << "moving from repeater " << site + 1 << " (" << States[static_cast<int>(state)]
                       << ") to repeater " << to + 1;
 }
@@ -456,7 +456,8 @@ void roamStep()
     }
     const roaming::Health state = roaming::health(heardList, site, Levels, now);
     const bool busy = activity.busy(now);
-    const bool passes = state == roaming::Health::Quiet || state == roaming::Health::Lost;
+    const bool passes =
+        state == roaming::Health::Poor || state == roaming::Health::Quiet || state == roaming::Health::Lost;
     const int to = automatic && !busy ? roaming::moveTo(heardList, site, state, Levels, now) : -1;
     const bool listen = automatic && to < 0 && !(passes && busy) &&
         listener.due(heardList, site, Levels, activity.idle(now), now, busy);

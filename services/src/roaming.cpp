@@ -86,13 +86,16 @@ void HeardList::keep(int position)
     m_count = kept;
 }
 
-void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs)
+void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
 {
     Entry &e = place(position, nowMs);
     // A current level is smoothed; an old one is replaced.
     const bool current = e.current(nowMs);
     e.levelDbm = clampDbm(current ? (e.levelDbm + levelDbm) / 2 : levelDbm);
     e.floorDbm = clampDbm(floorDbm);
+    if (!current || e.levelDb() >= fairDb) {
+        e.aboveFairMs = nowMs;
+    }
     e.unanswered = false;
     e.samples = current ? static_cast<std::uint8_t>(std::min(e.samples + 1, 255)) : 1;
     e.measuredMs = nowMs;
@@ -201,8 +204,13 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
         const bool faded = e->samples > 0 && e->levelDb() < levels.fairDb;
         return e->unanswered || faded ? Health::Lost : Health::Quiet;
     }
-    if (e->unanswered || e->levelDb() < levels.fairDb) {
+    if (e->unanswered) {
         return Health::Fair;
+    }
+    if (e->levelDb() < levels.fairDb) {
+        // Heard, but only below the fair level for as long as a level
+        // stays current: close to the edge of decoding.
+        return nowMs - e->aboveFairMs >= HeardList::ValidMs ? Health::Poor : Health::Fair;
     }
     return e->levelDb() >= levels.strongDb ? Health::Strong : Health::Good;
 }
@@ -224,6 +232,10 @@ int moveTo(const HeardList &heard, int site, Health state, const Levels &levels,
                 return e.levelDb() >= own->levelDb() + levels.marginDb ? e.position : -1;
             }
             break; // measured once: the next strongest may do
+        }
+        case Health::Poor: {
+            const HeardList::Entry *own = heard.find(static_cast<std::uint8_t>(site));
+            return e.levelDb() >= own->levelDb() + levels.marginDb ? e.position : -1;
         }
         case Health::Quiet:
             return e.levelDb() >= levels.searchDb ? e.position : -1;
