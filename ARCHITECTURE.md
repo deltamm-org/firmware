@@ -44,9 +44,9 @@ A part the app or a service uses comes in one of two forms.
   `boards/<name>/include/dmm/board/parts.h`, the one board header shared
   code includes: `board::Fm`, `board::Baseband`, `board::Calibration`,
   `board::Input`, `board::Battery`, `board::DataChannel`, `board::Gps`,
-  `board::GpsReceiver`, `board::Rtc`. The shared header writes the part
-  down as a C++20 concept, and the board checks its type against it. Calls
-  are direct. The headers in the board's `include/dmm/board/` include no
+  `board::GpsReceiver`, `board::Rtc`, `board::SettingsStore`. The shared
+  header writes the part down as a C++20 concept, and the board checks its
+  type against it. Calls are direct. The headers in the board's `include/dmm/board/` include no
   MCU headers.
 - LEDs, log output and system control stay virtual: the two simulators
   implement them differently and share one build of the app.
@@ -113,9 +113,10 @@ drawing goes straight to the panel.
 The data flash is read through `services::Storage`, which follows the
 radio's bad-block table; the tasks that read it share it behind a lock.
 Only the codeplug is written, by `D878Uv2CodeplugWriter`, for the PC
-programming protocol. Each 128 KB codeplug block is kept twice, and the
-last 8 bytes of a copy mark it: 55 55 AA AA in bytes 4-7 when valid, AA AA
-55 55 in bytes 0-3 once superseded. A write fills the other copy page by
+programming protocol and for settings changed on the radio
+(`docs/settings-storage.md`), never both at once. Each 128 KB codeplug
+block is kept twice, and the last 8 bytes of a copy mark it: 55 55 AA AA
+in bytes 4-7 when valid, AA AA 55 55 in bytes 0-3 once superseded. A write fills the other copy page by
 page from the valid one with the new data on top, marks it valid, then
 marks the old one superseded, so an interrupted write leaves the old
 block. Writes are limited to the codeplug's blocks, the contact ID table
@@ -142,7 +143,9 @@ switched on holding PTT and PF3. `tools/dmm_radio` speaks its protocol
 
 Settings, codeplug and calibration are kept in the radio's existing
 formats, so the radio can be switched back to its factory firmware without
-losing anything, and existing codeplug tools keep working.
+losing anything, and existing codeplug tools keep working. Settings
+DeltaMM has of its own go to a preferences record in a part of the
+codeplug that codeplugs leave unused (`docs/settings-storage.md`).
 
 Calibration is read-only by default. Without valid calibration the radio
 receives but refuses to transmit.

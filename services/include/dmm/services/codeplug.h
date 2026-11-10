@@ -4,6 +4,7 @@
 #pragma once
 
 #include "dmm/services/dmr.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/key_lock.h"
 #include "dmm/services/power_level.h"
 #include "dmm/services/tone.h"
@@ -74,7 +75,9 @@ struct RoamingSettings
 
     /// The roaming zone, or NoZone.
     std::uint8_t zone = NoZone;
-    /// Moves by itself; else only on a key, the menu or a failed PTT.
+    /// Listens to the other repeaters and moves to a better one by itself;
+    /// else searches only when the user asks (the roam key, the menu's
+    /// search, a call no repeater answers).
     bool automatic = false;
 };
 
@@ -94,6 +97,7 @@ struct CodeplugSettings
     KeyLockSettings keyLock;
     std::uint8_t batterySave = 0;       // 0 = off; 1 or 2 = the receiver sleeps 150 or 70 ms per cycle
     std::uint16_t backlightS = 0;       // backlight time after the last key; 0 = always on
+    std::uint8_t backlightLevel = 4;    // display brightness, 1..5
     bool voiceEnhancement = false;      // transmit voice shaped by the radio's equalizer
     std::uint8_t fmMicrophoneLevel = 2; // FM microphone gain, 0..4 (shown 1..5)
     bool gps = false;                   // GPS receiver on
@@ -103,6 +107,15 @@ struct CodeplugSettings
     /// The side keys' functions on a short and a long press.
     KeyFunction sideShort[SideKeys] = {};
     KeyFunction sideLong[SideKeys] = {};
+};
+
+/// Settings of DeltaMM's own that no codeplug field holds, kept with the
+/// codeplug in a record of their own. A record from before a field was
+/// added gives that field its default here.
+struct RadioPreferences
+{
+    /// What each row of the home screen shows.
+    HomeLayout home;
 };
 
 /// One repeater of a roaming zone.
@@ -129,6 +142,8 @@ public:
     static constexpr std::size_t ContactNameBytes = 16;
 
     virtual std::optional<CodeplugSettings> settings() = 0;
+    /// DeltaMM's own preferences, if a valid record was kept.
+    virtual std::optional<RadioPreferences> preferences() = 0;
     /// Channel @p index (0-based), if it is in use.
     virtual std::optional<Channel> channel(std::uint16_t index) = 0;
     /// The VFO of side A or B: a channel record whose frequency and

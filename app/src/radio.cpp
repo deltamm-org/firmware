@@ -100,6 +100,12 @@ constexpr std::uint32_t AllCallId = 0xFFFFFF;
 // The repeater's carrier is heard now.
 bool carrierHeard = false;
 bool timingSeen = false;
+// The level of the signal last heard, read twice a second while one is
+// there; signalAt is 0 until the first.
+constexpr os::Ticks SignalEveryMs = 500;
+os::Ticks lastSignalRead = 0;
+std::atomic<int> signalDbm{0};
+std::atomic<os::Ticks> signalAt{0};
 bool idleLogged = false;
 // The colour code of the last burst heard, for roaming's checks.
 std::uint8_t burstColourCode = NoColourCode;
@@ -1028,8 +1034,8 @@ void backHere()
 }
 
 // A call on a roaming channel goes through the repeater in use. With none,
-// or when it does not answer, automatic roaming searches for one and the
-// call gets one more try; without it the radio stays and says so.
+// or when it does not answer, the radio searches for one and the call gets
+// one more try.
 void startRoamingCall()
 {
     const bool known = roam::inUse() >= 0;
@@ -1038,11 +1044,6 @@ void startRoamingCall()
     }
     if (known) {
         roam::unanswered();
-    }
-    if (!roam::automaticOn()) {
-        logDmrRefused(known ? "the repeater did not answer (automatic roaming off)" : "no repeater in use (automatic roaming off)",
-            known ? "No answer" : "No repeater");
-        return;
     }
     if (!roam::search(roam::SearchCause::Ptt, known) || pttReleasedMeanwhile()) {
         return;
@@ -1377,7 +1378,6 @@ void handle(Message &message)
                        roam::show(false);
                    },
                    [](const RoamNow &) { roam::searchNow(); },
-                   [](const RoamingOn &r) { roam::setOn(r.on); },
                    [](const RoamAutomatic &r) { roam::setAutomatic(r.on); },
                    [](const RoamingSetup &r) { roam::setup(r.settings); },
                    [](const RoamStatus &) { roam::logStatus(); },
@@ -1464,6 +1464,14 @@ void radioMain(void *)
             }
             fm->keepLocked();
         }
+        // A level only from a signal: the DMR carrier, or the FM carrier
+        // the squelch heard; never the noise between signals.
+        const bool signal = fmChannel.digital ? carrierHeard : carrierGate.heard();
+        if (fm->receiving() && signal && os::nowMs() - lastSignalRead >= SignalEveryMs) {
+            lastSignalRead = os::nowMs();
+            signalDbm.store(fm->status().rssiDbm);
+            signalAt.store(lastSignalRead);
+        }
     }
 }
 
@@ -1478,6 +1486,14 @@ void start(board::Fm &f, board::Baseband *b)
     radioTask.start("radio", 7, radioMain, nullptr);
 }
 
+SignalLevel signalLevel()
+{
+    SignalLevel l;
+    l.atMs = signalAt.load();
+    l.known = l.atMs != 0;
+    l.dbm = signalDbm.load();
+    return l;
+}
 void setReceiveGroups(std::span<const std::uint32_t> ids)
 {
     groupsLock.lock();
