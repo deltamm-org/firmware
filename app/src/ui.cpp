@@ -797,6 +797,9 @@ void uiMain(void *)
         } else {
             log::warning("ui") << "codeplug: no channel to start on";
         }
+        if (const auto p = codeplug->preferences()) {
+            homeLayout = p->home;
+        }
     }
 
     View view = View::Start;
@@ -1678,7 +1681,15 @@ void uiMain(void *)
                                                    << ", auto roaming " << (s->roaming.automatic ? "on" : "off")
                                                    << ", roaming zone " << s->roaming.zone;
                                }
-                               log::info("ui") << (codeplug->preferences() ? "preferences record: valid" : "no preferences record");
+                               if (const auto p = codeplug->preferences()) {
+                                   const services::HomeLayout &h = p->home;
+                                   log::info("ui") << "preferences record: home screen " << static_cast<int>(h.top) << ' '
+                                                   << (h.clock ? 1 : 0) << ' ' << static_cast<int>(h.big) << ' '
+                                                   << static_cast<int>(h.middle) << ' ' << static_cast<int>(h.beside) << ' '
+                                                   << static_cast<int>(h.bottom);
+                               } else {
+                                   log::info("ui") << "no preferences record";
+                               }
                            },
                            [&](const EncoderClicks &c) {
                                useLight(d);
