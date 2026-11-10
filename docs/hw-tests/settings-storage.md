@@ -67,8 +67,15 @@ write: 2026-11-01, on the same branches before the review changes.
 | 15 | Pass: no differences other than two fields the codeplug tool changes on every write |
 | 16 | Pass: 375 unused stack words in the ui task |
 
-Roaming Off in steps 7, 9, 10 and 14, now the codeplug's Auto roaming,
-is still to be run on the radio.
+Roaming Off as the codeplug's Auto Roaming, run 2026-11-10 on the same
+kind of image (the stack, the test tools and the loader):
+
+| # | Result |
+| --- | --- |
+| 7 | Pass: `roam: automatic off`, then `settings kept in the codeplug` about 3.5 s later; On and `roam auto on\|off` kept the same way |
+| 9 | Pass: `auto roaming off` in the `codeplug:` line |
+| 10 | Pass: `automatic off` in the `roam:` start line after the restart |
+| 14 | Not run again |
 
 ## Undo
 
