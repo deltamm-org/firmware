@@ -203,6 +203,9 @@ header follows well within 1.5 s.
 
 ### 3.5 Listening (no transmitting)
 
+Only with auto roaming on; off, the radio never leaves the repeater in
+use by itself.
+
 A **check** tunes to another repeater's output for a moment: a carrier,
 then slot timing, then a burst with its colour code, whose level is
 read. An empty frequency costs about 0.1 s.
@@ -276,7 +279,9 @@ frequencies, as at the start. A pass starts afresh in the new order.
   each repeater heard with its level and age.
 - Menu > Channel > Roaming (auto roaming) and Roam zone take effect at
   once and are written to the codeplug. With auto roaming off the radio
-  does nothing on its own; PTT, the roam key and Search now still search.
+  does nothing on its own: no listening and no moves. PTT, the roam key
+  and Search now still search, in the order of what those searches heard
+  and then the zone's own order.
 - The console: `roam` logs the state and the heard list; each check
   (with the level read, also on an empty channel), search and move is
   logged.

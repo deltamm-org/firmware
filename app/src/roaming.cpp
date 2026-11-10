@@ -43,8 +43,8 @@ int site = -1;
 std::uint32_t channelReceiveHz = 0;
 std::uint32_t channelTransmitHz = 0;
 std::uint8_t channelColourCode = 1;
-// Auto roaming (the codeplug's, then the menu's): whether the radio moves
-// to a better repeater by itself.
+// Auto roaming (the codeplug's, then the menu's): whether the radio listens
+// to the other repeaters and moves to a better one by itself.
 bool automatic = false;
 
 constexpr roaming::Levels Levels{};
@@ -437,11 +437,11 @@ void scanPass()
     backToBase();
 }
 
-// Roaming between calls. Nothing moves, and no pass starts, while the
-// repeater in use is busy. Moves follow the codeplug's automatic roaming;
-// listening runs while the repeater in use is not clearly good: single
-// checks during its idle transmissions while it is heard, passes in bursts
-// while it is quiet or lost.
+// Roaming between calls, with auto roaming on only. Nothing moves, and no
+// pass starts, while the repeater in use is busy. Listening runs while the
+// repeater in use is not clearly good: single checks during its idle
+// transmissions while it is heard, passes in bursts while it is quiet or
+// lost.
 void roamStep()
 {
     if (!roamingChannel || !canRoam()) {
@@ -458,8 +458,8 @@ void roamStep()
     const bool busy = activity.busy(now);
     const bool passes = state == roaming::Health::Quiet || state == roaming::Health::Lost;
     const int to = automatic && !busy ? roaming::moveTo(heardList, site, state, Levels, now) : -1;
-    const bool listen =
-        to < 0 && !(passes && busy) && listener.due(heardList, site, Levels, activity.idle(now), now);
+    const bool listen = automatic && to < 0 && !(passes && busy) &&
+        listener.due(heardList, site, Levels, activity.idle(now), now);
     int next = -1;
     if (listen && !passes) {
         for (std::size_t i = 0; i < siteCount; ++i) {

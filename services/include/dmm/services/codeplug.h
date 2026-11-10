@@ -74,8 +74,9 @@ struct RoamingSettings
 
     /// The roaming zone, or NoZone.
     std::uint8_t zone = NoZone;
-    /// Moves to a better repeater by itself; else only when the user asks
-    /// (the roam key, the menu's search, a call no repeater answers).
+    /// Listens to the other repeaters and moves to a better one by itself;
+    /// else searches only when the user asks (the roam key, the menu's
+    /// search, a call no repeater answers).
     bool automatic = false;
 };
 
