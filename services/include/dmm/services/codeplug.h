@@ -4,6 +4,7 @@
 #pragma once
 
 #include "dmm/services/dmr.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/key_lock.h"
 #include "dmm/services/power_level.h"
 #include "dmm/services/tone.h"
@@ -113,6 +114,8 @@ struct CodeplugSettings
 /// added gives that field its default here.
 struct RadioPreferences
 {
+    /// What each row of the home screen shows.
+    HomeLayout home;
 };
 
 /// One repeater of a roaming zone.

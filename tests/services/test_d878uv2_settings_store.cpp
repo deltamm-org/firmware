@@ -483,3 +483,46 @@ TEST_CASE("preferences record: a record from a later version with more field byt
     seal(r);
     CHECK(dmm::services::d878uv2::decodePreferences(r).has_value());
 }
+
+TEST_CASE("preferences record: the home screen layout round trip")
+{
+    using dmm::services::HomeLayout;
+    RadioPreferences p;
+    p.home.top = HomeLayout::Top::Number;
+    p.home.clock = false;
+    p.home.big = HomeLayout::Big::Zone;
+    p.home.middle = HomeLayout::Middle::Signal;
+    p.home.beside = HomeLayout::Beside::Volume;
+    p.home.bottom = HomeLayout::Bottom::Position;
+    const auto q = dmm::services::d878uv2::decodePreferences(encoded(p));
+    REQUIRE(q.has_value());
+    CHECK(q->home == p.home);
+}
+
+TEST_CASE("preferences record: a record without the home screen bytes gives the default layout")
+{
+    using dmm::services::HomeLayout;
+    RadioPreferences p;
+    p.home.big = HomeLayout::Big::Contact;
+    p.home.clock = false;
+    // A record from before the layout: no field bytes.
+    Record r = encoded(p);
+    r[5] = 0;
+    seal(r);
+    auto q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->home == HomeLayout{});
+
+    // Values out of range read as their defaults, one by one.
+    r = encoded(p);
+    r[6] = static_cast<std::uint8_t>(HomeLayout::Top::Count);
+    r[7] = 2;
+    r[8] = 0xFF;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->home.top == HomeLayout{}.top);
+    CHECK(q->home.clock == HomeLayout{}.clock);
+    CHECK(q->home.big == HomeLayout{}.big);
+    CHECK(q->home.middle == p.home.middle);
+}
