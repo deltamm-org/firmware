@@ -185,8 +185,8 @@ struct RoamUse
 struct RoamForget
 {
 };
-/// Auto roaming on or off: whether the radio moves to a better repeater by
-/// itself.
+/// Auto roaming on or off: whether the radio listens to the other repeaters
+/// and moves to a better one by itself.
 struct RoamAutomatic
 {
     bool on;

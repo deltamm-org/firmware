@@ -81,15 +81,18 @@ the best repeater now.
 ### 5. Auto roaming (optional)
 
 With auto roaming on (QDMR: `settings.anytone.roamingSettings.autoRoam`),
-the radio also moves by itself to a better repeater it has heard. It
-never transmits to find one by itself: it only listens. The codeplug's
-start, delay, period and range check settings are not used.
+the radio also listens to the other pairs between calls and moves by
+itself to a better repeater it has heard. It never transmits to find one
+by itself: it only listens. The codeplug's start, delay, period and range
+check settings are not used.
 
-With auto roaming off the radio does nothing on its own: it stays on the
-repeater in use, for example to keep hearing that repeater's local calls
-(TG 9). PTT on a repeater that does not answer, the roam key and Search
-now still search. Menu > Channel > Roaming changes this setting on the
-radio.
+With auto roaming off the radio does nothing on its own: it stays tuned
+to the repeater in use, for example to keep hearing that repeater's
+local calls (TG 9), and never listens elsewhere. PTT on a repeater that
+does not answer, the roam key and Search now still search; with nothing
+heard by listening, a search follows the roaming zone's order after the
+repeaters earlier searches heard. Menu > Channel > Roaming changes this
+setting on the radio.
 
 ### Example
 
@@ -171,8 +174,9 @@ settings:
   not answer, or no repeater is in use yet, the radio searches and the
   call goes out through the repeater it found, as long as PTT is still
   held. This is the same with auto roaming off.
-- **Listening:** while the repeater in use is not clearly good, the radio
-  briefly listens to the other pairs, without transmitting: during the
+- **Listening** (auto roaming on): while the repeater in use is not
+  clearly good, the radio briefly listens to the other pairs, without
+  transmitting: during the
   repeater's own beacons or hang time while it is heard, and in bursts
   while it is quiet, at least every 5 minutes, and every 2 minutes once
   it is lost. It never leaves during a call or within 10 s of one.
