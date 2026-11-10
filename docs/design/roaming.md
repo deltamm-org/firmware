@@ -286,9 +286,12 @@ frequencies, as at the start. A pass starts afresh in the new order.
 - Under the channel name: the repeater in use, or `Searching...`.
 - `No repeater` while the repeater in use is lost; `No repeater answered`
   when a search found none.
-- Menu > Roaming > Status: the state of the repeater in use, then each
-  repeater heard by its name, with its level and age, a pointer marking
-  the one in use; on an FM channel `DMR only`.
+- Menu > Roaming > Status: the state of the repeater in use, by the same
+  name as in roaming (Strong, Good, Fair, Poor, Quiet, Lost);
+  `Site search` with when the next burst of passes starts, or `now`,
+  while bursts are planned; then each repeater heard by its name, with its
+  level and age, a pointer marking the one in use; on an FM channel
+  `DMR only`.
 - Menu > Roaming > Automatic (auto roaming) and Roam zone take effect at
   once and are written to the codeplug. With auto roaming off the radio
   does nothing on its own: no listening and no moves. PTT, the roam key

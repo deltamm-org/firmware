@@ -250,6 +250,10 @@ struct RoamingView
     std::uint8_t count = 0;
     services::roaming::HeardList::Entry entries[services::roaming::HeardList::Capacity];
     std::uint32_t receiveHz[services::roaming::HeardList::Capacity] = {};
+    // Listening to the other repeaters: a burst now, the next one in
+    // burstInMs, or none planned.
+    services::roaming::Listening::Bursts bursts = services::roaming::Listening::Bursts::None;
+    std::uint32_t burstInMs = 0;
 };
 void roamingView(RoamingView &out);
 

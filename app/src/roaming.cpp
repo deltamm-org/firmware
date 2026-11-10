@@ -663,6 +663,10 @@ void roamingView(RoamingView &out)
         const std::uint8_t i = out.entries[k].position;
         out.receiveHz[k] = i < siteCount ? sites[i].receiveHz : 0;
     }
+    const std::uint32_t now = os::nowMs();
+    std::uint32_t next = now;
+    out.bursts = automatic ? listener.bursts(now, next) : services::roaming::Listening::Bursts::None;
+    out.burstInMs = static_cast<std::int32_t>(next - now) > 0 ? next - now : 0;
     sitesLock.unlock();
 }
 
