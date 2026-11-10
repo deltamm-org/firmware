@@ -149,6 +149,7 @@ TEST_CASE("settings store: kept settings are written after a quiet time, in thei
     s.keyLock.knob = true;
     s.keyLock.autoLockMs = 30'000;
     s.roaming.zone = 2;
+    s.roaming.automatic = true;
     r.store.keepSettings(s, 1000);
     CHECK(r.store.pending());
     CHECK(r.store.flush(1000 + D878Uv2SettingsStore::QuietMs - 1) == SaveResult::Unchanged);
@@ -170,6 +171,7 @@ TEST_CASE("settings store: kept settings are written after a quiet time, in thei
     CHECK(t.keyLock.knob);
     CHECK(t.keyLock.autoLockMs == 30'000);
     CHECK(t.roaming.zone == 2);
+    CHECK(t.roaming.automatic);
     CHECK((r.byte(Settings + 0xBE) & 0x40) != 0);
 }
 

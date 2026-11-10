@@ -30,14 +30,14 @@ screen.
 | 4 | `light time 5`, `light time 10`, `light time 15` within 2 s | One `settings kept in the codeplug`, 3 s after the last; `settings` shows light `15 s` |
 | 5 | `save 1` again | No `settings kept` line; `settings` shows `last write unchanged` |
 | 6 | `restart`; then `save` and `settings` | `power: battery save on, 150 ms sleep; ...`; the `codeplug:` line as in step 4; the backlight goes off 15 s after the last key |
-| 7 | Menu > Channel: Squelch 4, Sq type the other one, Power the other one, Roam zone another one | Each takes effect at once; 3 s after the last one `settings kept in the codeplug` |
+| 7 | Menu > Channel: Squelch 4, Sq type the other one, Power the other one, Roaming Off, Roam zone another one | Each takes effect at once; 3 s after the last one `settings kept in the codeplug` |
 | 8 | Menu > Display: Backlight 2, Light time 30 s; Menu > GPS and time: GPS on, Systems GPS, Zone one step on | One `settings kept` line after the last |
-| 9 | Zone key: pick another zone; knob two channels on; wait 3 s; `settings` | `settings kept`; `codeplug:` shows the new zone, squelch 4, light 2 30 s, GPS on systems 1, the new time zone and roaming zone |
-| 10 | `restart`; `settings`; look at the screen | Starts in the zone and on the channel of step 9, dimmer (level 2); the channel of step 7 has its new power and squelch type |
+| 9 | Zone key: pick another zone; knob two channels on; wait 3 s; `settings` | `settings kept`; `codeplug:` shows the new zone, squelch 4, light 2 30 s, GPS on systems 1, the new time zone, `auto roaming off` and the new roaming zone |
+| 10 | `restart`; `settings`; look at the screen | Starts in the zone and on the channel of step 9, dimmer (level 2); the channel of step 7 has its new power and squelch type; `automatic off` in the `roam:` start line, and Menu > Channel > Roaming shows Off |
 | 11 | `light time 20`; about 2 s later start `dmrconf read -D <data> -R d878uv2 during.yaml`; when it has ended, `light time 30` | While it reads, `settings wait: the PC is programming`; the read completes without an error; right after it, `settings kept in the codeplug`; 3 s after `light time 30` (the light time of step 8 back) `settings kept` again |
 | 12 | Menu > Channel > Squelch type the other one; within 3 s `stty -F /dev/<data> raw -echo; printf PROGRAM > /dev/<data>` (program mode, left 10 s after its last command); within those 10 s: knob one channel on, Menu > Channel > Squelch type the other one, `settings` | `settings wait: the PC is programming`; `pending: channel <n> channel <n+1>`; about 10 s after `PROGRAM` one `settings kept in the codeplug`; knob back and forth: both channels show their new squelch type |
 | 13 | QDMR round trip: `settings`; `dmrconf read -D <data> -R d878uv2 a.yaml` | The `codeplug:` line noted |
-| 14 | `dmrconf write -D <data> -R d878uv2 a.yaml`; wait for the radio to start again; `settings` | The write completes; the radio restarts; the `codeplug:` line as in step 13, except that squelch B now has squelch A's value |
+| 14 | `dmrconf write -D <data> -R d878uv2 a.yaml`; wait for the radio to start again; `settings` | The write completes; the radio restarts; the `codeplug:` line as in step 13 (still `auto roaming off`), except that squelch B now has squelch A's value |
 | 15 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
 | 16 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 
@@ -56,16 +56,19 @@ write: 2026-11-01, on the same branches before the review changes.
 | 4 | Pass: one write |
 | 5 | Pass: no write, `last write unchanged` |
 | 6 | Pass: battery save on and light 15 s after the restart; the backlight going off was not watched |
-| 7 | Pass for squelch, squelch type, Roaming Off and another roam zone, one write; Power was not changed |
+| 7 | Pass for squelch, squelch type and another roam zone, one write; Power was not changed |
 | 8 | Pass: one write after the last |
-| 9 | Pass: the `codeplug:` line with all of them; `roaming off` in the record |
-| 10 | Pass: roaming off, the zone, light 2 30 s and the other values as in step 9 after the restart |
+| 9 | Pass: the `codeplug:` line with all of them |
+| 10 | Pass: the zone, light 2 30 s and the other values as in step 9 after the restart |
 | 11 | Pass: `settings wait` during the read, kept right after it, and again 3 s after `light time 30` |
 | 12 | Pass: both channels pending while the writes were refused; one write after program mode ended; both with the new squelch type. Back on the first channel before the write, its new value was in use |
 | 13 | Pass |
-| 14 | Pass: the write completes, the radio restarts, the record kept |
+| 14 | Pass: the write completes, the radio restarts |
 | 15 | Pass: no differences other than two fields the codeplug tool changes on every write |
 | 16 | Pass: 375 unused stack words in the ui task |
+
+Roaming Off in steps 7, 9, 10 and 14, now the codeplug's Auto roaming,
+is still to be run on the radio.
 
 ## Undo
 

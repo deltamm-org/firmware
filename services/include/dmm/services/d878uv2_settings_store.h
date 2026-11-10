@@ -47,7 +47,7 @@ public:
 
     /// The fields written: squelch of both sides, key lock and auto lock,
     /// battery save, backlight time and level, GPS and its systems, the
-    /// time zone and the roaming zone.
+    /// time zone, the roaming zone and roaming on or off.
     void keepSettings(const CodeplugSettings &s, std::uint32_t nowMs);
     void keepPreferences(const RadioPreferences &p, std::uint32_t nowMs);
     void keepZone(bool sideB, std::uint8_t zone, std::uint16_t position, std::uint32_t nowMs);

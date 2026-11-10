@@ -54,7 +54,6 @@ void searchNow();
 void use(std::uint8_t position);
 /// Debug feature: every repeater heard is forgotten.
 void forget();
-void setOn(bool on);
 void setAutomatic(bool on);
 /// Whether the radio roams by itself: moves, and searches when a call's
 /// repeater does not answer.

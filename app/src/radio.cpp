@@ -1377,7 +1377,6 @@ void handle(Message &message)
                        roam::show(false);
                    },
                    [](const RoamNow &) { roam::searchNow(); },
-                   [](const RoamingOn &r) { roam::setOn(r.on); },
                    [](const RoamAutomatic &r) { roam::setAutomatic(r.on); },
                    [](const RoamingSetup &r) { roam::setup(r.settings); },
                    [](const RoamStatus &) { roam::logStatus(); },

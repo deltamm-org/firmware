@@ -165,12 +165,6 @@ struct UseChannel
 struct RoamNow
 {
 };
-/// Roaming on, or off: every channel works on its own frequencies. Takes
-/// effect with the next UseChannel.
-struct RoamingOn
-{
-    bool on;
-};
 /// When roaming looks for a better repeater by itself.
 struct RoamingSetup
 {
@@ -191,8 +185,8 @@ struct RoamUse
 struct RoamForget
 {
 };
-/// Moving to a better repeater by itself on or off for this session,
-/// whatever the codeplug says; for tests.
+/// Auto roaming on or off: whether the radio moves to a better repeater,
+/// and searches for a call, by itself.
 struct RoamAutomatic
 {
     bool on;
@@ -205,7 +199,7 @@ struct GpsPower
     bool on;
 };
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingOn, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower>;
 
 /// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
 /// board without one) and brings them up.
