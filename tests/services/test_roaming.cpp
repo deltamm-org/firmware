@@ -138,16 +138,18 @@ TEST_CASE("a search stops at the first good repeater, else takes the strongest, 
     CHECK(none.chosen() == -1);
 }
 
-TEST_CASE("the repeater in use: good, weak, quiet or lost")
+TEST_CASE("the repeater in use: strong, good, fair, quiet or lost")
 {
     const Levels l;
     HeardList h;
     CHECK(roaming::health(h, -1, l, 0) == Health::Quiet); // none in use
     CHECK(roaming::health(h, 2, l, 0) == Health::Quiet);  // not heard yet
-    h.heard(2, -80, Floor, 1000);
+    h.heard(2, -88, Floor, 1000);
     CHECK(roaming::health(h, 2, l, 1000) == Health::Good);
     h.heard(3, -100, Floor, 1000);
     CHECK(roaming::health(h, 3, l, 1000) == Health::Fair);
+    h.heard(4, -80, Floor, 1000);
+    CHECK(roaming::health(h, 4, l, 1000) == Health::Strong);
     // Silent after being heard well: quiet, not lost; it may just be idle.
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs - 1) == Health::Good);
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs) == Health::Quiet);
@@ -155,7 +157,7 @@ TEST_CASE("the repeater in use: good, weak, quiet or lost")
     // Silent after fading below the fair level: lost.
     CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs - 1) == Health::Fair);
     CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs) == Health::Lost);
-    h.heard(3, -80, Floor, 300'000); // heard well again
+    h.heard(3, -88, Floor, 300'000); // heard well again
     CHECK(roaming::health(h, 3, l, 300'000) == Health::Good);
 }
 
@@ -163,11 +165,11 @@ TEST_CASE("an unanswered wake-up makes the repeater in use lost, until it is hea
 {
     const Levels l;
     HeardList h;
-    h.heard(2, -80, Floor, 1000);
+    h.heard(2, -88, Floor, 1000);
     h.unanswered(2, 2000);
-    CHECK(roaming::health(h, 2, l, 2000) == Health::Fair); // heard lately: weak
+    CHECK(roaming::health(h, 2, l, 2000) == Health::Fair); // heard lately: fair
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs) == Health::Lost);
-    h.heard(2, -80, Floor, 200'000);
+    h.heard(2, -88, Floor, 200'000);
     CHECK(roaming::health(h, 2, l, 200'000) == Health::Good);
     // Never heard, then unanswered: lost.
     h.unanswered(5, 3000);
@@ -179,11 +181,11 @@ TEST_CASE("a repeater heard again without a new level stays current")
 {
     const Levels l;
     HeardList h;
-    h.heard(2, -80, Floor, 1000);
+    h.heard(2, -88, Floor, 1000);
     // Its bursts keep coming through a long run of calls.
     h.stillHeard(2, 1000 + HeardList::ValidMs - 1);
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs + 5000) == Health::Good);
-    CHECK(h.find(2)->levelDbm == -80);
+    CHECK(h.find(2)->levelDbm == -88);
     CHECK(h.find(2)->samples == 1);
     // An old level is not revived.
     h.stillHeard(2, 1000 + 3 * HeardList::ValidMs);
@@ -192,18 +194,21 @@ TEST_CASE("a repeater heard again without a new level stays current")
     CHECK(h.find(7) == nullptr);
 }
 
-TEST_CASE("moves: never from good; from weak to a clearly better one; from quiet only to a good one")
+TEST_CASE("moves: never from strong; from good or fair to a clearly better one; from quiet only to a good one")
 {
     const Levels l;
     HeardList h;
     h.heard(0, -98, Floor, 1000); // in use: weak
     h.heard(1, -93, Floor, 1000); // 5 dB better, measured twice
     h.heard(1, -93, Floor, 2000);
-    h.heard(2, -80, Floor, 2000); // much better, measured once
+    h.heard(2, -88, Floor, 2000); // much better, measured once
+    CHECK(moveTo(h, 0, Health::Strong, l, 2000) == -1);
     CHECK(moveTo(h, 0, Health::Good, l, 2000) == -1);
     CHECK(moveTo(h, 0, Health::Fair, l, 2000) == -1); // 1 needs 6 dB, 2 a second level
-    h.heard(2, -80, Floor, 3000);
+    h.heard(2, -88, Floor, 3000);
     CHECK(moveTo(h, 0, Health::Fair, l, 3000) == 2);
+    CHECK(moveTo(h, 0, Health::Good, l, 3000) == 2);
+    CHECK(moveTo(h, 0, Health::Strong, l, 3000) == -1);
     CHECK(moveTo(h, 0, Health::Fair, l, 3000 + HeardList::ValidMs) == -1); // old levels
     // Quiet: only to a good one, even heard once; none in use counts as quiet.
     HeardList q;
@@ -283,19 +288,19 @@ TEST_CASE("a call holds listening off until the gap between overs has passed fro
     CHECK(a.idle(12'000 + Activity::CallGapMs));
 }
 
-TEST_CASE("good or weak: one check at a time during the idle transmission, and only below the good level")
+TEST_CASE("good or fair: one check at a time during the idle transmission; none while strong")
 {
     const Levels l;
     HeardList h;
-    h.heard(0, Floor + 12, Floor, 1000); // clearly good: no listening
+    h.heard(0, Floor + 22, Floor, 1000); // strong: no listening
     Listening v;
     CHECK_FALSE(v.due(h, 0, l, true, 1000));
-    h.heard(1, Floor + 8, Floor, 1000); // good, below the good level
+    h.heard(1, Floor + 12, Floor, 1000); // good
     CHECK_FALSE(v.due(h, 1, l, false, 1000));
     CHECK(v.due(h, 1, l, true, 1000));
     v.done(1000);
     CHECK_FALSE(v.due(h, 1, l, true, 1000 + Listening::HopMs - 1));
-    h.heard(2, Floor + 3, Floor, 1000); // weak
+    h.heard(2, Floor + 3, Floor, 1000); // fair
     CHECK(v.due(h, 2, l, true, 1000 + Listening::HopMs));
 }
 

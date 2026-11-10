@@ -507,7 +507,7 @@ std::string_view notRoamingText()
 // How the repeater in use is doing, or what roaming is doing instead.
 lib::StaticString<9> roamStateText(const radio::RoamingView &v)
 {
-    constexpr const char *States[] = {"Good", "Fair", "Quiet", "Lost"};
+    constexpr const char *States[] = {"Strong", "Good", "Fair", "Quiet", "Lost"};
     lib::StaticString<9> t;
     if (!v.roaming) {
         t << notRoamingText();

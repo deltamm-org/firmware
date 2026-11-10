@@ -103,23 +103,26 @@ struct Levels
 {
     int searchDb = 10; // a search stops here; a quiet repeater is left for one at this level
     int fairDb = 6;    // below: look for a better repeater
-    int marginDb = 6;  // better by this to leave a fair repeater
+    int marginDb = 6;  // better by this to leave a good or fair repeater
+    int strongDb = 20; // at or above: no listening, no move
 };
 
 /// How the repeater in use is doing.
 enum class Health : std::uint8_t
 {
-    Good,
-    Fair,  // below the fair level, or heard lately but a wake-up went unanswered
-    Quiet, // not heard lately, last heard at the fair level or above, or none in use yet
-    Lost,  // not heard lately, and a wake-up went unanswered or it was last heard below the fair level
+    Strong, // at the strong level or above
+    Good,   // below the strong level, at the fair level or above
+    Fair,   // below the fair level, or heard lately but a wake-up went unanswered
+    Quiet,  // not heard lately, last heard at the fair level or above, or none in use yet
+    Lost,   // not heard lately, and a wake-up went unanswered or it was last heard below the fair level
 };
 
 /// The health of repeater @p site (-1: none in use).
 Health health(const HeardList &heard, int site, const Levels &levels, std::uint32_t nowMs);
 
-/// The repeater to move to from @p site, or -1 to stay. Fair: the
-/// strongest current one, measured twice, better by the margin. Quiet: the
+/// The repeater to move to from @p site, or -1 to stay. Strong: none.
+/// Good or fair: the strongest current one, measured twice, better by the
+/// margin. Quiet: the
 /// strongest current one at the good level. Lost: the strongest current
 /// one; after fading out, only when it is stronger than the one in use was
 /// last heard.

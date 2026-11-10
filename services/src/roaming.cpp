@@ -201,12 +201,15 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
         const bool faded = e->samples > 0 && e->levelDb() < levels.fairDb;
         return e->unanswered || faded ? Health::Lost : Health::Quiet;
     }
-    return e->levelDb() >= levels.fairDb && !e->unanswered ? Health::Good : Health::Fair;
+    if (e->unanswered || e->levelDb() < levels.fairDb) {
+        return Health::Fair;
+    }
+    return e->levelDb() >= levels.strongDb ? Health::Strong : Health::Good;
 }
 
 int moveTo(const HeardList &heard, int site, Health state, const Levels &levels, std::uint32_t nowMs)
 {
-    if (state == Health::Good) {
+    if (state == Health::Strong) {
         return -1;
     }
     const HeardList::Entry *sorted[HeardList::Capacity];
@@ -214,6 +217,7 @@ int moveTo(const HeardList &heard, int site, Health state, const Levels &levels,
     for (std::size_t i = 0; i < n; ++i) {
         const HeardList::Entry &e = *sorted[i];
         switch (state) {
+        case Health::Good:
         case Health::Fair: {
             const HeardList::Entry *own = heard.find(static_cast<std::uint8_t>(site));
             if (e.samples >= 2) {
@@ -251,10 +255,9 @@ void Activity::heard(bool call, std::uint32_t nowMs)
 bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs)
 {
     const Health state = health(heard, site, levels, nowMs);
-    if (state == Health::Good || state == Health::Fair) {
+    if (state == Health::Strong || state == Health::Good || state == Health::Fair) {
         m_scanning = false;
-        const bool below = state == Health::Fair || heard.find(static_cast<std::uint8_t>(site))->levelDb() < levels.searchDb;
-        return below && idle && (!m_any || nowMs - m_lastMs >= HopMs);
+        return state != Health::Strong && idle && (!m_any || nowMs - m_lastMs >= HopMs);
     }
     if (!m_scanning) {
         m_scanning = true;

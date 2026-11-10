@@ -369,7 +369,7 @@ lib::StaticString<12> seconds(std::uint32_t ms)
 
 [[gnu::noinline]] void logMove(int to, roaming::Health state)
 {
-    constexpr const char *States[] = {"good", "fair", "quiet", "lost"};
+    constexpr const char *States[] = {"strong", "good", "fair", "quiet", "lost"};
     log::info("roam") << "moving from repeater " << site + 1 << " (" << States[static_cast<int>(state)]
                       << ") to repeater " << to + 1;
 }

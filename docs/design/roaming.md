@@ -153,8 +153,9 @@ The thresholds count from the floor:
 
 | Name | Value | |
 |---|---|---|
-| Search | floor + 10 dB | a search stops here; no listening at or above it |
-| Fair | below floor + 6 dB | look for a better repeater; move to one 6 dB better |
+| Strong | floor + 20 dB | no listening, no moving at or above it |
+| Search | floor + 10 dB | a search stops here; a quiet repeater is left for one at this level |
+| Fair | floor + 6 dB | below it: fair |
 
 These are fixed thresholds, as commercial DMR radios use: there the
 installer sets them per system after a coverage test. A floor learned on
@@ -168,7 +169,8 @@ steer listening and moving; a call always wakes the repeater first.
 
 | State | When |
 |---|---|
-| Good | heard lately at or above Fair |
+| Strong | heard lately at or above Strong |
+| Good | heard lately below Strong, at or above Fair |
 | Fair | heard lately below Fair, or heard lately but a wake-up went unanswered |
 | Quiet | not heard for 2 minutes, last heard at or above Fair; or none in use yet |
 | Lost | not heard for 2 minutes, and last heard below Fair or a wake-up went unanswered |
@@ -210,8 +212,8 @@ A **check** tunes to another repeater's output for a moment: a carrier,
 then slot timing, then a burst with its colour code, whose level is
 read. An empty frequency costs about 0.1 s.
 
-- **The repeater in use is Good at the Search level:** no listening.
-- **Good below the Search level, or Fair:** single checks, only while the
+- **The repeater in use is Strong:** no listening.
+- **Good or Fair:** single checks, only while the
   repeater in use is idle, at most one every 400 ms. The radio hears
   nothing on its own repeater then anyway.
 - **Quiet or Lost:** passes, check after check without going back in
@@ -231,7 +233,8 @@ Only with auto roaming on (the codeplug's setting, which Menu > Roaming >
 Roaming and `roam auto on|off` change), and never while the repeater in
 use is busy:
 
-- Fair: to one heard twice and 6 dB better;
+- Strong: never;
+- Good or Fair: to one heard twice and 6 dB better;
 - Quiet: only to one heard at the Search level;
 - Lost: to the strongest heard; after fading out, only to one stronger
   than the repeater in use was last heard.
@@ -293,7 +296,7 @@ Simulation and testing showed these cost more than they gave:
 learning beacon timing and visiting other repeaters at their beacons,
 automatic searches that wake repeaters, the codeplug's range check,
 a second fair level with its own margin, listening while the repeater in
-use is at the Search level, taking silence alone as lost, a minimum time
+use is Strong, taking silence alone as lost, a minimum time
 between moves, resuming a search where the last one stopped, and learned
 noise floors.
 
