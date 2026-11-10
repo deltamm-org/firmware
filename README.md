@@ -32,12 +32,12 @@ keying at High and Turbo are implemented, not yet tested on the radio.
 **Roaming.** A DMR channel with roaming on works through a repeater of
 the codeplug's roaming zone, so one channel per talkgroup covers a whole
 network. Between calls the radio learns the repeaters' beacons and
-visits the others briefly to keep their levels, and with the codeplug's
-automatic roaming on it moves to a clearly better repeater by itself.
+visits the others briefly to keep their levels, and with auto roaming
+on it moves to a clearly better repeater by itself.
 Searches, on a side key set to roaming or when PTT finds no repeater,
 try the most likely repeaters first. The codeplug's repeater range check
-is followed. Menu > Channel turns roaming off or picks another roaming
-zone, and Roam status shows what the radio hears. How to
+is followed. Menu > Channel sets auto roaming and the roaming zone, and
+Roam status shows what the radio hears. How to
 set roaming up and use it is in `docs/roaming-setup.md`, the design in
 `docs/design/roaming.md`; moving between two real repeaters is still to
 be tested.

@@ -544,8 +544,8 @@ char callChannel[Channel::NameBytes + 1] = {};
 // the radio task last reported.
 std::uint8_t roamingZone = services::RoamingSettings::NoZone;
 std::size_t roamingSites = 0;
-// Roaming switched on in the menu, for this session.
-bool roamingOn = true;
+// Auto roaming: the codeplug's choice at start, then the menu's.
+bool autoRoaming = false;
 struct RoamState
 {
     bool searching = false;
@@ -850,6 +850,7 @@ void uiMain(void *)
             timeZoneMinutes = selector.settings().timeZoneMinutes;
             const services::RoamingSettings &roaming = selector.settings().roaming;
             roamingZone = roaming.zone;
+            autoRoaming = roaming.automatic;
             loadRoamingSites();
             radio::post(radio::RoamingSetup{roaming});
             std::copy(std::begin(selector.settings().sideShort), std::end(selector.settings().sideShort), sideShort);
@@ -919,7 +920,7 @@ void uiMain(void *)
         s.clock = clockText.view();
         if (channels != nullptr) {
             const std::optional<Channel> &ch = channels->current();
-            s.roaming = roamingOn && ch && ch->digital() && ch->roaming && roamingSites > 0;
+            s.roaming = ch && ch->digital() && ch->roaming && roamingSites > 0;
         }
         s.roamSearching = roam.searching;
         s.roamLost = roam.lost;
@@ -1029,7 +1030,7 @@ void uiMain(void *)
             break;
         case MenuItem::Roaming:
             label = "Roaming";
-            value << (roamingOn ? "On" : "Off");
+            value << (autoRoaming ? "On" : "Off");
             break;
         case MenuItem::RoamStatus: {
             label = "Roam status";
@@ -1158,7 +1159,7 @@ void uiMain(void *)
             menuValue.open("Roaming");
             menuValue.add(0, "Off");
             menuValue.add(1, "On");
-            menuValue.select(roamingOn ? 1 : 0);
+            menuValue.select(autoRoaming ? 1 : 0);
             break;
         case MenuItem::RoamStatus:
             zonePicker.open("Roaming");
@@ -1271,6 +1272,7 @@ void uiMain(void *)
         s.gpsSystems = gpsSystems;
         s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
         s.roaming.zone = roamingZone;
+        s.roaming.automatic = autoRoaming;
         settingsStore->keepSettings(s, os::nowMs());
     };
     auto keepChannel = [&] {
@@ -1342,10 +1344,8 @@ void uiMain(void *)
             log::info("ui") << "power " << v;
             break;
         case MenuItem::Roaming:
-            roamingOn = v == 1;
-            radio::post(radio::RoamingOn{roamingOn});
-            // Takes effect when the channel is used again.
-            useChannel();
+            autoRoaming = v == 1;
+            radio::post(radio::RoamAutomatic{autoRoaming});
             break;
         case MenuItem::RoamStatus:
             break;
@@ -1404,11 +1404,11 @@ void uiMain(void *)
         }
         if (menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power) {
             keepChannel();
-        } else if (menuItem != MenuItem::Roaming && menuItem != MenuItem::RoamStatus && menuItem != MenuItem::GpsStatus) {
+        } else if (menuItem != MenuItem::RoamStatus && menuItem != MenuItem::GpsStatus) {
             keepSettings();
         }
         if (menuItem == MenuItem::Squelch || menuItem == MenuItem::SquelchMode || menuItem == MenuItem::Power ||
-            menuItem == MenuItem::Roaming || menuItem == MenuItem::RoamZone) {
+            menuItem == MenuItem::RoamZone) {
             useChannel();
         }
         // Back to the list it came from, showing the new value; straight to
@@ -1737,6 +1737,11 @@ void uiMain(void *)
                                setBatterySave(b.mode);
                                keepSettings();
                            },
+                           [&](const SetAutoRoaming &r) {
+                               autoRoaming = r.on;
+                               radio::post(radio::RoamAutomatic{autoRoaming});
+                               keepSettings();
+                           },
                            [&](const KeyLockSettings &s) {
                                keyLock.setSettings(s.settings);
                                refreshLockMark();
@@ -1783,6 +1788,7 @@ void uiMain(void *)
                                                    << s->batterySave << ", auto lock " << s->keyLock.autoLockMs / 1000
                                                    << " s, GPS " << (s->gps ? "on" : "off") << " systems "
                                                    << s->gpsSystems << ", " << zoneText(s->timeZoneMinutes).view()
+                                                   << ", auto roaming " << (s->roaming.automatic ? "on" : "off")
                                                    << ", roaming zone " << s->roaming.zone;
                                }
                                log::info("ui") << (codeplug->preferences() ? "preferences record: valid" : "no preferences record");

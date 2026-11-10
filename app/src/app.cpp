@@ -299,7 +299,7 @@ bool radioCommand(std::string_view command)
         // Debug feature: a search then follows the roaming zone's order.
         posted = radio::post(radio::RoamForget{});
     } else if (command == "roam auto on" || command == "roam auto off") {
-        posted = radio::post(radio::RoamAutomatic{command == "roam auto on"});
+        posted = ui::post(ui::SetAutoRoaming{command == "roam auto on"});
     } else if (command == "dmr tg off") {
         posted = radio::post(radio::DmrTarget{{}});
     } else if (lib::startsWith(command, "dmr tg ") || lib::startsWith(command, "dmr pc ")) {

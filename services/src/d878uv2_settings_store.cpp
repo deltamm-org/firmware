@@ -53,6 +53,7 @@ void encodeSettings(const CodeplugSettings &s, std::span<std::uint8_t, 0x100> b)
     // The time zone in half hours from UTC-12:00 (0).
     b[0x30] = clampTo(s.timeZoneMinutes / 30 + 24, 0, 52);
     b[0xDC] = s.roaming.zone;
+    b[0xE7] = s.roaming.automatic ? 1 : 0;
 }
 
 std::uint32_t channelAddress(std::uint16_t index)

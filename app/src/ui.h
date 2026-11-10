@@ -95,6 +95,11 @@ struct BatterySave
 {
     std::uint8_t mode;
 };
+/// Turns auto roaming on or off as Menu > Channel > Roaming does (console).
+struct SetAutoRoaming
+{
+    bool on;
+};
 /// What the key lock covers.
 struct KeyLockSettings
 {
@@ -156,7 +161,7 @@ struct Gps
 };
 
 using Message = std::variant<Backlight, BacklightTime, ShowTestPattern, ShowLog, ShowKeyTest, ToggleView, PanelPower, Keys, KeyEvent, EncoderClicks,
-    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, KeyLockSettings, KeyLockReport, SelectChannel, SettingsReport, Notice, Gps>;
+    EncoderRaw, Volume, Battery, SwitchingOff, Transmitting, Receiving, DmrCall, Roaming, ShowStandby, SetKeyLock, BatterySave, SetAutoRoaming, KeyLockSettings, KeyLockReport, SelectChannel, SettingsReport, Notice, Gps>;
 
 /// Starts the ui task, which owns @p display.
 /// @p input (may be nullptr) gives the key labels; @p settingsStore (may
