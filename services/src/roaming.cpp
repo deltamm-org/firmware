@@ -270,6 +270,7 @@ bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool
     const Health state = health(heard, site, levels, nowMs);
     if (state == Health::Strong || state == Health::Good || state == Health::Fair) {
         m_scanning = false;
+        m_planned = state != Health::Strong;
         if (state == Health::Strong) {
             m_scanBurst = false;
             return false;
@@ -289,6 +290,7 @@ bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool
             m_scanBurst = false;
         }
         const std::uint32_t period = state == Health::Good ? ScanGoodMs : ScanFairMs;
+        m_scanPeriodMs = period;
         if (!m_scanBurst && !busy && nowMs - m_scanLastMs >= period) {
             m_scanBurst = true;
             m_scanEndMs = nowMs + BurstMs;
@@ -300,12 +302,14 @@ bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool
         return idle && (!m_any || nowMs - m_lastMs >= HopMs);
     }
     m_scanBurst = false;
+    m_planned = true;
     if (!m_scanning) {
         m_scanning = true;
         m_burstEndMs = nowMs + BurstMs;
         burstStarted(nowMs);
         m_gapMs = FirstGapMs;
         m_passesFromMs = nowMs;
+        m_fixedGap = state == Health::Lost;
     }
     if (static_cast<std::int32_t>(nowMs - m_burstEndMs) >= 0) {
         // Lost: no call on the repeater in use to miss, so the gaps do not
@@ -316,6 +320,7 @@ bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool
             heardLately = heardLately || (e.samples > 0 && nowMs - e.measuredMs < SilentMs);
         }
         const bool lost = state == Health::Lost && heardLately;
+        m_fixedGap = lost;
         if (nowMs - m_burstEndMs < (lost ? FirstGapMs : m_gapMs)) {
             return false;
         }
@@ -326,6 +331,18 @@ bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool
         }
     }
     return !m_any || nowMs - m_lastMs >= DwellMs;
+}
+
+Listening::Bursts Listening::bursts(std::uint32_t nowMs, std::uint32_t &nextMs) const
+{
+    if (!m_planned) {
+        return Bursts::None;
+    }
+    if (m_scanBurst || (m_scanning && static_cast<std::int32_t>(nowMs - m_burstEndMs) < 0)) {
+        return Bursts::Now;
+    }
+    nextMs = m_scanning ? m_burstEndMs + (m_fixedGap ? FirstGapMs : m_gapMs) : m_scanLastMs + m_scanPeriodMs;
+    return Bursts::Later;
 }
 
 int Listening::next(const HeardList &heard, std::span<const std::uint32_t> receiveHz, int site, std::uint32_t nowMs)

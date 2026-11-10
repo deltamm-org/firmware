@@ -515,6 +515,36 @@ TEST_CASE("poor: passes in bursts, the gaps growing as while quiet")
     CHECK(gap == Listening::MaxGapMs);
 }
 
+TEST_CASE("bursts for display: none while strong, the next one while good or lost, now while one runs")
+{
+    const Levels l;
+    std::uint32_t next = 0;
+    HeardList e;
+    e.heard(0, Floor + 22, Floor, 1000);
+    Listening v;
+    v.due(e, 0, l, false, 1000);
+    CHECK(v.bursts(1000, next) == Listening::Bursts::None);
+    HeardList g;
+    g.heard(0, Floor + 12, Floor, 1000);
+    v.due(g, 0, l, false, 1000);
+    REQUIRE(v.bursts(1000, next) == Listening::Bursts::Later);
+    CHECK(next == 1000 + Listening::ScanGoodMs);
+    const std::uint32_t b = 1000 + Listening::ScanGoodMs;
+    g.heard(0, Floor + 12, Floor, b - 1000);
+    CHECK(v.due(g, 0, l, false, b));
+    CHECK(v.bursts(b, next) == Listening::Bursts::Now);
+    // Lost, not heard: bursts with gaps of FirstGapMs.
+    HeardList f;
+    f.heard(0, Floor + 3, Floor, 1000);
+    Listening u;
+    const std::uint32_t t0 = 1000 + HeardList::ValidMs;
+    CHECK(u.due(f, 0, l, false, t0));
+    CHECK(u.bursts(t0, next) == Listening::Bursts::Now);
+    u.due(f, 0, l, false, t0 + Listening::BurstMs);
+    REQUIRE(u.bursts(t0 + Listening::BurstMs, next) == Listening::Bursts::Later);
+    CHECK(next == t0 + Listening::BurstMs + Listening::FirstGapMs);
+}
+
 TEST_CASE("lost: the gaps between bursts stay at the first")
 {
     const Levels l;

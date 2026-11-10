@@ -218,6 +218,16 @@ public:
         bool busy = false);
     /// The listening due() allowed is a pass, not a single check.
     bool passing() const { return m_scanning || m_scanBurst; }
+    /// For display, as of the last due(): whether bursts of passes are
+    /// planned, and whether one runs at @p nowMs or when the next one starts
+    /// (@p nextMs, set for Later).
+    enum class Bursts : std::uint8_t
+    {
+        None,
+        Now,
+        Later,
+    };
+    Bursts bursts(std::uint32_t nowMs, std::uint32_t &nextMs) const;
     /// The zone position to check next, or -1 for none. In passes: the
     /// repeaters heard lately, strongest first, then the rest of the zone in
     /// its order. Each frequency once a pass, and never the frequency of
@@ -262,6 +272,9 @@ private:
     std::uint32_t m_scanEndMs = 0;
     int m_scanSite = -1;
     std::uint32_t m_passesFromMs = 0;
+    bool m_planned = false;
+    bool m_fixedGap = false;
+    std::uint32_t m_scanPeriodMs = ScanGoodMs;
 };
 
 } // namespace dmm::services::roaming
