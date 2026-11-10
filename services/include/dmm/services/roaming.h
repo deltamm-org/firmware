@@ -33,6 +33,9 @@ public:
         std::uint8_t samples = 0; // levels measured while current, up to 255; 0: none
         bool unanswered = false;  // a wake-up went unanswered since it was last heard
         std::uint32_t measuredMs = 0;
+        // When it was last at or above the fair level, or when its current
+        // levels began if it has not been since.
+        std::uint32_t aboveFairMs = 0;
 
         int levelDb() const { return levelDbm - floorDbm; }
         bool current(std::uint32_t nowMs) const { return samples > 0 && nowMs - measuredMs < ValidMs; }
@@ -45,8 +48,8 @@ public:
     /// answering, goes once another is in use.
     void keep(int position);
     /// Repeater @p position heard at @p levelDbm on a channel whose floor is
-    /// @p floorDbm.
-    void heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs);
+    /// @p floorDbm; @p fairDb is the fair level it is judged against.
+    void heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
     /// Repeater @p position is heard again without a new level: a current
     /// level stays current.
     void stillHeard(std::uint8_t position, std::uint32_t nowMs);
@@ -106,6 +109,7 @@ struct Levels
     int marginDb = 6;  // better by this to leave a good or fair repeater
     int strongDb = 20; // at or above: no listening, no move
 };
+static_assert(Levels{}.fairDb == 6, "HeardList::heard() takes the same fair level by default");
 
 /// How the repeater in use is doing.
 enum class Health : std::uint8_t
@@ -113,6 +117,7 @@ enum class Health : std::uint8_t
     Strong, // at the strong level or above
     Good,   // below the strong level, at the fair level or above
     Fair,   // below the fair level, or heard lately but a wake-up went unanswered
+    Poor,   // heard, but only below the fair level for as long as a level stays current
     Quiet,  // not heard lately, last heard at the fair level or above, or none in use yet
     Lost,   // not heard lately, and a wake-up went unanswered or it was last heard below the fair level
 };
@@ -122,7 +127,7 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
 
 /// The repeater to move to from @p site, or -1 to stay. Strong: none.
 /// Good or fair: the strongest current one, measured twice, better by the
-/// margin. Quiet: the
+/// margin. Poor: the strongest current one, better by the margin. Quiet: the
 /// strongest current one at the good level. Lost: the strongest current
 /// one; after fading out, only when it is stronger than the one in use was
 /// last heard.
@@ -188,11 +193,12 @@ public:
     /// other times than the one in use are not heard during its idle bursts.
     static constexpr std::uint32_t ScanGoodMs = 900'000;
     static constexpr std::uint32_t ScanFairMs = 600'000;
-    /// Quiet or lost: passes one after another for BurstMs, long enough to
-    /// span a repeater's beacon period; then a gap. Quiet: doubling from
-    /// FirstGapMs up to MaxGapMs, kept short so that a repeater met after a
-    /// long stretch without any is found soon. Lost: always FirstGapMs, as
-    /// no call on the repeater in use can be missed then.
+    /// Poor, quiet or lost: passes one after another for BurstMs, long
+    /// enough to span a repeater's beacon period; then a gap. Poor or quiet:
+    /// doubling from FirstGapMs up to MaxGapMs, kept short so that a
+    /// repeater met after a long stretch without any is found soon. Lost:
+    /// always FirstGapMs, as no call on the repeater in use can be missed
+    /// then.
     static constexpr std::uint32_t BurstMs = 60'000;
     static constexpr std::uint32_t FirstGapMs = 120'000;
     static constexpr std::uint32_t MaxGapMs = 300'000;

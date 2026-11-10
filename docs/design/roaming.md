@@ -172,6 +172,7 @@ steer listening and moving; a call always wakes the repeater first.
 | Strong | heard lately at or above Strong |
 | Good | heard lately below Strong, at or above Fair |
 | Fair | heard lately below Fair, or heard lately but a wake-up went unanswered |
+| Poor | heard, but only below Fair for 2 minutes |
 | Quiet | not heard for 2 minutes, last heard at or above Fair; or none in use yet |
 | Lost | not heard for 2 minutes, and last heard below Fair or a wake-up went unanswered |
 
@@ -220,14 +221,15 @@ read. An empty frequency costs about 0.1 s.
   area to area; so also a burst of passes, as below, 15 minutes after the
   last one while Good, 10 minutes while Fair, not started while the
   repeater in use is busy.
-- **Quiet or Lost:** passes, check after check without going back in
+- **Poor, Quiet or Lost:** passes, check after check without going back in
   between, in bursts: 1 minute, long enough to span a beacon period, then
   gaps of 2 minutes doubling up to 5, so that a repeater met after a long
-  stretch without any is found within minutes. While Lost the gaps stay
-  at 2 minutes: no call on the repeater in use can be missed then, and
-  the next repeater, even one that only carries a call now and then, is
-  found sooner. After each pass the radio stays 0.5 s on the repeater in
-  use. No pass starts while it is busy.
+  stretch without any is found within minutes; so too while Poor, as its
+  calls still play. While Lost the gaps stay at 2 minutes: no call on the
+  repeater in use can be missed then, and the next repeater, even one
+  that only carries a call now and then, is found sooner. After each pass
+  the radio stays 0.5 s on the repeater in use. No pass starts while it is
+  busy.
 - **Order of a pass:** the repeaters heard lately, strongest first, then
   the rest of the zone in its order. Each frequency once a pass.
 
@@ -239,6 +241,7 @@ use is busy:
 
 - Strong: never;
 - Good or Fair: to one heard twice and 6 dB better;
+- Poor: to one heard 6 dB better, once is enough;
 - Quiet: only to one heard at the Search level;
 - Lost: to the strongest heard; after fading out, only to one stronger
   than the repeater in use was last heard.
