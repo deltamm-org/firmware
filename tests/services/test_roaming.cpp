@@ -352,6 +352,99 @@ TEST_CASE("another zone: the heard list follows its repeaters to their new posit
     CHECK(h.find(0) != nullptr);
 }
 
+TEST_CASE("good: a burst of passes every ScanGoodMs, not started while busy; none while strong")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 12, Floor, 1000); // good
+    Listening v;
+    CHECK_FALSE(v.due(h, 0, l, false, 1000)); // not idle, no burst yet
+    CHECK_FALSE(v.passing());
+    const std::uint32_t b = 1000 + Listening::ScanGoodMs;
+    h.heard(0, Floor + 12, Floor, b - 1000);
+    CHECK_FALSE(v.due(h, 0, l, false, b, true)); // busy: the burst waits
+    CHECK(v.due(h, 0, l, false, b + 500));
+    CHECK(v.passing());
+    v.done(b + 1500); // a pass
+    CHECK_FALSE(v.due(h, 0, l, false, b + 1500 + Listening::DwellMs - 1));
+    CHECK(v.due(h, 0, l, false, b + 1500 + Listening::DwellMs));
+    CHECK_FALSE(v.due(h, 0, l, false, b + 2500, true)); // busy: no pass
+    CHECK(v.due(h, 0, l, false, b + 500 + Listening::BurstMs - 1));
+    CHECK_FALSE(v.due(h, 0, l, false, b + 500 + Listening::BurstMs)); // the burst is over
+    CHECK_FALSE(v.passing());
+    h.heard(0, Floor + 12, Floor, b + 500 + Listening::ScanGoodMs - 1000);
+    CHECK_FALSE(v.due(h, 0, l, false, b + 500 + Listening::ScanGoodMs - 1));
+    CHECK(v.due(h, 0, l, false, b + 500 + Listening::ScanGoodMs)); // the next one
+    // Strong: no bursts.
+    HeardList e;
+    e.heard(0, Floor + 22, Floor, 1000);
+    Listening w;
+    CHECK_FALSE(w.due(e, 0, l, false, 1000));
+    e.heard(0, Floor + 22, Floor, 1000 + Listening::ScanGoodMs);
+    CHECK_FALSE(w.due(e, 0, l, false, 1000 + Listening::ScanGoodMs));
+}
+
+TEST_CASE("good again after a burst while quiet: the next burst ScanGoodMs after that one")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 12, Floor, 1000); // good
+    Listening v;
+    CHECK_FALSE(v.due(h, 0, l, false, 1000));
+    // Last heard so that it turns quiet when the good burst would be due.
+    const std::uint32_t q = 1000 + Listening::ScanGoodMs;
+    h.heard(0, Floor + 12, Floor, q - HeardList::ValidMs);
+    REQUIRE(roaming::health(h, 0, l, q) == Health::Quiet);
+    CHECK(v.due(h, 0, l, false, q)); // a burst while quiet
+    CHECK(v.passing());
+    // Heard again, good, just after that burst: no second burst at once.
+    const std::uint32_t g = q + Listening::BurstMs + 10'000;
+    h.heard(0, Floor + 12, Floor, g);
+    REQUIRE(roaming::health(h, 0, l, g) == Health::Good);
+    CHECK_FALSE(v.due(h, 0, l, false, g));
+    CHECK_FALSE(v.passing());
+    h.heard(0, Floor + 12, Floor, q + Listening::ScanGoodMs - 1000);
+    CHECK_FALSE(v.due(h, 0, l, false, q + Listening::ScanGoodMs - 1));
+    CHECK(v.due(h, 0, l, false, q + Listening::ScanGoodMs));
+    CHECK(v.passing());
+}
+
+TEST_CASE("fair: a burst every ScanFairMs, so turning fair brings the next one closer")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 12, Floor, 1000); // good
+    Listening v;
+    CHECK_FALSE(v.due(h, 0, l, false, 1000));
+    const std::uint32_t t = 1000 + Listening::ScanFairMs;
+    h.heard(0, Floor + 12, Floor, t - 2000);
+    CHECK_FALSE(v.due(h, 0, l, false, t));  // still good: not yet
+    h.heard(0, Floor - 4, Floor, t - 1000); // averaged to 4: fair
+    REQUIRE(roaming::health(h, 0, l, t) == Health::Fair);
+    CHECK(v.due(h, 0, l, false, t));
+    CHECK(v.passing());
+}
+
+TEST_CASE("bursts: the next one starts though the last was not seen to end; a move ends one")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 12, Floor, 1000);
+    Listening v;
+    CHECK_FALSE(v.due(h, 0, l, false, 1000));
+    const std::uint32_t b = 1000 + Listening::ScanGoodMs;
+    h.heard(0, Floor + 12, Floor, b - 1000);
+    CHECK(v.due(h, 0, l, false, b));
+    // Not asked again until the next burst is due: it still starts.
+    h.heard(0, Floor + 12, Floor, b + Listening::ScanGoodMs - 1000);
+    CHECK(v.due(h, 0, l, false, b + Listening::ScanGoodMs));
+    CHECK(v.passing());
+    // A move during a burst ends it.
+    h.heard(1, Floor + 12, Floor, b + Listening::ScanGoodMs + 1000);
+    CHECK_FALSE(v.due(h, 1, l, false, b + Listening::ScanGoodMs + 1000));
+    CHECK_FALSE(v.passing());
+}
+
 TEST_CASE("lost: the gaps between bursts stay at the first")
 {
     const Levels l;

@@ -213,9 +213,14 @@ then slot timing, then a burst with its colour code, whose level is
 read. An empty frequency costs about 0.1 s.
 
 - **The repeater in use is Strong:** no listening.
-- **Good or Fair:** single checks, only while the
-  repeater in use is idle, at most one every 400 ms. The radio hears
-  nothing on its own repeater then anyway.
+- **Good or Fair:** single checks, only while the repeater in use is
+  idle, at most one every 400 ms; the radio hears nothing on its own
+  repeater then anyway. Repeaters that beacon at the same time as the one
+  in use are heard this way, others are not, as beacon times differ from
+  area to area; so also a burst of passes, as below, 15 minutes after the
+  last one while Good, 10 minutes while Fair, not started while the
+  repeater in use is busy. A burst while Quiet or Lost counts as the
+  last one too, so turning Good again does not bring another at once.
 - **Quiet or Lost:** passes, check after check without going back in
   between, in bursts: 1 minute, long enough to span a beacon period, then
   gaps of 2 minutes doubling up to 5, so that a repeater met after a long

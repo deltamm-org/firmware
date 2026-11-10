@@ -459,9 +459,10 @@ void roamStep()
     const bool passes = state == roaming::Health::Quiet || state == roaming::Health::Lost;
     const int to = automatic && !busy ? roaming::moveTo(heardList, site, state, Levels, now) : -1;
     const bool listen = automatic && to < 0 && !(passes && busy) &&
-        listener.due(heardList, site, Levels, activity.idle(now), now);
+        listener.due(heardList, site, Levels, activity.idle(now), now, busy);
+    const bool pass = listen && listener.passing();
     int next = -1;
-    if (listen && !passes) {
+    if (listen && !pass) {
         for (std::size_t i = 0; i < siteCount; ++i) {
             hz[i] = sites[i].receiveHz;
         }
@@ -474,7 +475,7 @@ void roamStep()
     if (to >= 0) {
         logMove(to, state);
         useSite(to);
-    } else if (listen && passes) {
+    } else if (pass) {
         scanPass();
         listener.done(os::nowMs());
     } else if (next >= 0) {
