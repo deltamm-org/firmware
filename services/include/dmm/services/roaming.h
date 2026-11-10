@@ -180,9 +180,14 @@ class Listening
 public:
     /// Zone positions a pass can hold: as many as a roaming zone has.
     static constexpr std::size_t MaxZone = 64;
-    /// Good or weak: one check at most this often, while the repeater in
+    /// Good or fair: one check at most this often, while the repeater in
     /// use sends idle bursts.
     static constexpr std::uint32_t HopMs = 400;
+    /// Good or fair: also a burst of passes this long after the last one
+    /// (or after it was first below strong), as repeaters that beacon at
+    /// other times than the one in use are not heard during its idle bursts.
+    static constexpr std::uint32_t ScanGoodMs = 900'000;
+    static constexpr std::uint32_t ScanFairMs = 600'000;
     /// Quiet or lost: passes one after another for BurstMs, long enough to
     /// span a repeater's beacon period; then a gap. Quiet: doubling from
     /// FirstGapMs up to MaxGapMs, kept short so that a repeater met after a
@@ -195,10 +200,14 @@ public:
     /// hear it if it is on the air.
     static constexpr std::uint32_t DwellMs = 500;
 
-    /// Whether to listen at @p nowMs: good or weak, one check while the
-    /// repeater in use sends idle bursts (@p idle); quiet or lost, a pass.
-    /// Never while the repeater in use is good at the good level.
-    bool due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs);
+    /// Whether to listen at @p nowMs: good or fair, one check while the
+    /// repeater in use sends idle bursts (@p idle), and a burst now and then,
+    /// not started while the repeater in use is @p busy; quiet or lost, a
+    /// pass. Never while the repeater in use is strong.
+    bool due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs,
+        bool busy = false);
+    /// The listening due() allowed is a pass, not a single check.
+    bool passing() const { return m_scanning || m_scanBurst; }
     /// The zone position to check next, or -1 for none. In passes: the
     /// repeaters heard lately, strongest first, then the rest of the zone in
     /// its order. Each frequency once a pass, and never the frequency of
@@ -229,6 +238,11 @@ private:
     bool m_scanning = false;
     std::uint32_t m_burstEndMs = 0;
     std::uint32_t m_gapMs = FirstGapMs;
+    bool m_scanTimer = false;
+    bool m_scanBurst = false;
+    std::uint32_t m_scanLastMs = 0;
+    std::uint32_t m_scanEndMs = 0;
+    int m_scanSite = -1;
 };
 
 } // namespace dmm::services::roaming

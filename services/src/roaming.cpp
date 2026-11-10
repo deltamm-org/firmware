@@ -252,13 +252,42 @@ void Activity::heard(bool call, std::uint32_t nowMs)
     }
 }
 
-bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs)
+bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs,
+    bool busy)
 {
     const Health state = health(heard, site, levels, nowMs);
     if (state == Health::Strong || state == Health::Good || state == Health::Fair) {
         m_scanning = false;
-        return state != Health::Strong && idle && (!m_any || nowMs - m_lastMs >= HopMs);
+        if (state == Health::Strong) {
+            m_scanBurst = false;
+            return false;
+        }
+        // A burst of passes ScanGoodMs after the last one while good,
+        // ScanFairMs while fair; the first after it was first below
+        // strong. A move ends a burst.
+        if (!m_scanTimer) {
+            m_scanTimer = true;
+            m_scanLastMs = nowMs;
+        }
+        if (site != m_scanSite) {
+            m_scanSite = site;
+            m_scanBurst = false;
+        }
+        if (m_scanBurst && static_cast<std::int32_t>(nowMs - m_scanEndMs) >= 0) {
+            m_scanBurst = false;
+        }
+        const std::uint32_t period = state == Health::Good ? ScanGoodMs : ScanFairMs;
+        if (!m_scanBurst && !busy && nowMs - m_scanLastMs >= period) {
+            m_scanBurst = true;
+            m_scanEndMs = nowMs + BurstMs;
+            m_scanLastMs = nowMs;
+        }
+        if (m_scanBurst) {
+            return !busy && (!m_any || nowMs - m_lastMs >= DwellMs);
+        }
+        return idle && (!m_any || nowMs - m_lastMs >= HopMs);
     }
+    m_scanBurst = false;
     if (!m_scanning) {
         m_scanning = true;
         m_burstEndMs = nowMs + BurstMs;
