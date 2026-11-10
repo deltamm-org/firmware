@@ -229,7 +229,8 @@ read. An empty frequency costs about 0.1 s.
   stretch without any is found within minutes; so too while Poor, as its
   calls still play. While Lost the gaps stay at 2 minutes: no call on the
   repeater in use can be missed then, and the next repeater, even one
-  that only carries a call now and then, is found sooner. After each pass
+  that only carries a call now and then, is found sooner; with nothing at
+  all heard for an hour, they grow as while Quiet. After each pass
   the radio stays 0.5 s on the repeater in use. No pass starts while it is
   busy.
 - **Order of a pass:** the repeaters heard lately, strongest first, then
