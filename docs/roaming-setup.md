@@ -81,15 +81,15 @@ the best repeater now.
 ### 5. Auto roaming (optional)
 
 With auto roaming on (QDMR: `settings.anytone.roamingSettings.autoRoam`),
-the radio also moves by itself to a better repeater it has heard, and a
-call whose repeater does not answer searches for another. It never
-transmits to find one by itself: it only listens. The codeplug's start,
-delay, period and range check settings are not used.
+the radio also moves by itself to a better repeater it has heard. It
+never transmits to find one by itself: it only listens. The codeplug's
+start, delay, period and range check settings are not used.
 
 With auto roaming off the radio does nothing on its own: it stays on the
 repeater in use, for example to keep hearing that repeater's local calls
-(TG 9); the roam key and Search now still search when you ask. Menu >
-Channel > Roaming changes this setting on the radio.
+(TG 9). PTT on a repeater that does not answer, the roam key and Search
+now still search. Menu > Channel > Roaming changes this setting on the
+radio.
 
 ### Example
 
@@ -168,10 +168,9 @@ settings:
   first, then the rest of the list, waking quiet ones, and stops at the
   first with a good signal. `No repeater answered` means none answered.
 - **PTT:** before a call the radio wakes the repeater in use. If it does
-  not answer, or no repeater is in use yet, with auto roaming on the
-  radio searches and the call goes out through the repeater it found, as
-  long as PTT is still held. With auto roaming off it stays and shows
-  `No answer` (`No repeater` with none in use); the roam key searches.
+  not answer, or no repeater is in use yet, the radio searches and the
+  call goes out through the repeater it found, as long as PTT is still
+  held. This is the same with auto roaming off.
 - **Listening:** while the repeater in use is not clearly good, the radio
   briefly listens to the other pairs, without transmitting: during the
   repeater's own beacons or hang time while it is heard, and in bursts
