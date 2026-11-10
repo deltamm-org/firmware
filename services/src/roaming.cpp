@@ -197,11 +197,11 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
     }
     if (!e->current(nowMs)) {
         // Silent after being heard well: likely just idle. Silent after
-        // fading below the weak level: likely out of reach.
-        const bool faded = e->samples > 0 && e->levelDb() < levels.weakDb;
+        // fading below the fair level: likely out of reach.
+        const bool faded = e->samples > 0 && e->levelDb() < levels.fairDb;
         return e->unanswered || faded ? Health::Lost : Health::Quiet;
     }
-    return e->levelDb() >= levels.weakDb && !e->unanswered ? Health::Good : Health::Weak;
+    return e->levelDb() >= levels.fairDb && !e->unanswered ? Health::Good : Health::Fair;
 }
 
 int moveTo(const HeardList &heard, int site, Health state, const Levels &levels, std::uint32_t nowMs)
@@ -214,7 +214,7 @@ int moveTo(const HeardList &heard, int site, Health state, const Levels &levels,
     for (std::size_t i = 0; i < n; ++i) {
         const HeardList::Entry &e = *sorted[i];
         switch (state) {
-        case Health::Weak: {
+        case Health::Fair: {
             const HeardList::Entry *own = heard.find(static_cast<std::uint8_t>(site));
             if (e.samples >= 2) {
                 return e.levelDb() >= own->levelDb() + levels.marginDb ? e.position : -1;
@@ -222,7 +222,7 @@ int moveTo(const HeardList &heard, int site, Health state, const Levels &levels,
             break; // measured once: the next strongest may do
         }
         case Health::Quiet:
-            return e.levelDb() >= levels.goodDb ? e.position : -1;
+            return e.levelDb() >= levels.searchDb ? e.position : -1;
         default: {
             // Faded out: only to one stronger than it was last heard, so
             // that a weak repeater gone quiet is not left for a weaker one.
@@ -251,9 +251,9 @@ void Activity::heard(bool call, std::uint32_t nowMs)
 bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs)
 {
     const Health state = health(heard, site, levels, nowMs);
-    if (state == Health::Good || state == Health::Weak) {
+    if (state == Health::Good || state == Health::Fair) {
         m_scanning = false;
-        const bool below = state == Health::Weak || heard.find(static_cast<std::uint8_t>(site))->levelDb() < levels.goodDb;
+        const bool below = state == Health::Fair || heard.find(static_cast<std::uint8_t>(site))->levelDb() < levels.searchDb;
         return below && idle && (!m_any || nowMs - m_lastMs >= HopMs);
     }
     if (!m_scanning) {

@@ -153,8 +153,8 @@ The thresholds count from the floor:
 
 | Name | Value | |
 |---|---|---|
-| Good | floor + 10 dB | a search stops here; no listening at or above it |
-| Weak | below floor + 6 dB | look for a better repeater; move to one 6 dB better |
+| Search | floor + 10 dB | a search stops here; no listening at or above it |
+| Fair | below floor + 6 dB | look for a better repeater; move to one 6 dB better |
 
 These are fixed thresholds, as commercial DMR radios use: there the
 installer sets them per system after a coverage test. A floor learned on
@@ -168,14 +168,14 @@ steer listening and moving; a call always wakes the repeater first.
 
 | State | When |
 |---|---|
-| Good | heard lately at or above Weak |
-| Weak | heard lately below Weak, or heard lately but a wake-up went unanswered |
-| Quiet | not heard for 2 minutes, last heard at or above Weak; or none in use yet |
-| Lost | not heard for 2 minutes, and last heard below Weak or a wake-up went unanswered |
+| Good | heard lately at or above Fair |
+| Fair | heard lately below Fair, or heard lately but a wake-up went unanswered |
+| Quiet | not heard for 2 minutes, last heard at or above Fair; or none in use yet |
+| Lost | not heard for 2 minutes, and last heard below Fair or a wake-up went unanswered |
 
 Silence alone never makes it lost: a quiet repeater looks the same as one
 out of reach, and many repeaters never send beacons. How it was last heard
-tells them apart: one that went silent while strong is likely idle, one
+tells them apart: one that went silent at or above Fair is likely idle, one
 that faded first likely out of reach. A full heard list never drops the
 repeater in use, so that this stays known.
 
@@ -210,8 +210,8 @@ A **check** tunes to another repeater's output for a moment: a carrier,
 then slot timing, then a burst with its colour code, whose level is
 read. An empty frequency costs about 0.1 s.
 
-- **The repeater in use is Good at the Good level:** no listening.
-- **Good below the Good level, or Weak:** single checks, only while the
+- **The repeater in use is Good at the Search level:** no listening.
+- **Good below the Search level, or Fair:** single checks, only while the
   repeater in use is idle, at most one every 400 ms. The radio hears
   nothing on its own repeater then anyway.
 - **Quiet or Lost:** passes, check after check without going back in
@@ -231,8 +231,8 @@ Only with auto roaming on (the codeplug's setting, which Menu > Roaming >
 Roaming and `roam auto on|off` change), and never while the repeater in
 use is busy:
 
-- Weak: to one heard twice and 6 dB better;
-- Quiet: only to one heard at the Good level;
+- Fair: to one heard twice and 6 dB better;
+- Quiet: only to one heard at the Search level;
 - Lost: to the strongest heard; after fading out, only to one stronger
   than the repeater in use was last heard.
 
@@ -248,14 +248,14 @@ Search now is pressed, the radio searches, with auto roaming on or off:
 2. the repeaters heard lately, strongest first;
 3. the rest of the zone in its order, one try each.
 
-It stops at the first repeater at or above Good; otherwise it takes the
+It stops at the first repeater at or above Search; otherwise it takes the
 strongest that answered. A repeater that answers is judged by its level
 in the heard list, so a current reading from before (a beacon) counts
 with the new one: one reading can be a few dB off. A repeater already on
 the air needs no wake-up; one that shows a carrier but no timing yet
 after a wake-up is slower to start and gets as long as one already on
 the air. Calls and searches wake a repeater the same way. A repeater in
-use that does not answer is marked: weak while it is still heard, lost
+use that does not answer is marked: fair while it is still heard, lost
 once it is not.
 
 ### 3.8 The zone's order
@@ -292,8 +292,8 @@ frequencies, as at the start. A pass starts afresh in the new order.
 Simulation and testing showed these cost more than they gave:
 learning beacon timing and visiting other repeaters at their beacons,
 automatic searches that wake repeaters, the codeplug's range check,
-a second weak level with its own margin, listening while the repeater in
-use is at the Good level, taking silence alone as lost, a minimum time
+a second fair level with its own margin, listening while the repeater in
+use is at the Search level, taking silence alone as lost, a minimum time
 between moves, resuming a search where the last one stopped, and learned
 noise floors.
 

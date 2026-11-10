@@ -147,13 +147,13 @@ TEST_CASE("the repeater in use: good, weak, quiet or lost")
     h.heard(2, -80, Floor, 1000);
     CHECK(roaming::health(h, 2, l, 1000) == Health::Good);
     h.heard(3, -100, Floor, 1000);
-    CHECK(roaming::health(h, 3, l, 1000) == Health::Weak);
+    CHECK(roaming::health(h, 3, l, 1000) == Health::Fair);
     // Silent after being heard well: quiet, not lost; it may just be idle.
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs - 1) == Health::Good);
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs) == Health::Quiet);
     CHECK(roaming::health(h, 2, l, 1000 + 100 * HeardList::ValidMs) == Health::Quiet);
-    // Silent after fading below the weak level: lost.
-    CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs - 1) == Health::Weak);
+    // Silent after fading below the fair level: lost.
+    CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs - 1) == Health::Fair);
     CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs) == Health::Lost);
     h.heard(3, -80, Floor, 300'000); // heard well again
     CHECK(roaming::health(h, 3, l, 300'000) == Health::Good);
@@ -165,7 +165,7 @@ TEST_CASE("an unanswered wake-up makes the repeater in use lost, until it is hea
     HeardList h;
     h.heard(2, -80, Floor, 1000);
     h.unanswered(2, 2000);
-    CHECK(roaming::health(h, 2, l, 2000) == Health::Weak); // heard lately: weak
+    CHECK(roaming::health(h, 2, l, 2000) == Health::Fair); // heard lately: weak
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs) == Health::Lost);
     h.heard(2, -80, Floor, 200'000);
     CHECK(roaming::health(h, 2, l, 200'000) == Health::Good);
@@ -201,10 +201,10 @@ TEST_CASE("moves: never from good; from weak to a clearly better one; from quiet
     h.heard(1, -93, Floor, 2000);
     h.heard(2, -80, Floor, 2000); // much better, measured once
     CHECK(moveTo(h, 0, Health::Good, l, 2000) == -1);
-    CHECK(moveTo(h, 0, Health::Weak, l, 2000) == -1); // 1 needs 6 dB, 2 a second level
+    CHECK(moveTo(h, 0, Health::Fair, l, 2000) == -1); // 1 needs 6 dB, 2 a second level
     h.heard(2, -80, Floor, 3000);
-    CHECK(moveTo(h, 0, Health::Weak, l, 3000) == 2);
-    CHECK(moveTo(h, 0, Health::Weak, l, 3000 + HeardList::ValidMs) == -1); // old levels
+    CHECK(moveTo(h, 0, Health::Fair, l, 3000) == 2);
+    CHECK(moveTo(h, 0, Health::Fair, l, 3000 + HeardList::ValidMs) == -1); // old levels
     // Quiet: only to a good one, even heard once; none in use counts as quiet.
     HeardList q;
     q.heard(3, Floor + 8, Floor, 5);
@@ -236,10 +236,10 @@ TEST_CASE("levels count in dB above each channel's floor")
     CHECK(h.find(0)->levelDb() == 11);
     CHECK(h.find(1)->levelDb() == 2);
     CHECK(roaming::health(h, 0, l, 1000) == Health::Good);
-    CHECK(roaming::health(h, 1, l, 1000) == Health::Weak);
+    CHECK(roaming::health(h, 1, l, 1000) == Health::Fair);
     // Moves compare levels above each repeater's own floor.
     h.heard(0, -90, -101, 2000);
-    CHECK(moveTo(h, 1, Health::Weak, l, 2000) == 0);
+    CHECK(moveTo(h, 1, Health::Fair, l, 2000) == 0);
 }
 
 TEST_CASE("the repeater in use's activity: busy on the air and between overs, idle in a beacon")
