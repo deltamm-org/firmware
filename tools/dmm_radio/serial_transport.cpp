@@ -12,6 +12,7 @@ namespace {
 constexpr quint16 RadioVendorId = 0x28E9;
 constexpr quint16 RadioProductId = 0x018A;
 const QString DeltaMmSerial = QStringLiteral("DeltaMM");
+const QString LoaderSerial = QStringLiteral("DeltaMM-loader");
 // Earlier DeltaMM builds: the pid.codes test IDs.
 constexpr quint16 TestVendorId = 0x1209;
 constexpr quint16 TestProductId = 0x0001;
@@ -28,7 +29,7 @@ QList<QSerialPortInfo> SerialTransport::findRadios()
 {
     QList<QSerialPortInfo> radios;
     for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
-        if (hasIds(info, RadioVendorId, RadioProductId) && info.serialNumber() != DeltaMmSerial) {
+        if (hasIds(info, RadioVendorId, RadioProductId) && info.serialNumber() != DeltaMmSerial && info.serialNumber() != LoaderSerial) {
             radios.append(info);
         }
     }
@@ -47,8 +48,22 @@ QList<QSerialPortInfo> SerialTransport::findDeltaMmPorts()
     return ports;
 }
 
+QList<QSerialPortInfo> SerialTransport::findLoaderPorts()
+{
+    QList<QSerialPortInfo> ports;
+    for (const QSerialPortInfo &info : QSerialPortInfo::availablePorts()) {
+        if (hasIds(info, RadioVendorId, RadioProductId) && info.serialNumber() == LoaderSerial) {
+            ports.append(info);
+        }
+    }
+    return ports;
+}
+
 bool SerialTransport::open(const QString &portName, QString *error)
 {
+    if (m_port.isOpen()) {
+        m_port.close();
+    }
     m_port.setPortName(portName);
     m_port.setBaudRate(QSerialPort::Baud115200);
     m_port.setDataBits(QSerialPort::Data8);

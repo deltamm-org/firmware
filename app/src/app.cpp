@@ -454,6 +454,40 @@ std::optional<std::uint32_t> parseDateTime(std::string_view text)
     return s;
 }
 
+// Transmitting or writing the codeplug: no restart into the loader now.
+bool busyForLoader()
+{
+    const bool programming = platform->programming != nullptr && platform->programming->active(os::nowMs());
+    return programming || radio::activity() == radio::Activity::Transmit;
+}
+
+void restartIntoLoader(services::LoaderRequest request)
+{
+    log::info("console") << (request == services::LoaderRequest::Rollback ? "restarting into the loader to bring the previous image back"
+                                                                          : "restarting into the loader");
+    flushLog();
+    platform->system.enterLoader(request);
+}
+
+void loaderCommand(std::string_view command)
+{
+    if (!platform->system.loaderStatus().present) {
+        log::info("console") << "no loader: this image runs without it";
+    } else if (command == "loader status") {
+        system::logLoaderStatus("console");
+    } else if (command == "loader confirm") {
+        log::info("console") << (platform->system.confirmImage() ? "image confirmed" : "could not confirm the image");
+    } else if (busyForLoader()) {
+        log::info("console") << "busy (transmitting or writing the codeplug), try again";
+    } else if (command == "loader") {
+        restartIntoLoader(services::LoaderRequest::Stay);
+    } else if (command == "loader rollback") {
+        restartIntoLoader(services::LoaderRequest::Rollback);
+    } else {
+        log::info("console") << "loader, loader rollback, loader confirm, loader status";
+    }
+}
+
 void runCommand(std::string_view command)
 {
     log::info("console") << "> " << command;
@@ -553,6 +587,8 @@ void runCommand(std::string_view command)
         if (!posted) {
             log::info("console") << "no GPS receiver";
         }
+    } else if (command == "loader" || lib::startsWith(command, "loader ")) {
+        loaderCommand(command);
     } else if (radioCommand(command)) {
     } else if (!command.empty()) {
         log::info("console") << "unknown command, try help";
@@ -635,7 +671,11 @@ void serveData(services::DataLink &link)
             programming->feed(std::span(input, n), now, writeData);
         }
         if (!programmingBefore && (programming == nullptr || !programming->active(now))) {
+            link.setBusy(busyForLoader());
             link.feed(std::span(input, n), now, writeData);
+            if (const auto request = link.takeLoaderRequest()) {
+                restartIntoLoader(*request);
+            }
         }
     }
 }
@@ -645,7 +685,7 @@ void serveData(services::DataLink &link)
 void linkMain(void *)
 {
     Console console;
-    static services::DataLink dataLink(platform->storage, Version);
+    static services::DataLink dataLink(platform->storage, Version, &platform->system);
     os::Ticks wake = os::nowMs();
     while (!os::stopRequested()) {
         console.poll();

@@ -19,20 +19,21 @@ DeltaMmClient::DeltaMmClient(Transport &transport)
 {
 }
 
-bool DeltaMmClient::exchange(const QByteArray &request, QByteArray &payload, quint8 &status, QString *error, int timeoutMs)
+bool dmmExchange(Transport &transport, const QByteArray &request, QByteArray &payload, quint8 &status, QString *error,
+    int timeoutMs)
 {
-    m_transport.discardInput();
-    if (!m_transport.write(request)) {
+    transport.discardInput();
+    if (!transport.write(request)) {
         *error = QStringLiteral("the data port is gone");
         return false;
     }
-    const QByteArray header = m_transport.read(4, timeoutMs);
+    const QByteArray header = transport.read(4, timeoutMs);
     if (header.size() < 4 || header.at(0) != Start || header.at(1) != request.at(1)) {
         *error = header.isEmpty() ? QStringLiteral("no reply (is this the DeltaMM data port?)") : QStringLiteral("garbled reply");
         return false;
     }
     const auto length = qFromLittleEndian<quint16>(header.constData() + 2);
-    const QByteArray rest = m_transport.read(length + 5, timeoutMs + length / 50);
+    const QByteArray rest = transport.read(length + 5, timeoutMs + length / 50);
     if (rest.size() < length + 5) {
         *error = QStringLiteral("reply cut short");
         return false;
@@ -68,8 +69,58 @@ std::optional<DeltaMmInfo> DeltaMmClient::info(QString *error, int timeoutMs)
     i.device = static_cast<quint8>(payload.at(2));
     i.storageBytes = qFromLittleEndian<quint32>(payload.constData() + 3);
     i.remappedBlocks = qFromLittleEndian<qint16>(payload.constData() + 7);
-    i.version = QString::fromLatin1(payload.mid(10, static_cast<quint8>(payload.at(9))));
+    const int versionLength = static_cast<quint8>(payload.at(9));
+    i.version = QString::fromLatin1(payload.mid(10, versionLength));
+    const QByteArray loader = payload.mid(10 + versionLength);
+    if (loader.size() >= 7 && loader.at(0) != 0) {
+        i.loader.present = true;
+        i.loader.trial = loader.at(1) != 0;
+        i.loader.manual = loader.at(2) != 0;
+        i.loader.attempts = static_cast<quint8>(loader.at(3));
+        i.loader.maxAttempts = static_cast<quint8>(loader.at(4));
+        i.loader.previousKept = loader.at(5) != 0;
+        i.loader.fallback = static_cast<quint8>(loader.at(6));
+    }
     return i;
+}
+
+bool DeltaMmClient::enterLoader(bool rollback, QString *error)
+{
+    QByteArray request("\xDD"
+                       "B\x01",
+        3);
+    if (rollback) {
+        request[2] = 2;
+    }
+    QByteArray payload;
+    quint8 status = 0;
+    if (!exchange(request, payload, status, error, 1000)) {
+        return false;
+    }
+    if (status != 0) {
+        *error = status == BadRequest ? QStringLiteral("this DeltaMM version cannot restart into the loader")
+                                      : QStringLiteral("the radio refused: no loader installed, or busy (transmitting, writing the codeplug)");
+        return false;
+    }
+    return true;
+}
+
+bool DeltaMmClient::confirm(QString *error)
+{
+    QByteArray payload;
+    quint8 status = 0;
+    if (!exchange(QByteArray("\xDD"
+                             "K",
+                      2),
+            payload, status, error, 2000)) {
+        return false;
+    }
+    if (status != 0) {
+        *error = status == BadRequest ? QStringLiteral("this DeltaMM version has no confirmation")
+                                      : QStringLiteral("the radio did not confirm (no loader installed?)");
+        return false;
+    }
+    return true;
 }
 
 bool DeltaMmClient::read(quint32 address, quint32 length, bool physical, QByteArray &out, ReadReport &report, QString *error,

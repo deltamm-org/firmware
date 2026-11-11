@@ -12,13 +12,18 @@ namespace {
 constexpr std::uint8_t OpInfo = 'i';
 constexpr std::uint8_t OpRead = 'r';
 constexpr std::uint8_t OpReadPhysical = 'p';
+constexpr std::uint8_t OpLoader = 'B';
+constexpr std::uint8_t OpConfirm = 'K';
 
 // Total request length once its letter is known; 0 = unknown letter.
 std::size_t requestLength(std::uint8_t op)
 {
     switch (op) {
     case OpInfo:
+    case OpConfirm:
         return 2;
+    case OpLoader:
+        return 3;
     case OpRead:
     case OpReadPhysical:
         return 8;
@@ -78,9 +83,16 @@ private:
 
 } // namespace
 
-DataLink::DataLink(Storage *storage, std::string_view version)
-    : m_storage(storage), m_version(version)
+DataLink::DataLink(Storage *storage, std::string_view version, SystemControl *system)
+    : m_storage(storage), m_version(version), m_system(system)
 {
+}
+
+std::optional<LoaderRequest> DataLink::takeLoaderRequest()
+{
+    const std::optional<LoaderRequest> r = m_loaderRequest;
+    m_loaderRequest.reset();
+    return r;
 }
 
 void DataLink::feed(std::span<const std::uint8_t> bytes, os::Ticks now, Writer write)
@@ -122,7 +134,7 @@ void DataLink::handle(Writer write)
     if (op == OpInfo) {
         const StorageInfo info = m_storage != nullptr ? m_storage->info() : StorageInfo{};
         const auto versionLength = static_cast<std::uint8_t>(m_version.size() < 32 ? m_version.size() : 32);
-        r.put16(static_cast<std::uint16_t>(10 + versionLength));
+        r.put16(static_cast<std::uint16_t>(10 + versionLength + (m_system != nullptr ? 7 : 0)));
         r.put8(info.present ? 1 : 0);
         r.put8(info.maker);
         r.put8(info.device);
@@ -130,7 +142,37 @@ void DataLink::handle(Writer write)
         r.put16(static_cast<std::uint16_t>(static_cast<std::int16_t>(info.remappedBlocks)));
         r.put8(versionLength);
         r.put(std::span(reinterpret_cast<const std::uint8_t *>(m_version.data()), versionLength));
+        if (m_system != nullptr) {
+            const LoaderStatus l = m_system->loaderStatus();
+            r.put8(l.present ? 1 : 0);
+            r.put8(l.trial ? 1 : 0);
+            r.put8(l.manual ? 1 : 0);
+            r.put8(l.attempts);
+            r.put8(l.maxAttempts);
+            r.put8(l.previousKept ? 1 : 0);
+            r.put8(static_cast<std::uint8_t>(l.fallback));
+        }
         r.put8(0);
+        r.finish();
+        return;
+    }
+    if (op == OpLoader) {
+        const std::uint8_t which = m_request[2];
+        const bool known = which == 1 || which == 2;
+        const bool available = m_system != nullptr && !m_busy && m_system->loaderStatus().present;
+        r.put16(0);
+        r.put8(!known ? BadRequest : available ? 0
+                                               : Refused);
+        r.finish();
+        if (known && available) {
+            m_loaderRequest = which == 1 ? LoaderRequest::Stay : LoaderRequest::Rollback;
+        }
+        return;
+    }
+    if (op == OpConfirm) {
+        const bool confirmed = m_system != nullptr && m_system->confirmImage();
+        r.put16(0);
+        r.put8(confirmed ? 0 : Refused);
         r.finish();
         return;
     }
