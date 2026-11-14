@@ -173,7 +173,7 @@ included. Each release has a hardware checklist in `docs/hw-tests/`.
 
 | Key | Standby screen |
 | --- | --- |
-| Channel knob, Up/Down | Next or previous channel, or VFO step |
+| Channel knob | Next or previous channel, or VFO step |
 | `0`-`9` | Type a frequency |
 | `#` | Switch between VFO and memory |
 | P1 | Zone list |
