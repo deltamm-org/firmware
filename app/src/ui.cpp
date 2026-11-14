@@ -496,8 +496,7 @@ std::string_view notRoamingText()
     }
     return roamingSites == 0 ? "No zone" : "Not set";
 }
-// The repeater in use and how it is doing, as "2 Good", or what roaming
-// is doing instead.
+// How the repeater in use is doing, or what roaming is doing instead.
 lib::StaticString<9> roamStateText(const radio::RoamingView &v)
 {
     constexpr const char *States[] = {"Good", "Weak", "Quiet", "Lost"};
@@ -509,13 +508,14 @@ lib::StaticString<9> roamStateText(const radio::RoamingView &v)
     } else if (v.site < 0) {
         t << "None";
     } else {
-        t << v.site + 1 << ' ' << States[static_cast<int>(v.health)];
+        t << States[static_cast<int>(v.health)];
     }
     return t;
 }
 // Fills @p list with what roaming knows: the repeater in use, then each
-// repeater heard with its level and the age of that level, and a row that
-// searches now. The cursor stays on the same row.
+// repeater heard by its name with its level and the age of that level, the
+// one in use marked, and a row that searches now. The cursor stays on the
+// same row.
 constexpr std::uint8_t SearchNowRow = 0xFF;
 void fillRoamStatus(ListPicker &list)
 {
@@ -527,15 +527,20 @@ void fillRoamStatus(ListPicker &list)
     const std::uint32_t now = os::nowMs();
     for (std::uint8_t k = 0; k < v.count; ++k) {
         const services::roaming::HeardList::Entry &e = v.entries[k];
-        // "2*438.2125": position, a star for the one in use, output
-        // frequency.
+        // The repeater's name, cut to leave its value room; "438.2125", its
+        // output frequency, when it has none.
+        constexpr std::size_t NameChars = 15;
         lib::StaticString<24> text;
-        const std::uint32_t frac = v.receiveHz[k] / 100 % 10'000;
-        text << e.position + 1 << (e.position == v.site ? '*' : ' ') << v.receiveHz[k] / 1'000'000 << '.'
-             << static_cast<char>('0' + frac / 1000) << static_cast<char>('0' + frac / 100 % 10)
-             << static_cast<char>('0' + frac / 10 % 10);
-        if (frac % 10 != 0) {
-            text << static_cast<char>('0' + frac % 10);
+        std::array<char, CodeplugSource::SiteNameBytes + 1> name{};
+        if (codeplug != nullptr && codeplug->roamingSiteName(roamingZone, e.position, name) && name[0] != '\0') {
+            text << std::string_view(name.data()).substr(0, NameChars);
+        } else {
+            const std::uint32_t frac = v.receiveHz[k] / 100 % 10'000;
+            text << v.receiveHz[k] / 1'000'000 << '.' << static_cast<char>('0' + frac / 1000)
+                 << static_cast<char>('0' + frac / 100 % 10) << static_cast<char>('0' + frac / 10 % 10);
+            if (frac % 10 != 0) {
+                text << static_cast<char>('0' + frac % 10);
+            }
         }
         // "-35 12s": level and its age; "--- 12s" for one in use that has
         // not answered and has no level.
@@ -554,6 +559,9 @@ void fillRoamStatus(ListPicker &list)
             value << "old";
         }
         list.add(static_cast<std::uint8_t>(k + 1), text.view(), value.view());
+        if (e.position == v.site) {
+            list.mark(static_cast<std::uint8_t>(k + 1));
+        }
     }
     list.add(SearchNowRow, "Search now");
     list.select(at);

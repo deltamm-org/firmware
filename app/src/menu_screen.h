@@ -17,13 +17,16 @@
 /// pixel painted once per update, so nothing blanks before it is redrawn.
 namespace dmm::app::ui {
 
-/// One row of a list: a label, its value or empty, and whether Menu opens
-/// something from it (a ">" where it has no value).
+/// One row of a list: a label, its value or empty, whether Menu opens
+/// something from it (a ">" where it has no value), and whether it is
+/// marked as the one in use (a pointer left of the label, which is drawn
+/// in the receive colour).
 struct ListRow
 {
     std::string_view label;
     std::string_view value;
     bool opens = false;
+    bool marked = false;
 };
 
 /// Rows a list screen shows at once, and a menu screen above its panel.

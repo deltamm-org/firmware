@@ -448,6 +448,7 @@ void ListPicker::open(std::string_view title)
 {
     m_count = 0;
     m_cursor = 0;
+    m_marked = MaxItems;
     copyText(m_title, title);
 }
 
@@ -471,6 +472,15 @@ void ListPicker::select(std::uint8_t id)
     }
 }
 
+void ListPicker::mark(std::uint8_t id)
+{
+    for (std::size_t i = 0; i < m_count; ++i) {
+        if (m_ids[i] == id) {
+            m_marked = i;
+        }
+    }
+}
+
 void ListPicker::move(int steps)
 {
     if (m_count == 0) {
@@ -486,7 +496,7 @@ void ListPicker::draw(Display &d, std::string_view hint)
     const std::size_t first = firstShown(m_cursor, m_count, ListRows);
     std::size_t n = 0;
     for (; n < std::size(rows) && first + n < m_count; ++n) {
-        rows[n] = {m_text[first + n], m_value[first + n]};
+        rows[n] = {m_text[first + n], m_value[first + n], false, first + n == m_marked};
     }
     drawListScreen(d, m_title, std::span(rows, n), first, m_count, m_cursor, hint);
 }
