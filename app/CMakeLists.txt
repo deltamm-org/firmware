@@ -9,3 +9,7 @@ option(DMM_DEBUG_COMMANDS "Console commands for testing: zone, channel, roam use
 if(DMM_DEBUG_COMMANDS)
     target_compile_definitions(dmm_app PRIVATE DMM_DEBUG_COMMANDS)
 endif()
+# The key test screen (Tools > Key test), for bringing up a radio: in debug
+# builds, and in others with DMM_KEY_TEST on.
+option(DMM_KEY_TEST "The key test screen in every build, not only debug builds" OFF)
+target_compile_definitions(dmm_app PRIVATE $<$<OR:$<BOOL:${DMM_KEY_TEST}>,$<CONFIG:Debug>>:DMM_KEY_TEST>)

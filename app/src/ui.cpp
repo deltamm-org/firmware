@@ -601,14 +601,20 @@ std::size_t entryLength = 0;
 constexpr std::uint32_t VfoStepHz = 12'500;
 
 // The key test: every key as a box in panel order, lit while pressed, and
-// the knob values below.
+// the knob values below; in builds made with DMM_KEY_TEST (debug builds),
+// for bringing up a radio.
+#ifdef DMM_KEY_TEST
+constexpr bool HasKeyTest = true;
+#else
+constexpr bool HasKeyTest = false;
+#endif
 class KeyTestView
 {
 public:
     void draw(Display &d)
     {
         d.fillRect(0, 0, d.width(), d.height(), colors::Black);
-        drawText(d, HeaderFont, 0, 0, "Keys (Exit=log)", colors::Grey, colors::Black);
+        drawText(d, HeaderFont, 0, 0, "Keys (hold Exit)", colors::Grey, colors::Black);
         drawLockMark(d);
         drawBattery(d);
         for (unsigned i = 0; i < static_cast<unsigned>(Key::Count); ++i) {
@@ -970,7 +976,7 @@ void uiMain(void *)
             zonePicker.draw(d, listHint());
         } else if (view == View::Log) {
             showLog(d);
-        } else if (view == View::KeyTest) {
+        } else if (HasKeyTest && view == View::KeyTest) {
             keyTest.draw(d);
         }
     };
@@ -983,7 +989,7 @@ void uiMain(void *)
         if (view == View::Standby || view == View::Gps) {
             return View::Log;
         }
-        if (view == View::Log) {
+        if (view == View::Log && HasKeyTest) {
             return View::KeyTest;
         }
         return channels != nullptr ? View::Standby : View::Log;
@@ -1381,7 +1387,7 @@ void uiMain(void *)
         Message m;
         if (inbox.receive(m, RedrawStepMs)) {
             auto refreshValues = [&] {
-                if (view == View::KeyTest) {
+                if (HasKeyTest && view == View::KeyTest) {
                     keyTest.drawValues(d);
                 }
             };
@@ -1405,10 +1411,20 @@ void uiMain(void *)
                                view = View::TestPattern;
                            },
                            [&](const ShowLog &) { show(View::Log); },
-                           [&](const ShowKeyTest &) { show(View::KeyTest); },
+                           [&](const ShowKeyTest &) {
+                               if constexpr (HasKeyTest) {
+                                   show(View::KeyTest);
+                               } else {
+                                   log::info("ui") << "no key test in this build";
+                               }
+                           },
                            [&](const ToggleView &) { show(nextView()); },
                            [&](const PanelPower &p) { d.setPanelOn(p.on); },
-                           [&](const Keys &k) { keyTest.setKeys(d, k.mask, view == View::KeyTest); },
+                           [&](const Keys &k) {
+                               if constexpr (HasKeyTest) {
+                                   keyTest.setKeys(d, k.mask, view == View::KeyTest);
+                               }
+                           },
                            [&](const KeyEvent &e) {
                                using Type = KeyDebouncer::EventType;
                                useLight(d);
@@ -1608,7 +1624,9 @@ void uiMain(void *)
                                static std::int32_t lastClicks = 0;
                                const std::int32_t moved = c.clicks - lastClicks;
                                lastClicks = c.clicks;
-                               keyTest.setClicks(c.clicks);
+                               if constexpr (HasKeyTest) {
+                                   keyTest.setClicks(c.clicks);
+                               }
                                refreshValues();
                                if (channels != nullptr && moved != 0) {
                                    if (view == View::Menu) {
@@ -1629,11 +1647,15 @@ void uiMain(void *)
                                }
                            },
                            [&](const EncoderRaw &r) {
-                               keyTest.setRaw(r.raw);
+                               if constexpr (HasKeyTest) {
+                                   keyTest.setRaw(r.raw);
+                               }
                                refreshValues();
                            },
                            [&](const Volume &v) {
-                               keyTest.setVolume(v.permille);
+                               if constexpr (HasKeyTest) {
+                                   keyTest.setVolume(v.permille);
+                               }
                                refreshValues();
                                audio::post(audio::VolumeKnob{v.permille});
                                const int step = services::volumeStep(v.permille);
@@ -1708,7 +1730,8 @@ void uiMain(void *)
             drawStarting(d);
         }
         if (view == View::Start && startShown && radio::ready()) {
-            show(channels != nullptr ? View::Standby : View::KeyTest);
+            show(channels != nullptr ? View::Standby : HasKeyTest ? View::KeyTest
+                                                                  : View::Log);
             setBatterySave(batterySave);
             gps::post(gps::Systems{gpsSystems});
             if (gpsAtStart) {

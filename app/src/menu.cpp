@@ -19,7 +19,14 @@ constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
 constexpr Row SettingsRows[] = {Group::Keys, Group::Battery, Group::Clock};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime};
+// The key test, for bringing up a radio, only in builds that have it.
+#ifdef DMM_KEY_TEST
 constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
+constexpr std::string_view ToolsAbout = "The log, the key test and the version";
+#else
+constexpr Row ToolsRows[] = {Item::Log, Item::Version};
+constexpr std::string_view ToolsAbout = "The log and the version";
+#endif
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock};
 constexpr Row BatteryRows[] = {Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
@@ -31,7 +38,7 @@ constexpr GroupInfo Groups[] = {
     {"GPS", "On or off, the fix and the satellite systems", GpsRows},
     {"Display", "Brightness and how long the light stays on", DisplayRows},
     {"Settings", "Keys, battery and clock", SettingsRows},
-    {"Tools", "The log, the key test and the version", ToolsRows},
+    {"Tools", ToolsAbout, ToolsRows},
     {"Keys", "What the key lock covers, and auto lock", KeysRows},
     {"Battery", "Battery save while the radio is quiet", BatteryRows},
     {"Clock", "The time zone", ClockRows},
