@@ -566,7 +566,7 @@ void fillRoamStatus(ListPicker &list)
         const std::uint32_t age = (now - e.measuredMs) / 1000;
         lib::StaticString<12> value;
         if (e.samples > 0) {
-            value << e.levelDbm << ' ';
+            value << e.levelDbm() << ' ';
         } else {
             value << "--- ";
         }
@@ -936,7 +936,7 @@ void uiMain(void *)
                     const auto &e = roamView.entries[i];
                     if (e.position == roam.site && e.current(now)) {
                         r.signalKnown = true;
-                        r.signalDbm = e.levelDbm;
+                        r.signalDbm = e.levelDbm();
                     }
                 }
             }

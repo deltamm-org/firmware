@@ -28,7 +28,9 @@ public:
     struct Entry
     {
         std::uint8_t position = 0;
-        std::int8_t levelDbm = 0;
+        // In half dB: smoothing in whole dB would stick a step short of a
+        // steady new level when coming from a stronger one.
+        std::int16_t levelHalfDbm = 0;
         std::int8_t floorDbm = 0;
         std::uint8_t samples = 0; // levels measured while current, up to 255; 0: none
         bool unanswered = false;  // a wake-up went unanswered since it was last heard
@@ -37,7 +39,9 @@ public:
         // levels began if it has not been since.
         std::uint32_t aboveFairMs = 0;
 
-        int levelDb() const { return levelDbm - floorDbm; }
+        // Rounded down, so that a steady level reads as itself from either side.
+        int levelDbm() const { return levelHalfDbm >> 1; }
+        int levelDb() const { return levelDbm() - floorDbm; }
         bool current(std::uint32_t nowMs) const { return samples > 0 && nowMs - measuredMs < ValidMs; }
     };
 

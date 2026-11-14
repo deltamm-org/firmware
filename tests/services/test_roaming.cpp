@@ -27,14 +27,28 @@ TEST_CASE("the heard list keeps a smoothed level per repeater")
     HeardList h;
     h.heard(3, -80, Floor, 1000);
     REQUIRE(h.find(3) != nullptr);
-    CHECK(h.find(3)->levelDbm == -80);
+    CHECK(h.find(3)->levelDbm() == -80);
     h.heard(3, -90, Floor, 2000); // fresh: averaged
-    CHECK(h.find(3)->levelDbm == -85);
+    CHECK(h.find(3)->levelDbm() == -85);
     h.heard(3, -100, Floor, 2000 + HeardList::ValidMs); // stale: replaced
-    CHECK(h.find(3)->levelDbm == -100);
+    CHECK(h.find(3)->levelDbm() == -100);
     CHECK(h.find(4) == nullptr);
     h.heard(4, -300, Floor, 0); // beyond the range is held at its end
-    CHECK(h.find(4)->levelDbm == -128);
+    CHECK(h.find(4)->levelDbm() == -128);
+}
+
+TEST_CASE("a steady level is reached from either side")
+{
+    HeardList h;
+    h.heard(1, -94, Floor, 1000);
+    for (std::uint32_t t = 2000; t < 12000; t += 1000) {
+        h.heard(1, -95, Floor, t);
+    }
+    CHECK(h.find(1)->levelDbm() == -95);
+    for (std::uint32_t t = 12000; t < 22000; t += 1000) {
+        h.heard(1, -94, Floor, t);
+    }
+    CHECK(h.find(1)->levelDbm() == -94);
 }
 
 TEST_CASE("a full heard list never drops the repeater in use")
@@ -70,7 +84,7 @@ TEST_CASE("a repeater that never answered leaves the heard list once another is 
     h.unanswered(1, 3000);
     h.keep(2);
     REQUIRE(h.find(1) != nullptr);
-    CHECK(h.find(1)->levelDbm == -70);
+    CHECK(h.find(1)->levelDbm() == -70);
 }
 
 TEST_CASE("a full heard list drops the repeater measured longest ago")
@@ -185,7 +199,7 @@ TEST_CASE("a repeater heard again without a new level stays current")
     // Its bursts keep coming through a long run of calls.
     h.stillHeard(2, 1000 + HeardList::ValidMs - 1);
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs + 5000) == Health::Good);
-    CHECK(h.find(2)->levelDbm == -88);
+    CHECK(h.find(2)->levelDbm() == -88);
     CHECK(h.find(2)->samples == 1);
     // An old level is not revived.
     h.stillHeard(2, 1000 + 3 * HeardList::ValidMs);

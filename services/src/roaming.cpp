@@ -91,7 +91,8 @@ void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::ui
     Entry &e = place(position, nowMs);
     // A current level is smoothed; an old one is replaced.
     const bool current = e.current(nowMs);
-    e.levelDbm = clampDbm(current ? (e.levelDbm + levelDbm) / 2 : levelDbm);
+    const int half = 2 * clampDbm(levelDbm);
+    e.levelHalfDbm = static_cast<std::int16_t>(current ? (e.levelHalfDbm + half) / 2 : half);
     e.floorDbm = clampDbm(floorDbm);
     if (!current || e.levelDb() >= fairDb) {
         e.aboveFairMs = nowMs;
