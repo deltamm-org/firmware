@@ -3,6 +3,8 @@
 
 #include "menu.h"
 
+#include "dmm/services/gps.h"
+
 #include <doctest/doctest.h>
 
 #include <string_view>
@@ -157,6 +159,24 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     nav.press(Key::Menu);
     nav.press(Key::Menu);
     CHECK(nav.current().item == Item::AutoLock);
+}
+
+TEST_CASE("GPS is one group, and GPS and Roaming start with their switch")
+{
+    const std::span<const Row> gps = info(Group::Gps).rows;
+    REQUIRE(gps.size() == 3);
+    CHECK(gps[0].item == Item::Gps);
+    CHECK(gps[1].item == Item::GpsStatus);
+    CHECK(gps[2].item == Item::GpsSystems);
+    CHECK(parentOf(Group::Gps).group == Group::Top);
+    CHECK(info(Item::Gps).label == "Enabled");
+    CHECK(info(Group::Roaming).rows[0].item == Item::Roaming);
+    for (const Row row : info(Group::Settings).rows) {
+        CHECK(row.group != Group::Gps);
+    }
+    Choices c;
+    listChoices(Item::GpsSystems, c);
+    CHECK(c.text(c.find(dmm::services::gps_systems::All)) == "All types");
 }
 
 TEST_CASE("Display opens from the top of the menu")
@@ -335,6 +355,7 @@ TEST_CASE("screens open from their rows and the version row does nothing")
 {
     Navigator nav;
     nav.open(Group::Gps);
+    moveTo(nav, 1);
     REQUIRE(nav.current().item == Item::GpsStatus);
     CHECK(nav.hint() == "Menu: open   Exit: back");
     CHECK(nav.press(Key::Menu) == Step::Show);

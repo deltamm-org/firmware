@@ -15,26 +15,24 @@ using services::Key;
 
 constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Display, Group::Settings, Group::Tools};
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
-constexpr Row RoamingRows[] = {Item::RoamStatus, Item::Roaming, Item::RoamZone};
-constexpr Row GpsRows[] = {Item::GpsStatus, Item::Gps};
-constexpr Row SettingsRows[] = {Group::Keys, Group::Clock, Group::GpsSettings};
+constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
+constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
+constexpr Row SettingsRows[] = {Group::Keys, Group::Clock};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime};
 constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock, Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
-constexpr Row GpsSettingsRows[] = {Item::GpsSystems};
 
 constexpr GroupInfo Groups[] = {
     {"Menu", "", TopRows},
     {"Channel", "Squelch and power of the channel in use", ChannelRows},
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
-    {"GPS", "The position and the GPS receiver", GpsRows},
+    {"GPS", "On or off, the fix and the satellite systems", GpsRows},
     {"Display", "Brightness and how long the light stays on", DisplayRows},
-    {"Settings", "How the radio is set up: keys, clock, GPS", SettingsRows},
+    {"Settings", "How the radio is set up: keys and clock", SettingsRows},
     {"Tools", "The log, the key test and the version", ToolsRows},
     {"Keys & battery", "The key lock and battery save", KeysRows},
     {"Clock", "The time zone", ClockRows},
-    {"GPS", "The satellite systems the receiver uses", GpsSettingsRows},
 };
 static_assert(std::size(Groups) == static_cast<std::size_t>(Group::Count));
 
@@ -46,14 +44,14 @@ constexpr ItemInfo Items[] = {
     {"Roaming", "Off: the radio does nothing on its own", Kind::Value},
     {"Roam zone", "The repeaters to move between", Kind::Value},
     {"Status", "Position, satellites and time from the GPS", Kind::Screen},
-    {"Receiver", "The GPS receiver on or off", Kind::Value},
+    {"Enabled", "The GPS receiver on or off", Kind::Value},
     {"Brightness", "Display brightness", Kind::Value},
     {"Light time", "How long the light stays on after a key", Kind::Value},
     {"Lock covers", "What the key lock covers", Kind::Value},
     {"Auto lock", "Lock the keys after this long without use", Kind::Value},
     {"Battery save", "Sleep between checks for a signal while quiet", Kind::Value},
     {"Time zone", "Local time's offset from UTC", Kind::Value},
-    {"Satellites", "Satellite systems the receiver uses", Kind::Value},
+    {"Satellites", "Satellite systems used: GPS, GLONASS, BeiDou", Kind::Value},
     {"Log", "The radio's log; hold Exit for the next screen", Kind::Screen},
     {"Key test", "Shows each key pressed; hold Exit for the next", Kind::Screen},
     {"Version", "The firmware's version and time since start", Kind::Info},
@@ -75,9 +73,9 @@ constexpr Fixed LockCovers[] = {{0, "All"}, {1, "Keys+PTT"}, {2, "Keypad"}, {3, 
 constexpr Fixed AutoLocks[] = {{0, "Off"}, {10, "10 s"}, {30, "30 s"}, {60, "60 s"}};
 constexpr Fixed BatterySaves[] = {{0, "Off"}, {1, "On", "150 ms"}, {2, "Fast wake", "70 ms"}};
 namespace g = services::gps_systems;
-constexpr Fixed GpsSystems[] = {{g::Gps | g::Beidou, "GPS + BeiDou"}, {g::Gps, "GPS"}, {g::Beidou, "BeiDou"},
-    {g::Gps | g::Glonass, "GPS + GLONASS"}, {g::Glonass, "GLONASS"}, {g::Beidou | g::Glonass, "BeiDou + GLONASS"},
-    {g::All, "All three"}};
+constexpr Fixed GpsSystems[] = {{g::Gps | g::Beidou, "GPS+BeiDou"}, {g::Gps, "GPS"}, {g::Beidou, "BeiDou"},
+    {g::Gps | g::Glonass, "GPS+GLONASS"}, {g::Glonass, "GLONASS"}, {g::Beidou | g::Glonass, "BeiDou+GLONASS"},
+    {g::All, "All types"}};
 // Light time choices, in seconds.
 constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
 // Time zones: UTC-12:00 to UTC+14:00 in half hours.
