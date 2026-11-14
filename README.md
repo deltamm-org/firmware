@@ -187,13 +187,14 @@ included. Each release has a hardware checklist in `docs/hw-tests/`.
 The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (on or off, status, roaming zone), GPS
 (on or off, status, satellite systems) and Display (brightness, light
-time). Settings holds the setup in groups: Home screen (a preset, or
-what each row shows), Keys (what the lock covers, auto lock), Battery
-(battery save) and Clock (time zone).
+time, help text). Settings holds the setup in groups: Home screen (a
+preset, or what each row shows), Keys (what the lock covers, auto lock),
+Battery (battery save) and Clock (time zone).
 Tools opens the log and shows the version; debug builds also have the
 key test there (built in any build with `-DDMM_KEY_TEST=ON`). The panel
-under the list says what the chosen row does. Menu opens a group or a
-row's value screen, and a digit from 1 to 9 opens the row at that place.
+under the list says what the chosen row does (Display > Help text Off
+hides it). Menu opens a group or a row's value screen, and a digit from
+1 to 9 opens the row at that place.
 On a value screen the squelch, squelch type, brightness and time zone
 take effect as soon as they are chosen; Menu keeps the value, Exit puts
 back the one in use before. Exit goes back one level, onto the row it
