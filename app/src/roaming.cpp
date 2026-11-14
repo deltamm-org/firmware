@@ -293,7 +293,7 @@ lib::StaticString<12> seconds(std::uint32_t ms)
         line << "heard: repeater " << e.position + 1 << ", " << mhz(siteAt(e.position).receiveHz).view()
              << " MHz, ";
         if (e.samples > 0) {
-            line << e.levelDbm << " dBm ";
+            line << e.levelDbm() << " dBm ";
         } else {
             line << "no level, ";
         }
