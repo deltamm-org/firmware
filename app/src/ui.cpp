@@ -487,6 +487,15 @@ void loadRoamingSites()
         return roamingSites;
     });
 }
+// Why the channel in use does not roam: roaming is for DMR channels, it
+// needs repeaters in the roaming zone, and the channel must be set to.
+std::string_view notRoamingText()
+{
+    if (channels != nullptr && channels->current() && !channels->current()->digital()) {
+        return "DMR only";
+    }
+    return roamingSites == 0 ? "No zone" : "Not set";
+}
 // The repeater in use and how it is doing, as "2 Good", or what roaming
 // is doing instead.
 lib::StaticString<9> roamStateText(const radio::RoamingView &v)
@@ -494,7 +503,7 @@ lib::StaticString<9> roamStateText(const radio::RoamingView &v)
     constexpr const char *States[] = {"Good", "Weak", "Quiet", "Lost"};
     lib::StaticString<9> t;
     if (!v.roaming) {
-        t << "Off";
+        t << notRoamingText();
     } else if (v.searching) {
         t << "Search";
     } else if (v.site < 0) {
