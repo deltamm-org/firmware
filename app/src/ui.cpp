@@ -435,6 +435,8 @@ lib::StaticString<6> localClockText(std::uint32_t utc)
 }
 // What each row of the home screen shows.
 services::HomeLayout homeLayout;
+// The menu's panel about the chosen row is shown.
+bool menuHelp = true;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
@@ -823,6 +825,7 @@ void uiMain(void *)
         }
         if (const auto p = codeplug->preferences()) {
             homeLayout = p->home;
+            menuHelp = p->menuHelp;
         }
     }
 
@@ -990,6 +993,7 @@ void uiMain(void *)
         s.gpsSystems = gpsSystems;
         s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
         s.home = homeLayout;
+        s.menuHelp = menuHelp;
         return s;
     };
     // A row's value: the setting's, or the state of what the row opens.
@@ -1026,17 +1030,28 @@ void uiMain(void *)
     };
     // The menu list: up to five rows around the one chosen, and the panel
     // about it.
+    // Without the panel, as a list of ListRows rows, the version as its
+    // row's value.
     auto drawMenu = [&] {
-        static ListRow rows[MenuRows];
-        static menu::ValueText values[MenuRows];
+        static ListRow rows[ListRows];
+        static menu::ValueText values[ListRows];
         const menu::GroupInfo &g = menuNav.groupInfo();
-        const std::size_t first = firstShown(menuNav.row(), g.rows.size(), MenuRows);
+        const int shown = menuHelp ? MenuRows : ListRows;
+        const std::size_t first = firstShown(menuNav.row(), g.rows.size(), shown);
         const menu::Settings s = menuSettings();
         std::size_t n = 0;
-        for (; n < std::size(rows) && first + n < g.rows.size(); ++n) {
+        for (; n < static_cast<std::size_t>(shown) && first + n < g.rows.size(); ++n) {
             const menu::Row row = g.rows[first + n];
             values[n] = rowValue(row, s);
+            if (!menuHelp && !row.opensGroup() && row.item == menu::Item::Version) {
+                values[n] << Version;
+            }
             rows[n] = {menu::label(row), values[n].view(), row.opensGroup() || menu::info(row.item).kind == menu::Kind::Screen};
+        }
+        if (!menuHelp) {
+            drawListScreen(d, menu::groupTitle(menuNav.group()).view(), std::span(rows, n), first, g.rows.size(),
+                menuNav.row(), menuNav.hint());
+            return;
         }
         std::string_view about1;
         std::string_view about2;
@@ -1140,6 +1155,7 @@ void uiMain(void *)
         if (settingsStore != nullptr) {
             services::RadioPreferences p;
             p.home = homeLayout;
+            p.menuHelp = menuHelp;
             settingsStore->keepPreferences(p, os::nowMs());
         }
     };
@@ -1256,6 +1272,10 @@ void uiMain(void *)
         if (s.timeZoneMinutes != was.timeZoneMinutes) {
             timeZoneMinutes = s.timeZoneMinutes;
             log::info("ui") << "time zone " << menu::valueText(menu::Item::TimeZone, timeZoneMinutes).view();
+        }
+        if (s.menuHelp != was.menuHelp) {
+            menuHelp = s.menuHelp;
+            log::info("ui") << "menu help " << (menuHelp ? "shown" : "hidden");
         }
         if (s.home != was.home) {
             homeLayout = s.home;
@@ -1745,7 +1765,8 @@ void uiMain(void *)
                                    log::info("ui") << "preferences record: home screen " << static_cast<int>(h.top) << ' '
                                                    << (h.clock ? 1 : 0) << ' ' << static_cast<int>(h.big) << ' '
                                                    << static_cast<int>(h.middle) << ' ' << static_cast<int>(h.beside) << ' '
-                                                   << static_cast<int>(h.bottom);
+                                                   << static_cast<int>(h.bottom) << ", menu help "
+                                                   << (p->menuHelp ? "on" : "off");
                                } else {
                                    log::info("ui") << "no preferences record";
                                }

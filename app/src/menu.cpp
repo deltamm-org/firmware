@@ -18,7 +18,7 @@ constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
 constexpr Row SettingsRows[] = {Group::Home, Group::Keys, Group::Battery, Group::Clock};
-constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime};
+constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime, Item::MenuHelp};
 // The key test, for bringing up a radio, only in builds that have it.
 #ifdef DMM_KEY_TEST
 constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
@@ -38,7 +38,7 @@ constexpr GroupInfo Groups[] = {
     {"Channel", "Squelch and power of the channel in use", ChannelRows},
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "On or off, the fix and the satellite systems", GpsRows},
-    {"Display", "Brightness and how long the light stays on", DisplayRows},
+    {"Display", "Brightness, light time, help text", DisplayRows},
     {"Settings", "Home screen, keys, battery and clock", SettingsRows},
     {"Tools", ToolsAbout, ToolsRows},
     {"Home screen", "What each row of the home screen shows", HomeRows},
@@ -59,6 +59,7 @@ constexpr ItemInfo Items[] = {
     {"Enabled", "The GPS receiver on or off", Kind::Value},
     {"Brightness", "Display brightness", Kind::Value},
     {"Light time", "How long the light stays on after a key", Kind::Value},
+    {"Help text", "These two lines about the chosen row", Kind::Value},
     {"Lock covers", "What the key lock covers", Kind::Value},
     {"Auto lock", "Lock the keys after this long without use", Kind::Value},
     {"Battery save", "Sleep between checks for a signal while quiet", Kind::Value},
@@ -127,6 +128,7 @@ std::span<const Fixed> fixedChoices(Item item)
     case Item::Roaming:
     case Item::Gps:
     case Item::HomeClock:
+    case Item::MenuHelp:
         return OffOn;
     case Item::HomePreset:
         return HomePresets;
@@ -286,6 +288,7 @@ Kept keptIn(Item item)
     case Item::HomeMiddle:
     case Item::HomeBeside:
     case Item::HomeBottom:
+    case Item::MenuHelp:
         return Kept::Preferences;
     case Item::Squelch:
     case Item::Roaming:
@@ -361,6 +364,8 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return static_cast<std::int32_t>(s.home.top);
     case Item::HomeClock:
         return s.home.clock ? 1 : 0;
+    case Item::MenuHelp:
+        return s.menuHelp ? 1 : 0;
     case Item::HomeBig:
         return static_cast<std::int32_t>(s.home.big);
     case Item::HomeMiddle:
@@ -433,6 +438,9 @@ void setChoice(Item item, std::int32_t value, Settings &s)
         break;
     case Item::HomeClock:
         s.home.clock = value != 0;
+        break;
+    case Item::MenuHelp:
+        s.menuHelp = value != 0;
         break;
     case Item::HomeBig:
         s.home.big = static_cast<services::HomeLayout::Big>(byte);
