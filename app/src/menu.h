@@ -252,7 +252,8 @@ public:
     std::int32_t chosen() const { return m_choices.value(m_cursor); }
     Style style() const { return styleOf(m_choices); }
 
-    /// Up, Down, Menu or Exit, pressed or repeating.
+    /// Up, Down, Menu or Exit, pressed or repeating; a digit 1 to 9 opens
+    /// that row of a list, as Menu on it would.
     Step press(services::Key key);
     /// The knob, clockwise positive.
     Step turn(int steps);

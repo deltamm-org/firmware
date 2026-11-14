@@ -502,8 +502,18 @@ Navigator::Step Navigator::press(Key key)
     case Key::Exit:
         return back();
     default:
-        return Step::None;
+        break;
     }
+    if (key >= Key::Digit1 && key <= Key::Digit9 && !m_choosing) {
+        const auto at = static_cast<std::size_t>(key) - static_cast<std::size_t>(Key::Digit1);
+        if (at >= groupInfo().rows.size()) {
+            return Step::None;
+        }
+        m_rows[static_cast<std::size_t>(m_group)] = static_cast<std::uint8_t>(at);
+        const Step step = select();
+        return step == Step::None ? Step::Moved : step;
+    }
+    return Step::None;
 }
 
 Navigator::Step Navigator::turn(int steps)

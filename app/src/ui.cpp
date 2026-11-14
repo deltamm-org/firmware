@@ -1229,7 +1229,8 @@ void uiMain(void *)
         const bool press = type == Type::Press;
         const bool step = press || type == Type::Repeat;
         if (view == View::Menu) {
-            if ((step && (key == Key::Up || key == Key::Down)) || (press && (key == Key::Menu || key == Key::Exit))) {
+            const bool digit = key >= Key::Digit1 && key <= Key::Digit9;
+            if ((step && (key == Key::Up || key == Key::Down)) || (press && (key == Key::Menu || key == Key::Exit || digit))) {
                 menuStep(menuNav.press(key));
             }
             return;
