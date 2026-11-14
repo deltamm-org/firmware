@@ -180,19 +180,22 @@ included. Each release has a hardware checklist in `docs/hw-tests/`.
 | P2 | Channel settings (squelch, power) |
 | Menu | The menu |
 | Hold `*` | Lock keys; Menu then `*` unlocks |
-| Hold Exit | Cycle standby, log and key test screens |
+| Hold Exit | Cycle standby and log screens (and the key test in debug builds) |
 
 The menu lists what is used while operating first: Channel (squelch,
-squelch type, power), Roaming (status, on or off, roaming zone), GPS
-(status, receiver on or off) and Display (brightness, light time).
-Settings holds the setup in groups: Keys & battery (what the lock
-covers, auto lock, battery save), Clock (time zone) and GPS (satellite
-systems).
-Tools opens the log and the key test and shows the version. The panel
+squelch type, power), Roaming (on or off, status, roaming zone), GPS
+(on or off, status, satellite systems) and Display (brightness, light
+time). Settings holds the setup in groups: Keys (what the lock covers,
+auto lock), Battery (battery save) and Clock (time zone).
+Tools opens the log and shows the version; debug builds also have the
+key test there (built in any build with `-DDMM_KEY_TEST=ON`). The panel
 under the list says what the chosen row does. Menu opens a group or a
-row's value screen, where Menu sets the value and Exit leaves it as it
-was; Exit goes back one level, onto the row it came from. A value
-changed in the menu is kept across restarts (`docs/settings-storage.md`).
+row's value screen, and a digit from 1 to 9 opens the row at that place.
+On a value screen the squelch, squelch type, brightness and time zone
+take effect as soon as they are chosen; Menu keeps the value, Exit puts
+back the one in use before. Exit goes back one level, onto the row it
+came from. A value changed in the menu is kept across restarts
+(`docs/settings-storage.md`).
 Choosing GPS > Status opens the GPS screen, and Exit or Menu goes back to
 the list. The console's `gps raw on`
 logs every sentence the receiver sends; `gps query`, `gps restart` and
