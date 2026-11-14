@@ -131,7 +131,7 @@ steps it covers were run again too.
 | 30 | Pass (2026-11-14): no channel change, no `fm: receiving`, `dmr:` or `ui:` line |
 | 31 | Pass (2026-11-14): Status and the In use row `DMR only` |
 | 32 | Partly (2026-11-14): In use with the state alone (`Quiet`), no position-and-frequency rows; the names and the green pointer not seen on the radio: no repeater heard |
-| 33 | To be run |
+| 33 | Pass (2026-11-14): `ui: menu help hidden`, `settings kept`; the lists without the panel; `Version 0.25.0` as the Version row; `ui: menu help shown` |
 
 ## Undo
 
