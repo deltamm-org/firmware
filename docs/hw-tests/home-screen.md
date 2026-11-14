@@ -108,29 +108,31 @@ knob in 18 by hand on 2026-11-02, and step 19 with a codeplug write on
 2026-11-01, on the same branches before the review changes.
 
 Steps changed for the review of 2026-11-11 (the smaller battery icon,
-the simpler Simple, None next to the power) are to be run again: 1, 5
-and 22.
+the simpler Simple, None next to the power) run again on 2026-11-14 on
+a D878UVII PLUS, release build, with the menu, microphone gain and
+frequency offset branches, the test tools and the loader in one image,
+by the radio test runner; the other steps it covers were run again too.
 
 | # | Result |
 | --- | --- |
-| 1 | To be run again (the smaller battery icon); before: pass, on a DMR channel that does not roam |
-| 2 | Pass: tones and offset on a repeater channel; the zone and place on a simplex channel without tones |
-| 3-4 | Pass |
-| 5 | To be run again (Simple now the channel and its frequency) |
-| 6 | Pass |
+| 1 | Pass, on a DMR channel that does not roam; again 2026-11-14 with the smaller battery icon |
+| 2 | Pass: tones and offset on a repeater channel; the zone and place on a simplex channel without tones; again 2026-11-14 |
+| 3-4 | Pass; again 2026-11-14 |
+| 5 | Pass (2026-11-14): `ui: home screen Simple`; no top line, the channel's name large, the frequency panel and `PWR` only; nothing next to the power or at the bottom |
+| 6 | Pass; again 2026-11-14 |
 | 7 | Pass, seen: bars and the level (-61 to -25 dBm) while a second radio sent; `-` and dark bars about 2 s after it stopped. Seen with the meter's earlier floor of -125 dBm |
 | 8 | Pass for the bottom row, `via <n> <name>`; the meter between beacons Open: no roaming repeater answered |
-| 9-11 | Pass |
+| 9-11 | Pass; again 2026-11-14 |
 | 12 | Pass, seen: the volume notice, and `VOL` followed from 0 to 9 |
 | 13 | Pass, seen: the position at the bottom, with the receiver on GPS + BeiDou; no fix indoors on 2026-11-03 |
-| 14 | Pass: the record line, and the layout kept across the restart |
+| 14 | Pass: the record line, and the layout kept across the restart; again 2026-11-14 (`home screen 2 1 0 2 1 2, menu help on`) |
 | 15 | Pass, seen: after a call answered by an echo service, `Last: <caller>` and its age in minutes |
-| 16, 17 | Pass |
+| 16, 17 | Pass; again 2026-11-14 |
 | 18 | Pass: the channel knob drawn in place; the volume knob too, by eye |
 | 19 | Pass: the layout and the channels kept through the write |
 | 20 | Pass: no differences |
-| 21 | Pass: 383 unused stack words in the ui task |
-| 22 | To be run |
+| 21 | Pass: 376 unused stack words in the ui task (2026-11-14; 383 before) |
+| 22 | Pass (2026-11-14): Voltage, Volume, Signal, None as buttons; nothing next to `PWR`; `home screen 3 0 2 2 3 1` in the record line |
 
 ## Undo
 
