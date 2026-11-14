@@ -116,6 +116,8 @@ struct RadioPreferences
 {
     /// What each row of the home screen shows.
     HomeLayout home;
+    /// The menu's two lines about the chosen row are shown.
+    bool menuHelp = true;
 };
 
 /// One repeater of a roaming zone.

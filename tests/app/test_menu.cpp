@@ -491,3 +491,18 @@ TEST_CASE("the home screen group sets a preset or each row, kept with the prefer
     CHECK(c.size() == 3);
     CHECK(c.find(choiceOf(Item::HomePreset, s)) == c.size());
 }
+
+TEST_CASE("the menu's help text can be hidden, kept with the preferences")
+{
+    const std::span<const Row> display = info(Group::Display).rows;
+    REQUIRE(display.size() == 3);
+    CHECK(display[2].item == Item::MenuHelp);
+    CHECK(keptIn(Item::MenuHelp) == Kept::Preferences);
+    CHECK(!previews(Item::MenuHelp));
+    Settings s;
+    CHECK(s.menuHelp);
+    CHECK(valueText(Item::MenuHelp, choiceOf(Item::MenuHelp, s)).view() == "On");
+    setChoice(Item::MenuHelp, 0, s);
+    CHECK(!s.menuHelp);
+    CHECK(valueText(Item::MenuHelp, choiceOf(Item::MenuHelp, s)).view() == "Off");
+}

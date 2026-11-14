@@ -38,6 +38,7 @@ enum class Item : std::uint8_t
     Gps,
     Backlight,
     BacklightTime,
+    MenuHelp, // the panel about the chosen row, shown or not
     KeyLock,
     AutoLock,
     BatterySave,
@@ -162,6 +163,7 @@ struct Settings
     std::uint8_t gpsSystems = 3;
     std::int16_t timeZoneMinutes = 0;
     services::HomeLayout home;
+    bool menuHelp = true;
 };
 
 /// Where a setting is kept: the general settings, the radio's own

@@ -504,6 +504,26 @@ TEST_CASE("preferences record: the home screen layout round trip")
     CHECK(none->home.beside == HomeLayout::Beside::None);
 }
 
+TEST_CASE("preferences record: the menu's help text round trip, shown by default")
+{
+    RadioPreferences p;
+    CHECK(p.menuHelp);
+    p.menuHelp = false;
+    const auto q = dmm::services::d878uv2::decodePreferences(encoded(p));
+    REQUIRE(q.has_value());
+    CHECK(!q->menuHelp);
+
+    // A record from before the field (the home screen's six bytes only)
+    // shows it.
+    Record r = encoded(p);
+    r[5] = 6;
+    seal(r);
+    const auto old = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(old.has_value());
+    CHECK(old->menuHelp);
+    CHECK(old->home == p.home);
+}
+
 TEST_CASE("preferences record: a record without the home screen bytes gives the default layout")
 {
     using dmm::services::HomeLayout;
