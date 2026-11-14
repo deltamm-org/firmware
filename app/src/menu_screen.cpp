@@ -71,19 +71,44 @@ void drawScrollBar(Display &d, int top, int h, std::size_t first, int shown, std
     fillArea(d, x + 1, barY + barH, 2, top + h - barY - barH, p::Panel);
 }
 
+// The pointer left of a marked row's label: a triangle pointing right,
+// in the receive colour (in the ground colour on a chosen row), each
+// column painted once.
+constexpr int PointerW = 5;
+void drawMark(Display &d, int y, bool marked, Color fill, Color ink)
+{
+    if (!marked) {
+        d.fillRect(0, y, PointerW, RowH, fill);
+        return;
+    }
+    constexpr int Middle = RowH / 2;
+    d.fillRect(0, y, 1, RowH, fill);
+    for (int x = 1; x < PointerW; ++x) {
+        const int half = PointerW - 1 - x;
+        const int top = y + Middle - half;
+        fillArea(d, x, y, 1, top - y, fill);
+        fillArea(d, x, top, 1, 2 * half + 1, ink);
+        fillArea(d, x, top + 2 * half + 1, 1, y + RowH - top - 2 * half - 1, fill);
+    }
+}
+
 // A list row: the label on the left, the value right-aligned and cut to
-// the room left, inverted when chosen.
+// the room left, inverted when chosen; a marked row's label in the receive
+// colour behind its pointer.
 void drawRow(Display &d, int y, const ListRow &row, bool on)
 {
     const int right = d.width() - ScrollW;
     const Color fill = on ? p::Text : p::Ground;
+    drawMark(d, y, row.marked, fill, on ? p::Ground : p::Receive);
+    const Color labelInk = on ? p::Ground : row.marked ? p::Receive
+                                                       : p::Text;
     const std::string_view value = row.value.empty() && row.opens ? std::string_view(">") : row.value;
     const int room = std::max(0, (right - 10 - textWidth(Body, row.label)) / Body.width - 1);
     const std::string_view shown = cut(value, room);
     band(d, y, RowH,
-        {{6, y + 1, row.label, &Body, on ? p::Ground : p::Text},
+        {{6, y + 1, row.label, &Body, labelInk},
             {right - 4 - textWidth(Body, shown), y + 1, shown, &Body, on ? p::Ground : p::Dim}},
-        fill, 0, right);
+        fill, PointerW, right);
 }
 
 // Up to @p shown rows from ListTop, the scroll bar beside them; returns

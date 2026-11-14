@@ -117,6 +117,8 @@ public:
     /// @p value to 8.
     void add(std::uint8_t id, std::string_view text, std::string_view value = {});
     void select(std::uint8_t id);
+    /// Marks item @p id as the one in use.
+    void mark(std::uint8_t id);
     void move(int steps);
     bool empty() const { return m_count == 0; }
     std::uint8_t chosen() const { return m_ids[m_cursor]; }
@@ -131,6 +133,8 @@ private:
     char m_value[MaxItems][ValueBytes] = {};
     std::size_t m_count = 0;
     std::size_t m_cursor = 0;
+    // The marked item's place, or MaxItems for none.
+    std::size_t m_marked = MaxItems;
 };
 
 } // namespace dmm::app::ui
