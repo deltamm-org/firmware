@@ -29,10 +29,14 @@ in `ARM_GNU_TOOLCHAIN`.
 - Names: types `PascalCase`, functions and variables `camelCase`, data
   members `m_camelCase`, constants and enum values `PascalCase`. Headers
   are `.h`, included with quotes (`#include "dmm/lib/ring_buffer.h"`).
-- Core folders (`lib/`, `os/`, `hal/`, `drivers/`, `services/`) never
-  allocate from the heap, never throw and never use RTTI. The
-  `core-heap-free` test checks their object files. `app/` and `tools/` may
-  use the heap.
+- Core folders (`lib/`, `os/`, `hal/`, `drivers/`, `services/`, `app/`)
+  never allocate from the heap, never throw and never use RTTI. The
+  firmware build checks all of their object files, the host
+  `core-heap-free` test those of `lib/`, `drivers/` and `services/`. Only
+  `tools/` may use the heap.
+- Standard calls with a range check, such as `std::string_view::substr`
+  or `.at()`, pull in exception code even with exceptions off, often only
+  in the debug build. Clamp the length or index instead.
 - A layer includes only from the layers below it (`app` → `services` →
   `drivers` → `hal`), plus `os/` and `lib/`. Only `boards/` sees every layer.
 - `hal/` and `drivers/` never include FreeRTOS or Qt headers.
