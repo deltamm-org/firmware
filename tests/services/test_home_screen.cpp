@@ -168,6 +168,12 @@ TEST_CASE("the volume is redrawn when its step changes, only next to the power")
     CHECK(changed(l, a, b) == 0);
     l.beside = HomeLayout::Beside::Volume;
     CHECK(changed(l, a, b) == rows::Beside);
+    // Nothing next to the power: nothing to redraw there.
+    l.beside = HomeLayout::Beside::None;
+    CHECK(changed(l, a, b) == 0);
+    a.centivolts = 781;
+    b.centivolts = 780;
+    CHECK(changed(l, a, b) == 0);
 }
 
 TEST_CASE("the last caller is redrawn for a new call and as the age moves on")

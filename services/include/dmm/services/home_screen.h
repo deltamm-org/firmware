@@ -41,6 +41,7 @@ struct HomeLayout
         Voltage,
         Volume,
         Signal,
+        None,
         Count,
     };
     /// The bottom row.

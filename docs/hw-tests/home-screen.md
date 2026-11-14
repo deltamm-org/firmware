@@ -18,7 +18,7 @@ Menu > Settings > Home screen, first in Settings, sets each row:
 | Clock | On, Off |
 | Large name | Channel, Contact (the contact's name), Zone |
 | Middle row | Frequency (`MHz`, slot and colour code, or `FM` and the bandwidth), Talkgroup (the contact and a name), Signal (meter) |
-| Next to power | Voltage (`BAT 7.80V`), Volume (`VOL 8`), Signal (`SIG -90`) |
+| Next to power | Voltage (`BAT 7.80V`), Volume (`VOL 8`), Signal (`SIG -90`), None (nothing) |
 | Bottom row | Details, Last caller, Position, None |
 
 Detailed is the default. Simple: no top line, the contact's name large,

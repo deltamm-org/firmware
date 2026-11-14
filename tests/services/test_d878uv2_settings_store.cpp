@@ -497,6 +497,11 @@ TEST_CASE("preferences record: the home screen layout round trip")
     const auto q = dmm::services::d878uv2::decodePreferences(encoded(p));
     REQUIRE(q.has_value());
     CHECK(q->home == p.home);
+
+    p.home.beside = HomeLayout::Beside::None;
+    const auto none = dmm::services::d878uv2::decodePreferences(encoded(p));
+    REQUIRE(none.has_value());
+    CHECK(none->home.beside == HomeLayout::Beside::None);
 }
 
 TEST_CASE("preferences record: a record without the home screen bytes gives the default layout")

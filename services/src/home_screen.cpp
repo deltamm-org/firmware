@@ -80,6 +80,7 @@ std::uint8_t changedRows(const HomeLayout &layout, const HomeReadings &shown, co
     case HomeLayout::Beside::Signal:
         beside = signal;
         break;
+    case HomeLayout::Beside::None:
     case HomeLayout::Beside::Count:
         break;
     }

@@ -341,6 +341,9 @@ void StandbyScreen::drawBeside(Display &d, const StandbyState &s)
             v << '-';
         }
         break;
+    case Layout::Beside::None:
+        label = {};
+        break;
     case Layout::Beside::Voltage:
     case Layout::Beside::Count:
         if (r.centivolts > 0) {
