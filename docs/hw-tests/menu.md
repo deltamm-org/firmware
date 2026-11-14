@@ -94,31 +94,42 @@ stall branch and the loader in one image. Step 25 with a codeplug write:
 before the review changes. Step 24 again on 2026-11-10, with Roaming as
 the codeplug's Auto Roaming.
 
-Steps changed for the review of 2026-11-11 (live values, number keys,
-the merged GPS group, Keys and Battery, the key test in debug builds,
-Up and Down on the standby screen, the roaming status) are to be run
-again: 2, 5, 6, 7, 8, 10, 11, 11b, 12 to 18, 24 and 29 to 32.
+Steps changed for the review of 2026-11-11 run again on 2026-11-14 on
+a D878UVII PLUS, release build (no key test), with this branch, the
+home screen, microphone gain and frequency offset branches, the test
+tools and the loader in one image, by the radio test runner; the other
+steps it covers were run again too.
 
 | # | Result |
 | --- | --- |
-| 1 | Pass: `1/6`, Channel to Settings above the panel |
-| 2 | To be run again (the Tools panel without the key test) |
-| 3-4 | Pass |
-| 5-7 | To be run again (the squelch tried at once; one font) |
-| 8 | To be run again; before: pass for the four buttons and Exit, another power was not set |
-| 9 | Pass |
-| 10-11b | To be run again (the switch first, the merged GPS group) |
-| 12 | To be run again (the brightness tried at once) |
-| 13-18 | To be run again (Keys and Battery, the time zone tried at once, the key test in debug builds) |
-| 19-21 | Pass |
-| 22 | Pass: nothing blanked or flashed |
-| 23 | Pass: squelch and power as before the restart |
-| 24 | To be run again (the new keys); before: pass, `ui: auto roaming off` and `settings kept` about 3.5 s later; Off after the restart, `auto roaming off` in the `codeplug:` line |
+| 1 | Pass: `1/6`, Channel to Settings above the panel; again 2026-11-14 |
+| 2 | Pass (2026-11-14): Tools at `6/6`, the panel `The log and the version`; the knob wraps round to Channel |
+| 3-4 | Pass; again 2026-11-14 |
+| 5 | Pass (2026-11-14): Up `ui: squelch <n+1>`, the knob `ui: squelch <n-1>`, Exit `ui: squelch <n>`; no `settings kept` |
+| 6 | Pass (2026-11-14): `ui: squelch <n+1>` on Up, `settings kept` about 3.9 s after Menu |
+| 7 | Pass (2026-11-14): `Carrier` and `CTCSS/DCS` in one font, the one in use starred |
+| 8 | Pass (2026-11-14) for the four buttons and Exit, no `ui: power`; another power was not set |
+| 9 | Pass; again 2026-11-14 |
+| 10 | Pass (2026-11-14): Roaming first, then Status and Roam zone; the status list with its hint |
+| 11 | Pass (2026-11-14): both panels; Enabled, Status, Satellites; the GPS screen |
+| 11b | Pass (2026-11-14), from the picture: every choice in one font, `All types` last. The runner's font check counted the status bar's GPS mark (the receiver was on) as a choice; fixed in the runner |
+| 12 | Pass (2026-11-14): Up `ui: brightness 1` (from 5, the display dimmed at once), Exit `ui: brightness 5`; no `settings kept` |
+| 13-15 | Pass (2026-11-14): Home screen to Battery in Settings; Lock covers and Auto lock; Battery save as a list |
+| 16 | Pass (2026-11-14): Up `ui: time zone` half an hour on, Exit the zone in use again; no `settings kept` |
+| 17 | Pass (2026-11-14): Version the last row, the version and uptime in the panel |
+| 18 | Pass (2026-11-14): 1 opens the log; held Exit goes straight to standby (no key test in a release build) |
+| 19-21 | Pass; again 2026-11-14 |
+| 22 | Pass: nothing blanked or flashed; again 2026-11-14 |
+| 23 | Pass: squelch and power as before the restart; again 2026-11-14 |
+| 24 | Pass (2026-11-14): `ui: auto roaming off`, `settings kept` about 3.4 s later; Off after the restart, `auto roaming off` in the `codeplug:` line |
 | 25 | Not run again with Auto Roaming |
-| 26 | Pass: no differences |
+| 26 | Pass: no differences; again 2026-11-14 |
 | 27 | Pass, by eye: only what changes is redrawn; turning very fast can outrun the drawing |
-| 28 | Pass: 390 unused stack words in the ui task |
-| 29-32 | To be run |
+| 28 | Pass: 394 unused stack words in the ui task (2026-11-14; 390 before) |
+| 29 | Pass (2026-11-14): 1 opens Channel, 3 the Power buttons, 9 nothing; no `ui: power` |
+| 30 | Pass (2026-11-14): no channel change, no `fm: receiving`, `dmr:` or `ui:` line |
+| 31 | Pass (2026-11-14): Status and the In use row `DMR only` |
+| 32 | Partly (2026-11-14): In use with the state alone (`Quiet`), no position-and-frequency rows; the names and the green pointer not seen on the radio: no repeater heard |
 
 ## Undo
 

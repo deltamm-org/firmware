@@ -77,6 +77,19 @@ kind of image (the stack, the test tools and the loader):
 | 10 | Pass: `automatic off` in the `roam:` start line after the restart |
 | 14 | Not run again |
 
+The menu's review paths (Menu > GPS > Enabled and Satellites), run
+2026-11-14 on the same kind of image, release build:
+
+| # | Result |
+| --- | --- |
+| 1-5 | Pass |
+| 7 | Pass for the squelch type and another roam zone, one write each run; Power was not changed |
+| 8 | Pass: Brightness, Light time, GPS Enabled, Satellites and the time zone, one write after the last |
+| 9 | Pass: the `codeplug:` line with all of them |
+| 11, 12 | Pass |
+| 13, 15 | Pass: no differences (the write in 14 not run) |
+| 16 | Pass: 361 unused stack words in the ui task |
+
 ## Undo
 
 - `dmrconf write -D <data> -R d878uv2 before.yaml` puts the codeplug's
