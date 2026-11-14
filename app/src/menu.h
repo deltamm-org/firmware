@@ -61,7 +61,6 @@ enum class Group : std::uint8_t
     Tools,
     Keys,
     Clock,
-    GpsSettings,
     Count,
 };
 
