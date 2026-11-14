@@ -197,20 +197,20 @@ BatteryState batteryState;
 int headerHeight = 8;
 int headerTop = 0;
 
-// A battery at the header's right end, in its own field from 48 pixels
-// before the edge: filled from the left by its level, so the outline shows
-// as it drains, red when low. Every pixel is painted once, so an update
-// does not flicker.
+// A battery at the header's right end, in its own field
+// (StandbyScreen::BatteryW): filled from the left by its level, so the
+// outline shows as it drains, red when low. Every pixel is painted once,
+// so an update does not flicker.
 void drawBattery(Display &d)
 {
     const BatteryState &b = batteryState;
     const int w = d.width();
-    const int fieldX = w - 48;
-    constexpr int BodyW = 21;
+    const int fieldX = w - StandbyScreen::BatteryW;
+    constexpr int BodyW = 19;
     constexpr int InnerW = BodyW - 2;
     const int x = w - 5 - BodyW;
-    const int y = headerTop == 0 ? 0 : 1;
-    const int bodyH = std::min(9, headerHeight - y);
+    const int y = headerTop == 0 ? 0 : 2;
+    const int bodyH = std::min(7, headerHeight - y);
     const Color ink = b.low ? colors::Red : colors::White;
     int filled = 0;
     if (b.millivolts > 0) {
@@ -241,7 +241,7 @@ bool transmitting = false;
 constexpr int LockMarkW = 4 * 5 + 3;
 int lockMarkX(const Display &d)
 {
-    return d.width() - 48 - LockMarkW;
+    return d.width() - StandbyScreen::BatteryW - LockMarkW;
 }
 
 void drawLockMark(Display &d)
