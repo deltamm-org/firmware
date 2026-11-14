@@ -3,10 +3,10 @@
 The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (on or off, status, roaming zone), GPS
 (on or off, status, satellite systems) and Display (brightness, light
-time). Settings holds the setup in groups of its own: Home screen
-(`home-screen.md`), Keys (what the lock covers, auto lock), Battery
-(battery save) and Clock (time zone). Tools opens the log and shows the
-version; a debug build also has the key test there.
+time, help text). Settings holds the setup in groups of its own: Home
+screen (`home-screen.md`), Keys (what the lock covers, auto lock),
+Battery (battery save) and Clock (time zone). Tools opens the log and
+shows the version; a debug build also has the key test there.
 
 A list shows a title band with where it is and the place in it (`2/5`),
 five rows, a scroll bar when there are more, a panel of two lines about
@@ -63,7 +63,7 @@ ended. Steps 31 and 32 need an FM channel and a roaming DMR channel.
 | 10 | Press Down, Menu; look; press Down, Menu; look; press Exit | `Menu > Roaming`: Automatic, Status, Roam zone, on Automatic; the roaming status list in the menu's style, hint `Menu: search   Exit: back`; Exit: `Menu > Roaming` on Status |
 | 11 | Press Exit, Down; look; press Menu; look; press Down, Menu; look; press Exit | GPS chosen, the panel `On or off, the fix and` / `the satellite systems`; `Menu > GPS`: Enabled, Status, Satellites, on Enabled, the panel `The GPS receiver on or` / `off`; the GPS screen; Exit: `Menu > GPS` on Status |
 | 11b | Press Down; look; press Menu; turn the knob through every choice; press Exit | The panel `Satellite systems used:` / `GPS, GLONASS, BeiDou`; `GPS > Satellites`: every choice in the same font, the last `All types`; Exit leaves the systems as they were (no `gps:` line) |
-| 12 | Press Exit, Down, Menu; look; press Menu; look; press Up; look; press Exit | `Menu > Display`: Brightness and Light time with their values, the panel `Display brightness`; Menu: `Brightness`, the level large between arrows with `In use: <n>` under it; Up: the display changes brightness at once, `ui: brightness <n+1>` (1 after 5); Exit: as bright as before, `ui: brightness <n>`, back on Brightness, the level unchanged |
+| 12 | Press Exit, Down, Menu; look; press Menu; look; press Up; look; press Exit | `Menu > Display`: Brightness, Light time and Help text with their values, the panel `Display brightness`; Menu: `Brightness`, the level large between arrows with `In use: <n>` under it; Up: the display changes brightness at once, `ui: brightness <n+1>` (1 after 5); Exit: as bright as before, `ui: brightness <n>`, back on Brightness, the level unchanged |
 | 13 | Press Exit, Down, Menu; look | `Menu > Settings`: Home screen, Keys, Battery, Clock; the panel `What each row of the home screen shows` |
 | 14 | Press Down, Menu; look; press Exit; look | `Settings > Keys`: Lock covers and Auto lock; Exit: `Menu > Settings` on Keys |
 | 15 | Press Down, Menu, Menu; look; press Exit | `Settings > Battery`; Battery save as a list: Off, On `150 ms`, Fast wake `70 ms`, the one in use chosen; Exit leaves it |
@@ -84,6 +84,7 @@ ended. Steps 31 and 32 need an FM channel and a roaming DMR channel.
 | 30 | On the standby screen press Up, then Down; look; knob 1 on, 1 back | Up and Down leave the channel as it is (no `fm: receiving` or `ui:` line); the knob steps one channel on and back |
 | 31 | On an FM channel press Menu, 2; look; press 2; look; press Exit twice, then Exit | Roaming > Status shows `DMR only`; the status screen's In use row `DMR only` |
 | 32 | On the roaming DMR channel, with its repeaters heard: press Menu, 2, 2; look; press Exit three times | Each repeater heard by its name from the codeplug (its frequency when it has none), its level and age; a green pointer left of the name of the one in use (black on the chosen row); In use shows the state alone (`Good`) |
+| 33 | Press Menu, 4, 3, choose Off, Menu; look; press Exit, 6, then Up; look; then Exit, 4, 3, choose On, Menu | `ui: menu help hidden`, `settings kept`; the lists without the panel, seven rows; `settings`: `menu help off` in the `preferences record:` line; Tools: the Version row shows the version; On: `ui: menu help shown`, the panel back |
 
 ## Results
 
@@ -130,6 +131,7 @@ steps it covers were run again too.
 | 30 | Pass (2026-11-14): no channel change, no `fm: receiving`, `dmr:` or `ui:` line |
 | 31 | Pass (2026-11-14): Status and the In use row `DMR only` |
 | 32 | Partly (2026-11-14): In use with the state alone (`Quiet`), no position-and-frequency rows; the names and the green pointer not seen on the radio: no repeater heard |
+| 33 | To be run |
 
 ## Undo
 

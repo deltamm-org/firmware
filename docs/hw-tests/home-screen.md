@@ -42,8 +42,9 @@ is heard and shown for 2 s after; on a roaming channel the repeater's
 last level is shown while it is current (2 minutes). Otherwise, and
 after a restart until the first signal, it shows `-` and no bars.
 
-The status bar keeps its TX, RX, LOCK and GPS marks; the battery is an
-icon filled by its level, red when low. Only rows whose shown value
+The status bar keeps its TX, RX, LOCK and GPS marks; the battery is a
+small icon (19 by 7 pixels) at the right end, filled by its level, red
+when low. Only rows whose shown value
 changes are drawn again: the clock each minute, the voltage when its
 digits change, the volume, the signal level, the last call's age, the
 position.
@@ -75,7 +76,7 @@ the way into the group depends on what came before:
 
 | # | Do | Expect |
 | --- | --- | --- |
-| 1 | `restart`; on the DMR channel, look | `TG <n>` top left, the time top right; the channel's name large; `MHz`, the frequency, `TS<n>` and `CC<n>` on the panel; `PWR` and `BAT` with the voltage to 0.01 V; the zone and `<n>/<m>` at the bottom; a battery icon in the status bar |
+| 1 | `restart`; on the DMR channel, look | `TG <n>` top left, the time top right; the channel's name large; `MHz`, the frequency, `TS<n>` and `CC<n>` on the panel; `PWR` and `BAT` with the voltage to 0.01 V; the zone and `<n>/<m>` at the bottom; a small battery icon at the status bar's right end, lower than the bar |
 | 2 | Turn the channel knob to the FM channel; look | `CHANNEL` top left; `FM` and `25k` or `12.5k` on the panel; tones and offset at the bottom; on a simplex channel without tones the zone and `<n>/<m>` instead |
 | 3 | Turn the channel knob back to the DMR channel; `H`; look | `Home screen` (title alone), `1/7`: Preset Detailed, Top line Talkgroup, Clock On, Large name Channel, Middle row Frequency, then Next to power Voltage, Bottom row Details below; panel `A whole layout at once;` / `rows can then change` |
 | 4 | Press Menu; look | `Preset`: Detailed, Simple, Roaming as buttons, Detailed starred |
@@ -96,6 +97,7 @@ the way into the group depends on what came before:
 | 19 | QDMR round trip: `dmrconf read -D <data> -R d878uv2 a.yaml`; `dmrconf write -D <data> -R d878uv2 a.yaml`; wait for the restart; look; `settings` | The write completes; the layout of step 16 is still in use and in `preferences record`; channels and zones as before |
 | 20 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
 | 21 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
+| 22 | `H`, press Down five times, Menu; look; choose None, Menu, then `X`; look | `Next to power`: Voltage, Volume, Signal, None as buttons; after `X` nothing next to `PWR`; `settings` shows the fifth number of `home screen` as 3 |
 
 ## Results
 
@@ -105,11 +107,17 @@ branch and the loader in one image. Steps 7, 12, 13, 15 and the volume
 knob in 18 by hand on 2026-11-02, and step 19 with a codeplug write on
 2026-11-01, on the same branches before the review changes.
 
+Steps changed for the review of 2026-11-11 (the smaller battery icon,
+the simpler Simple, None next to the power) are to be run again: 1, 5
+and 22.
+
 | # | Result |
 | --- | --- |
-| 1 | Pass, on a DMR channel that does not roam |
+| 1 | To be run again (the smaller battery icon); before: pass, on a DMR channel that does not roam |
 | 2 | Pass: tones and offset on a repeater channel; the zone and place on a simplex channel without tones |
-| 3-6 | Pass |
+| 3-4 | Pass |
+| 5 | To be run again (Simple now the channel and its frequency) |
+| 6 | Pass |
 | 7 | Pass, seen: bars and the level (-61 to -25 dBm) while a second radio sent; `-` and dark bars about 2 s after it stopped. Seen with the meter's earlier floor of -125 dBm |
 | 8 | Pass for the bottom row, `via <n> <name>`; the meter between beacons Open: no roaming repeater answered |
 | 9-11 | Pass |
@@ -122,6 +130,7 @@ knob in 18 by hand on 2026-11-02, and step 19 with a codeplug write on
 | 19 | Pass: the layout and the channels kept through the write |
 | 20 | Pass: no differences |
 | 21 | Pass: 383 unused stack words in the ui task |
+| 22 | To be run |
 
 ## Undo
 
