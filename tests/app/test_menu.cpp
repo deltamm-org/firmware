@@ -172,6 +172,35 @@ TEST_CASE("Display opens from the top of the menu")
     CHECK(nav.current().group == Group::Display);
 }
 
+TEST_CASE("a digit opens the row at its place in the list")
+{
+    Navigator nav;
+    nav.open();
+    CHECK(nav.press(Key::Digit1) == Step::Opened);
+    CHECK(nav.group() == Group::Channel);
+    // In Channel, 3 is Power: its value screen is to open.
+    CHECK(nav.press(Key::Digit3) == Step::Choose);
+    CHECK(nav.current().item == Item::Power);
+    // A digit past the last row does nothing, and 0 is no row.
+    CHECK(nav.press(Key::Digit9) == Step::None);
+    CHECK(nav.press(Key::Digit0) == Step::None);
+    CHECK(nav.current().item == Item::Power);
+
+    // The version row only moves the cursor onto it.
+    nav.open(Group::Tools);
+    const std::size_t last = info(Group::Tools).rows.size();
+    CHECK(nav.press(static_cast<Key>(static_cast<int>(Key::Digit0) + static_cast<int>(last))) == Step::Moved);
+    CHECK(nav.current().item == Item::Version);
+
+    // On a value screen digits are not rows.
+    Settings s;
+    nav.open(Group::Channel);
+    chooseHere(nav, s);
+    REQUIRE(nav.choosing());
+    CHECK(nav.press(Key::Digit1) == Step::None);
+    CHECK(nav.choosing());
+}
+
 TEST_CASE("the cursor wraps round both ends of a list")
 {
     Navigator nav;
