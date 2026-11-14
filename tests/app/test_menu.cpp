@@ -74,7 +74,12 @@ TEST_CASE("every group but the top opens from exactly one row, and every item is
     }
     for (std::size_t i = 0; i < Items; ++i) {
         CAPTURE(info(itemAt(i)).label);
-        CHECK(itemRows[i] == 1);
+        // The key test is only in builds that have it.
+        if (itemAt(i) == Item::KeyTest) {
+            CHECK(itemRows[i] <= 1);
+        } else {
+            CHECK(itemRows[i] == 1);
+        }
     }
     CHECK(parentOf(Group::Top).group == Group::Count);
 }
@@ -374,7 +379,7 @@ TEST_CASE("screens open from their rows and the version row does nothing")
     CHECK(nav.hint() == "Menu: open   Exit: back");
     CHECK(nav.press(Key::Menu) == Step::Show);
     nav.open(Group::Tools);
-    moveTo(nav, 2);
+    moveTo(nav, info(Group::Tools).rows.size() - 1);
     REQUIRE(nav.current().item == Item::Version);
     CHECK(nav.press(Key::Menu) == Step::None);
     CHECK(nav.hint() == "Exit: back");
