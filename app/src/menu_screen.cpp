@@ -10,6 +10,7 @@
 #include "dmm/services/font.h"
 
 #include <algorithm>
+#include <initializer_list>
 #include <utility>
 
 namespace dmm::app::ui {
@@ -103,8 +104,30 @@ int drawRows(Display &d, std::span<const ListRow> rows, std::size_t first, std::
     return end;
 }
 
+// The longest text among @p choices, in characters.
+int longestText(const menu::Choices &choices)
+{
+    std::size_t longest = 0;
+    for (std::size_t i = 0; i < choices.size(); ++i) {
+        longest = std::max(longest, choices.text(i).size());
+    }
+    return static_cast<int>(longest);
+}
+
+// The largest of @p fonts in which @p chars characters fit in @p room
+// pixels; the last one when none does.
+const Font &fontFor(int chars, int room, std::initializer_list<const Font *> fonts)
+{
+    for (const Font *f : fonts) {
+        if (chars * f->width <= room) {
+            return *f;
+        }
+    }
+    return **(fonts.end() - 1);
+}
+
 // Up to four choices as large buttons, the chosen one inverted and the one
-// in use starred.
+// in use starred; all in one font, the largest the longest text fits.
 void drawButtons(Display &d, const menu::Choices &choices, std::size_t cursor, std::size_t inUse)
 {
     const int w = d.width();
@@ -114,6 +137,7 @@ void drawButtons(Display &d, const menu::Choices &choices, std::size_t cursor, s
     constexpr int Margin = 20;
     const int n = static_cast<int>(std::min<std::size_t>(choices.size(), 4));
     const int y0 = ListTop + (bodyEnd - ListTop - n * Pitch + (Pitch - ButtonH)) / 2;
+    const Font &f = fontFor(longestText(choices), w - 3 * Margin, {&Medium, &Body});
     fillArea(d, 0, ListTop, w, y0 - ListTop, p::Ground);
     for (int i = 0; i < n; ++i) {
         const auto at = static_cast<std::size_t>(i);
@@ -121,7 +145,6 @@ void drawButtons(Display &d, const menu::Choices &choices, std::size_t cursor, s
         const bool on = at == cursor;
         const Color fill = on ? p::Text : p::Panel;
         const std::string_view text = choices.text(at);
-        const Font &f = textWidth(Medium, text) <= w - 3 * Margin ? Medium : Body;
         d.fillRect(0, y, Margin, ButtonH, p::Ground);
         band(d, y, ButtonH,
             {{(w - textWidth(f, text)) / 2, y + (ButtonH - f.height) / 2, text, &f, on ? p::Ground : p::Text},
@@ -140,12 +163,10 @@ void drawSpinner(Display &d, const menu::Choices &choices, std::size_t cursor, s
 {
     const int w = d.width();
     const int bodyEnd = d.height() - StandbyScreen::HintH;
-    // The value, as large as it fits between the arrows.
+    // The value between the arrows, in the largest font every choice fits.
     const int room = w - 2 * 22;
-    std::string_view value = choices.text(cursor);
-    const Font &f = textWidth(Large, value) <= room ? Large : textWidth(Medium, value) <= room ? Medium
-                                                                                               : Body;
-    value = cut(value, room / f.width);
+    const Font &f = fontFor(longestText(choices), room, {&Large, &Medium, &Body});
+    const std::string_view value = cut(choices.text(cursor), room / f.width);
     const int arrowY = ListTop + 10;
     band(d, ListTop, 40,
         {{6, arrowY, "<", &Large, p::Dim}, {(w - textWidth(f, value)) / 2, arrowY + (Large.height - f.height) / 2, value, &f, p::Text},
