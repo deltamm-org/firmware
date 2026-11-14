@@ -60,6 +60,7 @@ enum class Group : std::uint8_t
     Settings,
     Tools,
     Keys,
+    Battery,
     Clock,
     Count,
 };

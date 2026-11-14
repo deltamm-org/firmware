@@ -17,10 +17,11 @@ constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Di
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
-constexpr Row SettingsRows[] = {Group::Keys, Group::Clock};
+constexpr Row SettingsRows[] = {Group::Keys, Group::Battery, Group::Clock};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime};
 constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
-constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock, Item::BatterySave};
+constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock};
+constexpr Row BatteryRows[] = {Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
 
 constexpr GroupInfo Groups[] = {
@@ -29,9 +30,10 @@ constexpr GroupInfo Groups[] = {
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "On or off, the fix and the satellite systems", GpsRows},
     {"Display", "Brightness and how long the light stays on", DisplayRows},
-    {"Settings", "How the radio is set up: keys and clock", SettingsRows},
+    {"Settings", "Keys, battery and clock", SettingsRows},
     {"Tools", "The log, the key test and the version", ToolsRows},
-    {"Keys & battery", "The key lock and battery save", KeysRows},
+    {"Keys", "What the key lock covers, and auto lock", KeysRows},
+    {"Battery", "Battery save while the radio is quiet", BatteryRows},
     {"Clock", "The time zone", ClockRows},
 };
 static_assert(std::size(Groups) == static_cast<std::size_t>(Group::Count));
