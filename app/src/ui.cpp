@@ -1284,17 +1284,8 @@ void uiMain(void *)
                 return;
             }
         }
-        if (step && (key == Key::Up || key == Key::Down)) {
-            entryLength = 0;
-            const int dir = key == Key::Up ? 1 : -1;
-            if (channels->vfoMode()) {
-                channels->tune(channels->current()->receiveHz + static_cast<std::uint32_t>(dir * VfoStepHz));
-            } else {
-                channels->step(dir);
-            }
-            useChannel();
-            redrawView();
-        } else if (press && key >= Key::Digit0 && key <= Key::Digit9) {
+        // Up and Down do nothing here: the knob steps the channel.
+        if (press && key >= Key::Digit0 && key <= Key::Digit9) {
             if (entryLength < EntryDigits) {
                 entry[entryLength++] = static_cast<char>('0' + static_cast<int>(key) - static_cast<int>(Key::Digit0));
             }
