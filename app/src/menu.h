@@ -164,6 +164,11 @@ enum class Kept : std::uint8_t
 };
 Kept keptIn(Item item);
 
+/// Whether @p item's value screen puts the chosen value into use while it
+/// is chosen, before Menu sets it: only where trying a value is quick,
+/// shows or sounds at once, and neither transmits nor writes anything.
+bool previews(Item item);
+
 /// The value of @p item's setting in @p s, as its choices number it.
 std::int32_t choiceOf(Item item, const Settings &s);
 /// Sets @p item's setting in @p s to @p value.
@@ -222,12 +227,13 @@ public:
     enum class Step : std::uint8_t
     {
         None,
-        Moved,  // the cursor moved
-        Opened, // another list is up
-        Choose, // a value screen is to open: list the choices, then choose()
-        Set,    // a value was chosen: chosen()
-        Show,   // the row's item opens a screen of its own
-        Left,   // the menu is closed
+        Moved,   // the cursor moved
+        Opened,  // another list is up
+        Choose,  // a value screen is to open: list the choices, then choose()
+        Set,     // a value was chosen: chosen()
+        Restore, // a value screen was left with Exit: was() is in use again
+        Show,    // the row's item opens a screen of its own
+        Left,    // the menu is closed
     };
 
     /// Opens @p group at the row last chosen there. Opened @p quick, from
@@ -250,6 +256,8 @@ public:
     std::size_t cursor() const { return m_cursor; }
     std::size_t inUse() const { return m_inUse; }
     std::int32_t chosen() const { return m_choices.value(m_cursor); }
+    /// The value in use when the value screen opened.
+    std::int32_t was() const { return m_was; }
     Style style() const { return styleOf(m_choices); }
 
     /// Up, Down, Menu or Exit, pressed or repeating; a digit 1 to 9 opens
@@ -275,6 +283,7 @@ private:
     Choices m_choices;
     std::size_t m_cursor = 0;
     std::size_t m_inUse = 0;
+    std::int32_t m_was = 0;
 };
 
 } // namespace dmm::app::ui::menu

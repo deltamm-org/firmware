@@ -232,7 +232,8 @@ TEST_CASE("a value is chosen with Menu and left alone with Exit")
     // Buttons move as drawn: Down is the next one.
     CHECK(nav.press(Key::Down) == Step::Moved);
     CHECK(nav.chosen() == 3);
-    CHECK(nav.press(Key::Exit) == Step::Opened);
+    CHECK(nav.press(Key::Exit) == Step::Restore);
+    CHECK(nav.was() == 2);
     CHECK(!nav.choosing());
     CHECK(nav.current().item == Item::Power);
 
@@ -269,6 +270,51 @@ TEST_CASE("on a large value Up raises it, and a value with notes is a list")
     listChoices(Item::TimeZone, c);
     CHECK(styleOf(c) == Style::Spinner);
     CHECK(c.size() == 53);
+}
+
+TEST_CASE("a value screen tries its value while chosen where that is harmless, and Exit restores it")
+{
+    // The radio's settings as the ui task keeps them: tried on each move,
+    // put back on Exit.
+    Settings radio;
+    radio.squelch = 3;
+    Navigator nav;
+    nav.open(Group::Channel);
+    REQUIRE(nav.current().item == Item::Squelch);
+    CHECK(previews(Item::Squelch));
+    chooseHere(nav, radio);
+    REQUIRE(nav.press(Key::Up) == Step::Moved);
+    setChoice(Item::Squelch, nav.chosen(), radio);
+    CHECK(radio.squelch == 4);
+    REQUIRE(nav.press(Key::Exit) == Step::Restore);
+    setChoice(Item::Squelch, nav.was(), radio);
+    CHECK(radio.squelch == 3);
+
+    // Menu keeps the value tried.
+    chooseHere(nav, radio);
+    nav.press(Key::Down);
+    setChoice(Item::Squelch, nav.chosen(), radio);
+    CHECK(nav.press(Key::Menu) == Step::Set);
+    CHECK(nav.chosen() == 2);
+    CHECK(radio.squelch == 2);
+
+    CHECK(previews(Item::Backlight));
+    CHECK(previews(Item::SquelchMode));
+    CHECK(previews(Item::TimeZone));
+    // Not where a step would transmit, search, switch a receiver or lock
+    // the keys.
+    CHECK(!previews(Item::Power));
+    CHECK(!previews(Item::Roaming));
+    CHECK(!previews(Item::RoamZone));
+    CHECK(!previews(Item::Gps));
+    CHECK(!previews(Item::GpsSystems));
+    CHECK(!previews(Item::AutoLock));
+    CHECK(!previews(Item::KeyLock));
+    for (std::size_t i = 0; i < Items; ++i) {
+        if (info(itemAt(i)).kind != Kind::Value) {
+            CHECK(!previews(itemAt(i)));
+        }
+    }
 }
 
 TEST_CASE("opened from the standby screen, Exit and a value set close the menu")
