@@ -120,7 +120,8 @@ TEST_CASE("labels and titles fit the screen without being cut")
     CHECK(groupTitle(Group::Channel).view() == "Menu > Channel");
     CHECK(groupTitle(Group::Display).view() == "Menu > Display");
     CHECK(groupTitle(Group::Clock).view() == "Settings > Clock");
-    CHECK(groupTitle(Group::Keys).view() == "Keys & battery");
+    CHECK(groupTitle(Group::Keys).view() == "Settings > Keys");
+    CHECK(groupTitle(Group::Battery).view() == "Settings > Battery");
     CHECK(valueTitle(Group::Channel, Item::Squelch).view() == "Channel > Squelch");
     CHECK(valueTitle(Group::Channel, Item::SquelchMode).view() == "Squelch type");
 }
@@ -133,7 +134,7 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     CHECK(nav.group() == Group::Top);
     CHECK(nav.row() == 0);
 
-    // Settings > Keys & battery.
+    // Settings > Keys.
     moveTo(nav, 4);
     CHECK(nav.current().group == Group::Settings);
     CHECK(nav.press(Key::Menu) == Step::Opened);
@@ -177,6 +178,19 @@ TEST_CASE("GPS is one group, and GPS and Roaming start with their switch")
     Choices c;
     listChoices(Item::GpsSystems, c);
     CHECK(c.text(c.find(dmm::services::gps_systems::All)) == "All types");
+}
+
+TEST_CASE("Settings holds the keys and the battery in groups of their own")
+{
+    const std::span<const Row> rows = info(Group::Settings).rows;
+    REQUIRE(rows.size() >= 3);
+    CHECK(rows[0].group == Group::Keys);
+    CHECK(rows[1].group == Group::Battery);
+    CHECK(rows[2].group == Group::Clock);
+    CHECK(info(Group::Keys).rows.size() == 2);
+    REQUIRE(info(Group::Battery).rows.size() == 1);
+    CHECK(info(Group::Battery).rows[0].item == Item::BatterySave);
+    CHECK(parentOf(Group::Battery).group == Group::Settings);
 }
 
 TEST_CASE("Display opens from the top of the menu")
