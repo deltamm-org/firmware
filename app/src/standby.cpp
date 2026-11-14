@@ -496,7 +496,9 @@ void StandbyScreen::draw(Display &d, const ChannelSelector &sel, const StandbySt
             {26, SettingsY + 3, c ? std::string_view(powerText(c->power)) : std::string_view{}, &Body, p::Text}},
         p::Ground, 0, RightX);
     drawBeside(d, s);
-    d.fillRect(0, InfoY - 1, w, 1, p::Rule);
+    // The rule above the bottom row only while that row shows something.
+    const bool bottom = s.layout.bottom != Layout::Bottom::None || !bottomText(sel, s, 1).view().empty();
+    d.fillRect(0, InfoY - 1, w, 1, bottom ? p::Rule : p::Ground);
 
     drawBottom(d, sel, s);
 

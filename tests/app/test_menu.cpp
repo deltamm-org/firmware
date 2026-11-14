@@ -479,7 +479,7 @@ TEST_CASE("the home screen group sets a preset or each row, kept with the prefer
     CHECK(valueText(Item::HomePreset, choiceOf(Item::HomePreset, s)).view() == "Detailed");
     setChoice(Item::HomePreset, static_cast<std::int32_t>(HomePreset::Simple), s);
     CHECK(s.home == dmm::services::presetLayout(HomePreset::Simple));
-    CHECK(valueText(Item::HomeMiddle, choiceOf(Item::HomeMiddle, s)).view() == "Talkgroup");
+    CHECK(valueText(Item::HomeBottom, choiceOf(Item::HomeBottom, s)).view() == "None");
 
     // A row changed on its own makes the layout the user's own.
     setChoice(Item::HomeBeside, static_cast<std::int32_t>(HomeLayout::Beside::Signal), s);
