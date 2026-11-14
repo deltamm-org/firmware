@@ -188,8 +188,10 @@ settings:
 - **Menu > Roaming > Roaming** turns auto roaming on or off. **Roam
   zone** picks another of the codeplug's roaming zones; the pair in use
   stays in use when the new roaming zone has it. Both are written to the
-  codeplug (`docs/settings-storage.md`). **Status** shows the pair in use
-  and its state, then each pair heard with its level and how long ago.
+  codeplug (`docs/settings-storage.md`). **Status** shows the state of
+  the pair in use, then each pair heard by its roaming channel's name,
+  with its level and how long ago, a pointer marking the one in use; on
+  an FM channel it reads `DMR only`.
 - On an FM channel the key says `Not roaming`.
 
 ## Notes
