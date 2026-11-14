@@ -69,7 +69,7 @@ constexpr ItemInfo Items[] = {
     {"Clock", "The time at the top right", Kind::Value},
     {"Large name", "The large name: channel, contact or zone", Kind::Value},
     {"Middle row", "Frequency, contact or signal under the name", Kind::Value},
-    {"Next to power", "Voltage, volume or signal next to the power", Kind::Value},
+    {"Next to power", "Voltage, volume, signal or none", Kind::Value},
     {"Bottom row", "Details, last caller or GPS position", Kind::Value},
     {"Log", "The radio's log; hold Exit for the next screen", Kind::Screen},
     {"Key test", "Shows each key pressed; hold Exit for the next", Kind::Screen},
@@ -102,7 +102,7 @@ constexpr Fixed HomePresets[] = {{static_cast<std::int32_t>(services::HomePreset
 constexpr Fixed HomeTops[] = {{0, "Talkgroup"}, {1, "Zone"}, {2, "Number"}, {3, "None"}};
 constexpr Fixed HomeBigs[] = {{0, "Channel"}, {1, "Contact"}, {2, "Zone"}};
 constexpr Fixed HomeMiddles[] = {{0, "Frequency"}, {1, "Talkgroup"}, {2, "Signal"}};
-constexpr Fixed HomeBesides[] = {{0, "Voltage"}, {1, "Volume"}, {2, "Signal"}};
+constexpr Fixed HomeBesides[] = {{0, "Voltage"}, {1, "Volume"}, {2, "Signal"}, {3, "None"}};
 constexpr Fixed HomeBottoms[] = {{0, "Details"}, {1, "Last caller"}, {2, "Position"}, {3, "None"}};
 static_assert(std::size(HomeTops) == static_cast<std::size_t>(services::HomeLayout::Top::Count));
 static_assert(std::size(HomeBigs) == static_cast<std::size_t>(services::HomeLayout::Big::Count));
