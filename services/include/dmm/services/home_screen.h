@@ -70,7 +70,7 @@ struct HomeLayout
 enum class HomePreset : std::uint8_t
 {
     Detailed, // the default layout
-    Simple,   // the contact large, the last caller at the bottom
+    Simple,   // the channel large and its frequency, little else
     Roaming,  // a signal meter under the name
     Own,
 };

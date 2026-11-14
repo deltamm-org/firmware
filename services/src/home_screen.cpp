@@ -13,9 +13,8 @@ HomeLayout presetLayout(HomePreset preset)
     switch (preset) {
     case HomePreset::Simple:
         l.top = HomeLayout::Top::None;
-        l.big = HomeLayout::Big::Contact;
-        l.middle = HomeLayout::Middle::Talkgroup;
-        l.bottom = HomeLayout::Bottom::LastCaller;
+        l.beside = HomeLayout::Beside::None;
+        l.bottom = HomeLayout::Bottom::None;
         break;
     case HomePreset::Roaming:
         l.middle = HomeLayout::Middle::Signal;

@@ -32,9 +32,10 @@ TEST_CASE("presets set their rows and are recognised again")
 {
     const HomeLayout simple = dmm::services::presetLayout(HomePreset::Simple);
     CHECK(simple.top == HomeLayout::Top::None);
-    CHECK(simple.big == HomeLayout::Big::Contact);
-    CHECK(simple.middle == HomeLayout::Middle::Talkgroup);
-    CHECK(simple.bottom == HomeLayout::Bottom::LastCaller);
+    CHECK(simple.big == HomeLayout::Big::Channel);
+    CHECK(simple.middle == HomeLayout::Middle::Frequency);
+    CHECK(simple.beside == HomeLayout::Beside::None);
+    CHECK(simple.bottom == HomeLayout::Bottom::None);
     CHECK(simple.clock);
     CHECK(dmm::services::presetOf(simple) == HomePreset::Simple);
 

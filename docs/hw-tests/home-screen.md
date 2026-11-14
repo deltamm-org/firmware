@@ -21,9 +21,10 @@ Menu > Settings > Home screen, first in Settings, sets each row:
 | Next to power | Voltage (`BAT 7.80V`), Volume (`VOL 8`), Signal (`SIG -90`), None (nothing) |
 | Bottom row | Details, Last caller, Position, None |
 
-Detailed is the default. Simple: no top line, the contact's name large,
-the contact and the channel's name in the middle row, the last caller at
-the bottom. Roaming: the signal meter in the middle row.
+Detailed is the default. Simple: the clock, the channel's name large,
+its frequency in the middle row and the power, nothing else (no top
+line, nothing next to the power, no bottom row or its rule). Roaming:
+the signal meter in the middle row.
 
 Details are the repeater a roaming channel works through (`via 2 NAME`,
 counted from 1 as `roam` counts), an FM channel's tones and offset, or
@@ -78,7 +79,7 @@ the way into the group depends on what came before:
 | 2 | Turn the channel knob to the FM channel; look | `CHANNEL` top left; `FM` and `25k` or `12.5k` on the panel; tones and offset at the bottom; on a simplex channel without tones the zone and `<n>/<m>` instead |
 | 3 | Turn the channel knob back to the DMR channel; `H`; look | `Home screen` (title alone), `1/7`: Preset Detailed, Top line Talkgroup, Clock On, Large name Channel, Middle row Frequency, then Next to power Voltage, Bottom row Details below; panel `A whole layout at once;` / `rows can then change` |
 | 4 | Press Menu; look | `Preset`: Detailed, Simple, Roaming as buttons, Detailed starred |
-| 5 | Press Down, Menu, then `X`; look | `ui: home screen Simple`; no top line; the contact's name large; the panel `TG <n>` with the channel's name after it (the contact's name not repeated); `No call heard yet` at the bottom; 3 s later `settings kept in the codeplug` |
+| 5 | Press Down, Menu, then `X`; look | `ui: home screen Simple`; no top line; the channel's name large; the panel with the frequency; `PWR` with nothing next to it; nothing at the bottom, no rule above it; 3 s later `settings kept in the codeplug` |
 | 6 | `M`, press Menu, Down, Menu, then `X`; on a quiet DMR channel that does not roam, look | `ui: home screen Roaming`; the panel `SIG`, ten dark bars, `-`, `dBm` |
 | 7 | Key another radio on that channel for 5 s, then stop; watch the meter meanwhile | Bars and the level while it transmits; `-` and dark bars again about 2 s after it stops |
 | 8 | Turn the channel knob to the roaming channel; wait for a repeater (`roam` names it); look | The meter shows the repeater's last level between its beacons; the bottom row `via <n> <name>` with `<n>` as `roam` numbers it |
