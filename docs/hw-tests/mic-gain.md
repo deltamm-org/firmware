@@ -109,6 +109,23 @@ gain, they are open until run again.
 | 19 | Open: to hear again |
 | 20 | Optional, only for the console's baseband route: not run |
 
+Run again 2026-11-14 on a D878UVII PLUS, release build, with the
+settings store, menu, home screen and frequency offset branches, the
+test tools and the loader in one image, by the radio test runner, with
+the gains one byte further down the preferences record (after the
+menu's help text):
+
+| # | Result |
+| --- | --- |
+| 1-3 | Pass: the codeplug's levels in dB at start; out of range refused; `DMR +30 dB, FM +24 dB` in the record line |
+| 4 | Pass: `fm 41` and `fm 44` as expected for +24 dB |
+| 5 | Pass: `fm 41` and `fm 44` as expected for +8 dB |
+| 6-8 | Pass: Settings > Audio after Home screen; kept across a restart |
+| 10 | Pass |
+| 13 | Pass |
+| 14 | Pass: `fm 41` and `fm 44` as expected for +16 dB |
+| 9, 11, 12, 15-20 | Not run (codeplug write, transmitting or listening) |
+
 ## Undo
 
 `mic gain dmr codeplug`, `mic gain fm codeplug`; `dmrconf write -y` the
