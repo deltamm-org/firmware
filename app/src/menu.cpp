@@ -258,6 +258,19 @@ Kept keptIn(Item item)
     return Kept::No;
 }
 
+bool previews(Item item)
+{
+    switch (item) {
+    case Item::Squelch:
+    case Item::SquelchMode:
+    case Item::Backlight:
+    case Item::TimeZone:
+        return true;
+    default:
+        return false;
+    }
+}
+
 std::int32_t choiceOf(Item item, const Settings &s)
 {
     const services::KeyLockSettings &k = s.keyLock;
@@ -480,6 +493,7 @@ void Navigator::open(Group group, bool quick)
 void Navigator::choose(std::int32_t inUse)
 {
     const std::size_t at = m_choices.find(inUse);
+    m_was = inUse;
     m_inUse = at;
     m_cursor = at < m_choices.size() ? at : 0;
     m_choosing = m_choices.size() > 0;
@@ -566,7 +580,7 @@ Navigator::Step Navigator::back()
 {
     if (m_choosing) {
         m_choosing = false;
-        return Step::Opened;
+        return Step::Restore;
     }
     const Place parent = parentOf(m_group);
     if (m_quick || parent.group == Group::Count) {

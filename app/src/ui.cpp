@@ -1023,7 +1023,9 @@ void uiMain(void *)
             settingsStore->keepChannel(channels->channelIndex(), c.power, c.squelchMode, os::nowMs());
         }
     };
-    auto useChannel = [&] {
+    // The channel in use to the radio task; @p keepPlace keeps the zone and
+    // the channel's place in it.
+    auto useChannel = [&](bool keepPlace = true) {
         if (channels == nullptr || !channels->current()) {
             return;
         }
@@ -1039,7 +1041,7 @@ void uiMain(void *)
         if (view == View::Standby) {
             redrawView();
         }
-        if (settingsStore != nullptr && !channels->vfoMode()) {
+        if (keepPlace && settingsStore != nullptr && !channels->vfoMode()) {
             settingsStore->keepZone(channels->sideB(), channels->zone(),
                 static_cast<std::uint16_t>(channels->position() - 1), os::nowMs());
         }
@@ -1101,6 +1103,7 @@ void uiMain(void *)
         if (s.backlight != was.backlight) {
             backlightLevel = s.backlight;
             d.setBacklight(backlightLevel);
+            log::info("ui") << "brightness " << backlightLevel;
         }
         if (s.backlightS != was.backlightS) {
             backlightS = s.backlightS;
@@ -1128,15 +1131,19 @@ void uiMain(void *)
             log::info("ui") << "time zone " << menu::valueText(menu::Item::TimeZone, timeZoneMinutes).view();
         }
         if (channel) {
-            useChannel();
+            useChannel(false);
         }
+    };
+    // @p value of @p item into use, not kept.
+    auto useMenuValue = [&](menu::Item item, std::int32_t value) {
+        menu::Settings s = menuSettings();
+        menu::setChoice(item, value, s);
+        useSettings(s);
     };
     // The value chosen in the menu takes effect at once and is kept in the
     // codeplug.
     auto applyMenuValue = [&](menu::Item item, std::int32_t value) {
-        menu::Settings s = menuSettings();
-        menu::setChoice(item, value, s);
-        useSettings(s);
+        useMenuValue(item, value);
         switch (menu::keptIn(item)) {
         case menu::Kept::Settings:
             keepSettings();
@@ -1193,6 +1200,10 @@ void uiMain(void *)
             break;
         case Step::Moved:
             if (menuNav.choosing()) {
+                // Tried at once where that is harmless; Menu keeps it.
+                if (menu::previews(menuNav.current().item)) {
+                    useMenuValue(menuNav.current().item, menuNav.chosen());
+                }
                 drawMenuValue();
             } else {
                 drawMenu();
@@ -1213,6 +1224,12 @@ void uiMain(void *)
         case Step::Set:
             applyMenuValue(menuNav.current().item, menuNav.chosen());
             show(menuNav.isOpen() ? View::Menu : View::Standby);
+            break;
+        case Step::Restore:
+            if (menu::previews(menuNav.current().item)) {
+                useMenuValue(menuNav.current().item, menuNav.was());
+            }
+            show(View::Menu);
             break;
         case Step::Show:
             showItem(menuNav.current().item);
