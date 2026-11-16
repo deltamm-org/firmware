@@ -115,9 +115,9 @@ public:
     void drawCall(services::Display &d, const StandbyState &s, const CallInfo &c);
     /// Only the call screen's bottom bar, for the running time.
     void drawCallTime(services::Display &d, const CallInfo &c);
-    /// Where the caller may draw the battery: x of its left edge.
     /// The battery's field at the status row's right end.
     static constexpr int BatteryW = 30;
+    /// Where the caller may draw the battery: x of its left edge.
     int batteryX(const services::Display &d) const { return d.width() - BatteryW; }
 
 private:
