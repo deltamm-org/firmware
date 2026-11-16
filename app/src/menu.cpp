@@ -50,7 +50,7 @@ constexpr ItemInfo Items[] = {
     {"Squelch type", "Carrier: any signal; CTCSS/DCS: its tone/code", Kind::Value},
     {"Power", "Transmit power of this channel", Kind::Value},
     {"Status", "Repeaters heard and their levels; search now", Kind::Screen},
-    {"Roaming", "Off: the radio does nothing on its own", Kind::Value},
+    {"Automatic", "Off: only the Roam key and PTT search", Kind::Value},
     {"Roam zone", "The repeaters to move between", Kind::Value},
     {"Status", "Position, satellites and time from the GPS", Kind::Screen},
     {"Enabled", "The GPS receiver on or off", Kind::Value},

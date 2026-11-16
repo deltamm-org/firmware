@@ -60,7 +60,7 @@ ended. Steps 31 and 32 need an FM channel and a roaming DMR channel.
 | 7 | Press Down, Menu; look | `Squelch type` (the group left out of the title, which would not fit): two large buttons, `Carrier` and `CTCSS/DCS` in the same font, the one in use starred |
 | 8 | Press Exit, Down, Menu; look; press Down, Menu | Power: four buttons, the power in use starred and chosen; no `ui: power` line before Menu; then `ui: power <n>`; back on Power with the new value; `settings kept` 3 s later |
 | 9 | Press Exit; look | `Menu`, Channel chosen |
-| 10 | Press Down, Menu; look; press Down, Menu; look; press Exit | `Menu > Roaming`: Roaming, Status, Roam zone, on Roaming; the roaming status list in the menu's style, hint `Menu: search   Exit: back`; Exit: `Menu > Roaming` on Status |
+| 10 | Press Down, Menu; look; press Down, Menu; look; press Exit | `Menu > Roaming`: Automatic, Status, Roam zone, on Automatic; the roaming status list in the menu's style, hint `Menu: search   Exit: back`; Exit: `Menu > Roaming` on Status |
 | 11 | Press Exit, Down; look; press Menu; look; press Down, Menu; look; press Exit | GPS chosen, the panel `On or off, the fix and` / `the satellite systems`; `Menu > GPS`: Enabled, Status, Satellites, on Enabled, the panel `The GPS receiver on or` / `off`; the GPS screen; Exit: `Menu > GPS` on Status |
 | 11b | Press Down; look; press Menu; turn the knob through every choice; press Exit | The panel `Satellite systems used:` / `GPS, GLONASS, BeiDou`; `GPS > Satellites`: every choice in the same font, the last `All types`; Exit leaves the systems as they were (no `gps:` line) |
 | 12 | Press Exit, Down, Menu; look; press Menu; look; press Up; look; press Exit | `Menu > Display`: Brightness and Light time with their values, the panel `Display brightness`; Menu: `Brightness`, the level large between arrows with `In use: <n>` under it; Up: the display changes brightness at once, `ui: brightness <n+1>` (1 after 5); Exit: as bright as before, `ui: brightness <n>`, back on Brightness, the level unchanged |
@@ -75,7 +75,7 @@ ended. Steps 31 and 32 need an FM channel and a roaming DMR channel.
 | 21 | Press P1; look; press Exit | The zone list in the same style, hint `Menu: use   Exit: back` |
 | 22 | Watching the screen: P2, knob 3 on, knob 3 back, Menu, knob 2 on, Exit, Exit, P1, knob 1 on, Exit, Menu, knob 1 on, knob 1 back, Exit | Each screen and each change is drawn in place: nothing blanks or flashes |
 | 23 | Note the squelch and power set above. `restart`; after the start `settings`; press P2; look; press Exit | The `codeplug:` line holds the squelch; Channel shows the squelch and power as set before the restart |
-| 24 | Menu > Roaming > Roaming Off: press Menu, 2, 1, choose Off, Menu; wait 3 s; `restart`; press Menu, 2; look | `ui: auto roaming off`, `settings kept`; after the restart Roaming shows Off and the `codeplug:` line of `settings` shows `auto roaming off` |
+| 24 | Menu > Roaming > Automatic Off: press Menu, 2, 1, choose Off, Menu; wait 3 s; `restart`; press Menu, 2; look | `ui: auto roaming off`, `settings kept`; after the restart Automatic shows Off and the `codeplug:` line of `settings` shows `auto roaming off` |
 | 25 | QDMR round trip: `dmrconf read -D <data> -R d878uv2 a.yaml`; `dmrconf write -D <data> -R d878uv2 a.yaml`; wait for the restart | The write completes; the menu shows the same values as before; the `codeplug:` line still shows `auto roaming off` |
 | 26 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
 | 27 | By hand: turn the knob fast in a list, on Power and on Time zone | Only the rows, buttons and values that change are redrawn; nothing blanks or flashes |
@@ -133,7 +133,7 @@ steps it covers were run again too.
 
 ## Undo
 
-- Menu > Roaming > Roaming On, and put back the squelch and power noted
+- Menu > Roaming > Automatic On, and put back the squelch and power noted
   in step 23; wait for `settings kept`.
 - Or `dmrconf write -D <data> -R d878uv2 before.yaml` with a codeplug read
   before the steps.
