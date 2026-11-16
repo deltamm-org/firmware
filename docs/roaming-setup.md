@@ -91,7 +91,7 @@ to the repeater in use, for example to keep hearing that repeater's
 local calls (TG 9), and never listens elsewhere. PTT on a repeater that
 does not answer, the roam key and Search now still search; with nothing
 heard by listening, a search follows the roaming zone's order after the
-repeaters earlier searches heard. Menu > Roaming > Roaming changes this
+repeaters earlier searches heard. Menu > Roaming > Automatic changes this
 setting on the radio.
 
 ### Example
@@ -185,7 +185,7 @@ settings:
   with a good signal; after an unanswered wake-up, to the strongest
   heard; after the one in use faded out, to the strongest heard if it is
   stronger than that one was. Never during a call.
-- **Menu > Roaming > Roaming** turns auto roaming on or off. **Roam
+- **Menu > Roaming > Automatic** turns auto roaming on or off. **Roam
   zone** picks another of the codeplug's roaming zones; the pair in use
   stays in use when the new roaming zone has it. Both are written to the
   codeplug (`docs/settings-storage.md`). **Status** shows the state of

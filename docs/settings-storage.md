@@ -19,7 +19,7 @@ The code: `services/settings_store.h` (the interface the app uses),
 | Battery save | General settings | `Settings` |
 | Backlight time and brightness | General settings | `Settings` |
 | GPS on or off; time zone | General settings | `Settings` |
-| Auto roaming (Menu > Roaming > Roaming); roaming zone | General settings | `Settings` |
+| Auto roaming (Menu > Roaming > Automatic); roaming zone | General settings | `Settings` |
 | Zone of each side | General settings | `Settings` |
 | Place in each zone's channel list | Zone channel selections | `ZoneSelections` |
 | GPS satellite systems | Extended general settings | `SettingsExtension` |

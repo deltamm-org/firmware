@@ -278,7 +278,7 @@ frequencies, as at the start. A pass starts afresh in the new order.
 - Menu > Roaming > Status: the state of the repeater in use, then each
   repeater heard by its name, with its level and age, a pointer marking
   the one in use; on an FM channel `DMR only`.
-- Menu > Roaming > Roaming (auto roaming) and Roam zone take effect at
+- Menu > Roaming > Automatic (auto roaming) and Roam zone take effect at
   once and are written to the codeplug. With auto roaming off the radio
   does nothing on its own: no listening and no moves. PTT, the roam key
   and Search now still search, in the order of what those searches heard
