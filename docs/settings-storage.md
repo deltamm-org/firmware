@@ -26,6 +26,7 @@ The code: `services/settings_store.h` (the interface the app uses),
 | A channel's power and squelch mode | The channel's record | `ChannelBanks` |
 | Home screen layout (Menu > Settings > Home screen) | Preferences record | `Preferences` |
 | Menu help text shown or hidden (Menu > Display > Help text) | Preferences record | `Preferences` |
+| What Up and Down do on the home screen (Menu > Settings > Home screen > Up/Down) | Preferences record | `Preferences` |
 
 The auto lock time shares its field with the menu exit time, in 5 s
 steps up to 60 s.

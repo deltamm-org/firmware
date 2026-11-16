@@ -524,6 +524,37 @@ TEST_CASE("preferences record: the menu's help text round trip, shown by default
     CHECK(old->home == p.home);
 }
 
+TEST_CASE("preferences record: Up and Down's use round trip, zones by default")
+{
+    using dmm::services::HomeUpDown;
+    RadioPreferences p;
+    CHECK(p.upDown == HomeUpDown::Zone);
+    for (const HomeUpDown u : {HomeUpDown::Channel, HomeUpDown::Off, HomeUpDown::Zone}) {
+        p.upDown = u;
+        const auto q = dmm::services::d878uv2::decodePreferences(encoded(p));
+        REQUIRE(q.has_value());
+        CHECK(q->upDown == u);
+    }
+
+    // A record from before the field (up to the help text) and a value
+    // out of range give zones.
+    p.upDown = HomeUpDown::Off;
+    p.menuHelp = false;
+    Record r = encoded(p);
+    r[5] = 7;
+    seal(r);
+    auto old = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(old.has_value());
+    CHECK(old->upDown == HomeUpDown::Zone);
+    CHECK(!old->menuHelp);
+    r = encoded(p);
+    r[13] = static_cast<std::uint8_t>(HomeUpDown::Count);
+    seal(r);
+    old = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(old.has_value());
+    CHECK(old->upDown == HomeUpDown::Zone);
+}
+
 TEST_CASE("preferences record: a record without the home screen bytes gives the default layout")
 {
     using dmm::services::HomeLayout;

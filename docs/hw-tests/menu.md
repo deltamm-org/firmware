@@ -28,7 +28,8 @@ back one level, onto the row it came from. P2 opens Channel straight
 from the standby screen; Exit or a value set goes back there. The zone
 list (P1) and the roaming status look like the menu's lists; the
 roaming status names the repeaters heard and points at the one in use.
-On the standby screen Up and Down do nothing: the channel knob steps
+On the standby screen Up and Down step the zone, or what Settings >
+Home screen > Up/Down sets (`home-screen.md`); the channel knob steps
 the channel. Every screen is drawn in place: nothing blanks before it is
 redrawn.
 
@@ -81,7 +82,7 @@ ended. Steps 31 and 32 need an FM channel and a roaming DMR channel.
 | 27 | By hand: turn the knob fast in a list, on Power and on Time zone | Only the rows, buttons and values that change are redrawn; nothing blanks or flashes |
 | 28 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 | 29 | On the standby screen press Menu, 1; look; press 3; look; press 9; press Exit three times | 1 opens `Menu > Channel`; 3 opens the Power value screen (no `ui: power`); 9 does nothing; Exit, Exit, Exit: standby |
-| 30 | On the standby screen press Up, then Down; look; knob 1 on, 1 back | Up and Down leave the channel as it is (no `fm: receiving` or `ui:` line); the knob steps one channel on and back |
+| 30 | On the standby screen, with Up/Down Zone (the default), press Up, then Down; look; knob 1 on, 1 back | Up: `ui: zone <n> (<name>), channel ...`, the next zone in use; Down: the zone before again; the knob steps one channel on and back |
 | 31 | On an FM channel press Menu, 2; look; press 2; look; press Exit twice, then Exit | Roaming > Status shows `DMR only`; the status screen's In use row `DMR only` |
 | 32 | On the roaming DMR channel, with its repeaters heard: press Menu, 2, 2; look; press Exit three times | Each repeater heard by its name from the codeplug (its frequency when it has none), its level and age; a green pointer left of the name of the one in use (black on the chosen row); In use shows the state alone (`Good`) |
 | 33 | Press Menu, 4, 3, choose Off, Menu; look; press Exit, 6, then Up; look; then Exit, 4, 3, choose On, Menu | `ui: menu help hidden`, `settings kept`; the lists without the panel, seven rows; `settings`: `menu help off` in the `preferences record:` line; Tools: the Version row shows the version; On: `ui: menu help shown`, the panel back |

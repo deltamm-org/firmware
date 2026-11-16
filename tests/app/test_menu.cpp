@@ -492,6 +492,28 @@ TEST_CASE("the home screen group sets a preset or each row, kept with the prefer
     CHECK(c.find(choiceOf(Item::HomePreset, s)) == c.size());
 }
 
+TEST_CASE("Up/Down sets zones, channels or nothing, zones by default, kept with the preferences")
+{
+    using dmm::services::HomeUpDown;
+    const std::span<const Row> home = info(Group::Home).rows;
+    REQUIRE(!home.empty());
+    CHECK(home.back().item == Item::HomeUpDown);
+    CHECK(keptIn(Item::HomeUpDown) == Kept::Preferences);
+    CHECK(!previews(Item::HomeUpDown));
+
+    Settings s;
+    CHECK(valueText(Item::HomeUpDown, choiceOf(Item::HomeUpDown, s)).view() == "Zone");
+    // Changing the preset leaves it as it is.
+    setChoice(Item::HomeUpDown, static_cast<std::int32_t>(HomeUpDown::Channel), s);
+    setChoice(Item::HomePreset, static_cast<std::int32_t>(dmm::services::HomePreset::Simple), s);
+    CHECK(s.upDown == HomeUpDown::Channel);
+    CHECK(valueText(Item::HomeUpDown, choiceOf(Item::HomeUpDown, s)).view() == "Channel");
+    Choices c;
+    REQUIRE(listChoices(Item::HomeUpDown, c));
+    REQUIRE(c.size() == 3);
+    CHECK(c.find(static_cast<std::int32_t>(HomeUpDown::Off)) == 2);
+}
+
 TEST_CASE("the menu's help text can be hidden, kept with the preferences")
 {
     const std::span<const Row> display = info(Group::Display).rows;

@@ -51,8 +51,9 @@ enum class Item : std::uint8_t
     HomeMiddle,
     HomeBeside,
     HomeBottom,
-    Log,     // opens the log
-    KeyTest, // opens the key test
+    HomeUpDown, // what Up and Down do on the home screen
+    Log,        // opens the log
+    KeyTest,    // opens the key test
     Version,
     Count,
 };
@@ -163,6 +164,7 @@ struct Settings
     std::uint8_t gpsSystems = 3;
     std::int16_t timeZoneMinutes = 0;
     services::HomeLayout home;
+    services::HomeUpDown upDown = services::HomeUpDown::Zone;
     bool menuHelp = true;
 };
 
