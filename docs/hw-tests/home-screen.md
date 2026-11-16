@@ -7,7 +7,8 @@ The standby screen is the home screen, in rows under the status bar:
 - a row on a panel;
 - the power, with a reading next to it;
 - the bottom row;
-- the key hints.
+- the key hints; `#` names the mode it switches to, `# VFO` on a memory
+  channel and `# MEM` in the VFO.
 
 Menu > Settings > Home screen, first in Settings, sets each row:
 
@@ -99,6 +100,7 @@ the way into the group depends on what came before:
 | 20 | `dmrconf read -D <data> -R d878uv2 b.yaml`; `diff a.yaml b.yaml` | No differences |
 | 21 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 | 22 | `H`, press Down five times, Menu; look; choose None, Menu, then `X`; look | `Next to power`: Voltage, Volume, Signal, None as buttons; after `X` nothing next to `PWR`; `settings` shows the fifth number of `home screen` as 3 |
+| 23 | On a memory channel look at the hint bar; press `#`; look; press `#` again; look | On the channel `Menu  P1 Zone  P2 Chan  # VFO`; in the VFO (`VFO` top left) the hint ends in `# MEM`; back on the channel `# VFO` again |
 
 ## Results
 

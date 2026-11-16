@@ -652,8 +652,10 @@ void nameCall(HeardCall &h, CodeplugSource *plug)
         copyName(h.callerName, user.name.data());
     }
 }
-// The standby screen's quick-key hint.
+// The standby screen's quick-key hint, up to the mode # switches to, and
+// the whole hint.
 lib::StaticString<40> quickKeys;
+lib::StaticString<44> keysText;
 // Frequency digits typed on the standby screen.
 constexpr std::size_t EntryDigits = 6;
 char entry[EntryDigits + 1] = {};
@@ -789,7 +791,7 @@ void uiMain(void *)
     log::info("ui") << "display " << d.width() << " x " << d.height();
 
     quickKeys << keyText(Key::Menu) << "  " << keyText(Key::Front1) << " Zone  " << keyText(Key::Front2) << " Chan  "
-              << keyText(Key::Hash) << " VFO";
+              << keyText(Key::Hash) << ' ';
 
     // The codeplug: settings, and the channel the radio starts on.
     if (codeplug != nullptr) {
@@ -882,7 +884,9 @@ void uiMain(void *)
         s.receiving = receiving;
         s.locked = keyLock.locked() || keyLock.settings().forced;
         s.entry = std::string_view(entry, entryLength);
-        s.keys = quickKeys.view();
+        keysText.clear();
+        keysText << quickKeys.view() << (channels != nullptr && channels->vfoMode() ? "MEM" : "VFO");
+        s.keys = keysText.view();
         s.gps = gpsState;
         s.layout = homeLayout;
         services::HomeReadings &r = s.readings;
