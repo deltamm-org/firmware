@@ -24,7 +24,8 @@ Menu > Settings > Home screen, first in Settings, sets each row:
 Detailed is the default. Simple: the clock, the channel's name large,
 its frequency in the middle row and the power, nothing else (no top
 line, nothing next to the power, no bottom row or its rule). Roaming:
-the signal meter in the middle row.
+the signal meter in the middle row. With the bottom row None, a
+receive-only channel still shows `RX ONLY` there, and the rule above it.
 
 Details are the repeater a roaming channel works through (`via 2 NAME`,
 counted from 1 as `roam` counts), an FM channel's tones and offset, or
