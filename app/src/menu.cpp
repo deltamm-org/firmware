@@ -28,7 +28,7 @@ constexpr Row ToolsRows[] = {Item::Log, Item::Version};
 constexpr std::string_view ToolsAbout = "The log and the version";
 #endif
 constexpr Row HomeRows[] = {Item::HomePreset, Item::HomeTop, Item::HomeClock, Item::HomeBig, Item::HomeMiddle,
-    Item::HomeBeside, Item::HomeBottom};
+    Item::HomeBeside, Item::HomeBottom, Item::HomeUpDown};
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock};
 constexpr Row BatteryRows[] = {Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
@@ -72,6 +72,7 @@ constexpr ItemInfo Items[] = {
     {"Middle row", "Frequency, contact or signal under the name", Kind::Value},
     {"Next to power", "Voltage, volume, signal or none", Kind::Value},
     {"Bottom row", "Details, last caller or GPS position", Kind::Value},
+    {"Up/Down", "Up and Down: next zone, next channel or off", Kind::Value},
     {"Log", "The radio's log; hold Exit for the next screen", Kind::Screen},
     {"Key test", "Shows each key pressed; hold Exit for the next", Kind::Screen},
     {"Version", "The firmware's version and time since start", Kind::Info},
@@ -110,6 +111,8 @@ static_assert(std::size(HomeBigs) == static_cast<std::size_t>(services::HomeLayo
 static_assert(std::size(HomeMiddles) == static_cast<std::size_t>(services::HomeLayout::Middle::Count));
 static_assert(std::size(HomeBesides) == static_cast<std::size_t>(services::HomeLayout::Beside::Count));
 static_assert(std::size(HomeBottoms) == static_cast<std::size_t>(services::HomeLayout::Bottom::Count));
+constexpr Fixed HomeUpDowns[] = {{0, "Zone"}, {1, "Channel"}, {2, "Off"}};
+static_assert(std::size(HomeUpDowns) == static_cast<std::size_t>(services::HomeUpDown::Count));
 // Light time choices, in seconds.
 constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
 // Time zones: UTC-12:00 to UTC+14:00 in half hours.
@@ -142,6 +145,8 @@ std::span<const Fixed> fixedChoices(Item item)
         return HomeBesides;
     case Item::HomeBottom:
         return HomeBottoms;
+    case Item::HomeUpDown:
+        return HomeUpDowns;
     case Item::KeyLock:
         return LockCovers;
     case Item::AutoLock:
@@ -288,6 +293,7 @@ Kept keptIn(Item item)
     case Item::HomeMiddle:
     case Item::HomeBeside:
     case Item::HomeBottom:
+    case Item::HomeUpDown:
     case Item::MenuHelp:
         return Kept::Preferences;
     case Item::Squelch:
@@ -374,6 +380,8 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return static_cast<std::int32_t>(s.home.beside);
     case Item::HomeBottom:
         return static_cast<std::int32_t>(s.home.bottom);
+    case Item::HomeUpDown:
+        return static_cast<std::int32_t>(s.upDown);
     case Item::RoamStatus:
     case Item::GpsStatus:
     case Item::Log:
@@ -453,6 +461,9 @@ void setChoice(Item item, std::int32_t value, Settings &s)
         break;
     case Item::HomeBottom:
         s.home.bottom = static_cast<services::HomeLayout::Bottom>(byte);
+        break;
+    case Item::HomeUpDown:
+        s.upDown = static_cast<services::HomeUpDown>(byte);
         break;
     case Item::RoamStatus:
     case Item::GpsStatus:

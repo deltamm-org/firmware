@@ -118,6 +118,8 @@ struct RadioPreferences
     HomeLayout home;
     /// The menu's two lines about the chosen row are shown.
     bool menuHelp = true;
+    /// What Up and Down do on the home screen.
+    HomeUpDown upDown = HomeUpDown::Zone;
 };
 
 /// One repeater of a roaming zone.

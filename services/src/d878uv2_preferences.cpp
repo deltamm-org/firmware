@@ -33,7 +33,9 @@ constexpr std::size_t HomeBesideAt = FieldsAt + 4;
 constexpr std::size_t HomeBottomAt = FieldsAt + 5;
 // The menu's help text: 0 hidden, 1 shown.
 constexpr std::size_t MenuHelpAt = FieldsAt + 6;
-constexpr std::size_t FieldsEnd = FieldsAt + 7;
+// What Up and Down do on the home screen, a choice of HomeUpDown's.
+constexpr std::size_t HomeUpDownAt = FieldsAt + 7;
+constexpr std::size_t FieldsEnd = FieldsAt + 8;
 static_assert(FieldsEnd <= CrcAt);
 
 // The field bytes a record holds; a field past them reads as its default.
@@ -92,6 +94,7 @@ std::optional<RadioPreferences> decodePreferences(std::span<const std::uint8_t, 
     p.home.beside = f.choice(HomeBesideAt, d.home.beside);
     p.home.bottom = f.choice(HomeBottomAt, d.home.bottom);
     p.menuHelp = f.flag(MenuHelpAt, d.menuHelp);
+    p.upDown = f.choice(HomeUpDownAt, d.upDown);
     return p;
 }
 
@@ -108,6 +111,7 @@ void encodePreferences(const RadioPreferences &p, std::span<std::uint8_t, Prefer
     record[HomeBesideAt] = static_cast<std::uint8_t>(p.home.beside);
     record[HomeBottomAt] = static_cast<std::uint8_t>(p.home.bottom);
     record[MenuHelpAt] = p.menuHelp ? 1 : 0;
+    record[HomeUpDownAt] = static_cast<std::uint8_t>(p.upDown);
     const std::uint32_t crc = lib::crc32(record.data(), CrcAt);
     for (std::size_t i = 0; i < 4; ++i) {
         record[CrcAt + i] = static_cast<std::uint8_t>(crc >> (8 * i));

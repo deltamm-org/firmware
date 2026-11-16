@@ -437,6 +437,8 @@ lib::StaticString<6> localClockText(std::uint32_t utc)
 services::HomeLayout homeLayout;
 // The menu's panel about the chosen row is shown.
 bool menuHelp = true;
+// What Up and Down do on the home screen.
+services::HomeUpDown homeUpDown = services::HomeUpDown::Zone;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
@@ -828,6 +830,7 @@ void uiMain(void *)
         if (const auto p = codeplug->preferences()) {
             homeLayout = p->home;
             menuHelp = p->menuHelp;
+            homeUpDown = p->upDown;
         }
     }
 
@@ -997,6 +1000,7 @@ void uiMain(void *)
         s.gpsSystems = gpsSystems;
         s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
         s.home = homeLayout;
+        s.upDown = homeUpDown;
         s.menuHelp = menuHelp;
         return s;
     };
@@ -1160,6 +1164,7 @@ void uiMain(void *)
             services::RadioPreferences p;
             p.home = homeLayout;
             p.menuHelp = menuHelp;
+            p.upDown = homeUpDown;
             settingsStore->keepPreferences(p, os::nowMs());
         }
     };
@@ -1192,6 +1197,26 @@ void uiMain(void *)
             settingsStore->keepZone(channels->sideB(), channels->zone(),
                 static_cast<std::uint16_t>(channels->position() - 1), os::nowMs());
         }
+    };
+    // The zone and channel in use, to the log; @p ok false says the one
+    // asked for was not found.
+    auto logPlace = [&](bool ok) {
+        const auto &c = channels->current();
+        log::info("ui") << (ok ? "" : "not found; ") << "zone " << static_cast<int>(channels->zone()) << " ("
+                        << channels->zoneName() << "), channel " << channels->position() << " of "
+                        << channels->zoneSize() << ": " << (c ? c->name : "-") << ", " << (c ? c->receiveHz / 1000 : 0)
+                        << " kHz" << (c && c->roaming ? ", roaming" : "");
+    };
+    // The channel, or in the VFO its frequency, @p moved steps on, as the
+    // channel knob turns it.
+    auto stepChannel = [&](int moved) {
+        entryLength = 0;
+        if (channels->vfoMode()) {
+            channels->tune(channels->current()->receiveHz + static_cast<std::uint32_t>(moved * static_cast<int>(VfoStepHz)));
+        } else {
+            channels->step(moved);
+        }
+        useChannel();
     };
     auto tuneEntry = [&] {
         std::uint32_t khz = 0;
@@ -1285,6 +1310,11 @@ void uiMain(void *)
             homeLayout = s.home;
             log::info("ui") << "home screen "
                             << menu::valueText(menu::Item::HomePreset, menu::choiceOf(menu::Item::HomePreset, s)).view();
+        }
+        if (s.upDown != was.upDown) {
+            homeUpDown = s.upDown;
+            log::info("ui") << "up/down "
+                            << menu::valueText(menu::Item::HomeUpDown, menu::choiceOf(menu::Item::HomeUpDown, s)).view();
         }
         if (channel) {
             useChannel(false);
@@ -1443,8 +1473,19 @@ void uiMain(void *)
                 return;
             }
         }
-        // Up and Down do nothing here: the knob steps the channel.
-        if (press && key >= Key::Digit0 && key <= Key::Digit9) {
+        // Up and Down step the zone, or the channel as the knob does, as
+        // set in the menu; a zone step does nothing in the VFO.
+        if (step && (key == Key::Up || key == Key::Down)) {
+            const int dir = key == Key::Up ? 1 : -1;
+            if (homeUpDown == services::HomeUpDown::Channel) {
+                stepChannel(dir);
+            } else if (homeUpDown == services::HomeUpDown::Zone && !channels->vfoMode()) {
+                entryLength = 0;
+                const bool ok = channels->stepZone(dir);
+                useChannel();
+                logPlace(ok);
+            }
+        } else if (press && key >= Key::Digit0 && key <= Key::Digit9) {
             if (entryLength < EntryDigits) {
                 entry[entryLength++] = static_cast<char>('0' + static_cast<int>(key) - static_cast<int>(Key::Digit0));
             }
@@ -1739,12 +1780,7 @@ void uiMain(void *)
                                    show(View::Standby);
                                    useChannel();
                                }
-                               const auto &c = channels->current();
-                               log::info("ui") << (ok ? "" : "not found; ") << "zone " << static_cast<int>(channels->zone()) << " ("
-                                               << channels->zoneName() << "), channel " << channels->position() << " of "
-                                               << channels->zoneSize() << ": " << (c ? c->name : "-") << ", "
-                                               << (c ? c->receiveHz / 1000 : 0) << " kHz"
-                                               << (c && c->roaming ? ", roaming" : "");
+                               logPlace(ok);
                            },
                            [&](const SettingsReport &) {
                                if (settingsStore != nullptr) {
@@ -1770,7 +1806,8 @@ void uiMain(void *)
                                                    << (h.clock ? 1 : 0) << ' ' << static_cast<int>(h.big) << ' '
                                                    << static_cast<int>(h.middle) << ' ' << static_cast<int>(h.beside) << ' '
                                                    << static_cast<int>(h.bottom) << ", menu help "
-                                                   << (p->menuHelp ? "on" : "off");
+                                                   << (p->menuHelp ? "on" : "off") << ", up/down "
+                                                   << static_cast<int>(p->upDown);
                                } else {
                                    log::info("ui") << "no preferences record";
                                }
@@ -1800,14 +1837,7 @@ void uiMain(void *)
                                        zonePicker.move(moved);
                                        zonePicker.draw(d, listHint());
                                    } else if (view == View::Standby) {
-                                       entryLength = 0;
-                                       if (channels->vfoMode()) {
-                                           channels->tune(channels->current()->receiveHz +
-                                               static_cast<std::uint32_t>(moved * static_cast<int>(VfoStepHz)));
-                                       } else {
-                                           channels->step(moved);
-                                       }
-                                       useChannel();
+                                       stepChannel(moved);
                                    }
                                }
                            },

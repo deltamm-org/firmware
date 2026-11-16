@@ -21,6 +21,11 @@ Menu > Settings > Home screen, first in Settings, sets each row:
 | Middle row | Frequency (`MHz`, slot and colour code, or `FM` and the bandwidth), Talkgroup (the contact and a name), Signal (meter) |
 | Next to power | Voltage (`BAT 7.80V`), Volume (`VOL 8`), Signal (`SIG -90`), None (nothing) |
 | Bottom row | Details, Last caller, Position, None |
+| Up/Down | Zone (Up the next zone in use, Down the one before, wrapping), Channel (as the channel knob, in the VFO too), Off |
+
+Up/Down is not part of a preset; Zone is its default. A zone step lands
+on the channel last selected in that zone as the codeplug keeps it (the
+zone list does the same) and does nothing in the VFO.
 
 Detailed is the default. Simple: the clock, the channel's name large,
 its frequency in the middle row and the power, nothing else (no top
@@ -58,7 +63,8 @@ default layout.
 ## Before
 
 - A DMR channel whose contact is a talkgroup with a name other than the
-  channel's, a roaming channel, and an FM channel in the codeplug.
+  channel's, a roaming channel, and an FM channel in the codeplug, and
+  at least two zones in use.
 - A codeplug read with QDMR to undo with: `dmrconf read -D <data> -R
   d878uv2 before.yaml`.
 - The log port open for the log lines named under Expect and for the
@@ -80,7 +86,7 @@ the way into the group depends on what came before:
 | --- | --- | --- |
 | 1 | `restart`; on the DMR channel, look | `TG <n>` top left, the time top right; the channel's name large; `MHz`, the frequency, `TS<n>` and `CC<n>` on the panel; `PWR` and `BAT` with the voltage to 0.01 V; the zone and `<n>/<m>` at the bottom; a small battery icon at the status bar's right end, lower than the bar |
 | 2 | Turn the channel knob to the FM channel; look | `CHANNEL` top left; `FM` and `25k` or `12.5k` on the panel; tones and offset at the bottom; on a simplex channel without tones the zone and `<n>/<m>` instead |
-| 3 | Turn the channel knob back to the DMR channel; `H`; look | `Home screen` (title alone), `1/7`: Preset Detailed, Top line Talkgroup, Clock On, Large name Channel, Middle row Frequency, then Next to power Voltage, Bottom row Details below; panel `A whole layout at once;` / `rows can then change` |
+| 3 | Turn the channel knob back to the DMR channel; `H`; look | `Home screen` (title alone), `1/8`: Preset Detailed, Top line Talkgroup, Clock On, Large name Channel, Middle row Frequency, then Next to power Voltage, Bottom row Details, Up/Down Zone below; panel `A whole layout at once;` / `rows can then change` |
 | 4 | Press Menu; look | `Preset`: Detailed, Simple, Roaming as buttons, Detailed starred |
 | 5 | Press Down, Menu, then `X`; look | `ui: home screen Simple`; no top line; the channel's name large; the panel with the frequency; `PWR` with nothing next to it; nothing at the bottom, no rule above it; 3 s later `settings kept in the codeplug` |
 | 6 | `M`, press Menu, Down, Menu, then `X`; on a quiet DMR channel that does not roam, look | `ui: home screen Roaming`; the panel `SIG`, ten dark bars, `-`, `dBm` |
@@ -101,6 +107,12 @@ the way into the group depends on what came before:
 | 21 | Wait for the `system: uptime ...` line (each minute) | `unused stack words: ui` above 50 |
 | 22 | `H`, press Down five times, Menu; look; choose None, Menu, then `X`; look | `Next to power`: Voltage, Volume, Signal, None as buttons; after `X` nothing next to `PWR`; `settings` shows the fifth number of `home screen` as 3 |
 | 23 | On a memory channel look at the hint bar; press `#`; look; press `#` again; look | On the channel `Menu  P1 Zone  P2 Chan  # VFO`; in the VFO (`VFO` top left) the hint ends in `# MEM`; back on the channel `# VFO` again |
+| 24 | `M`, press Down until Up/Down; look; press Menu; look; press Exit, then `X` | The panel `Up and Down: next zone,` / `next channel or off`, the row's value `Zone`; Menu: Zone, Channel, Off as buttons, Zone starred; Exit leaves it |
+| 25 | On a memory channel, knob 1 on; wait 5 s; note the zone and channel; press Up; look; press Down; look | Up: `ui: zone <n> (<name>), channel <p> of <m>: ...`, the next zone in use (from the last one, the first) on the channel last selected there; Down: the zone and channel noted again, with its `ui: zone` line |
+| 26 | Press `#`; press Up, then Down; look; press `#` | In the VFO Up and Down change nothing (no `ui: zone` line, the frequency stays); `#` back on the channel |
+| 27 | `M`, press 8, Down, Menu, then `X`; press Up; look; press Down; press `#`, Up; look; press `#` | `ui: up/down Channel`, `settings kept` 3 s later; Up: the next channel in the zone, as knob 1 on; Down: back; in the VFO Up raises the frequency one step, as knob 1 on |
+| 28 | `M`, press 8, Down, Down, Menu, then `X`; press Up, then Down; look | `ui: up/down Off`; Up and Down change nothing (no `ui:` or `fm:` line) |
+| 29 | `restart`; `settings`; press Up; look | `up/down 2` at the end of `preferences record:`; Up still does nothing |
 
 ## Results
 
@@ -139,6 +151,6 @@ by the radio test runner; the other steps it covers were run again too.
 
 ## Undo
 
-- `restart`, then `H`, press Menu, Menu (Preset Detailed), then `X`;
-  wait for `settings kept`.
+- `restart`, then `H`, press Menu, Menu (Preset Detailed), 8, Up, Up,
+  Menu (Up/Down Zone), then `X`; wait for `settings kept`.
 - Or `dmrconf write -D <data> -R d878uv2 before.yaml`.

@@ -75,6 +75,15 @@ enum class HomePreset : std::uint8_t
     Own,
 };
 
+/// What Up and Down do on the home screen.
+enum class HomeUpDown : std::uint8_t
+{
+    Zone,    // the next or previous zone
+    Channel, // the next or previous channel, as the channel knob
+    Off,
+    Count,
+};
+
 /// The layout of @p preset; Own gives the default layout.
 HomeLayout presetLayout(HomePreset preset);
 /// The preset @p layout is, or Own.
