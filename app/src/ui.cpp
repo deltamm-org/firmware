@@ -4,6 +4,7 @@
 #include "ui.h"
 
 #include "audio.h"
+#include "draw.h"
 #include "gps.h"
 #include "menu.h"
 #include "menu_screen.h"
@@ -529,11 +530,11 @@ void fillRoamStatus(ListPicker &list)
         const services::roaming::HeardList::Entry &e = v.entries[k];
         // The repeater's name, cut to leave its value room; "438.2125", its
         // output frequency, when it has none.
-        constexpr std::size_t NameChars = 15;
+        constexpr int NameChars = 15;
         lib::StaticString<24> text;
         std::array<char, CodeplugSource::SiteNameBytes + 1> name{};
         if (codeplug != nullptr && codeplug->roamingSiteName(roamingZone, e.position, name) && name[0] != '\0') {
-            text << std::string_view(name.data()).substr(0, NameChars);
+            text << cut(name.data(), NameChars);
         } else {
             const std::uint32_t frac = v.receiveHz[k] / 100 % 10'000;
             text << v.receiveHz[k] / 1'000'000 << '.' << static_cast<char>('0' + frac / 1000)
