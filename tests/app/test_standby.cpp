@@ -118,3 +118,16 @@ TEST_CASE("the bottom row's details: an FM simplex channel shows the zone and it
     s.layout.bottom = HomeLayout::Bottom::None;
     CHECK(bottom(sel, s).empty());
 }
+
+TEST_CASE("a receive-only channel says so on the bottom row, alone when the row shows nothing else")
+{
+    FakeCodeplug cp;
+    ChannelSelector sel(cp);
+    auto receiveOnly = [](std::uint16_t, Channel &c) { c.receiveOnly = true; };
+    sel.setAdjust(receiveOnly);
+    REQUIRE(sel.load());
+    StandbyState s;
+    CHECK(bottom(sel, s) == "Local  1/3  RX ONLY");
+    s.layout.bottom = HomeLayout::Bottom::None;
+    CHECK(bottom(sel, s) == "RX ONLY");
+}

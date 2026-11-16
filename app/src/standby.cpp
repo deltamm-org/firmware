@@ -407,7 +407,7 @@ lib::StaticString<48> bottomText(const ChannelSelector &sel, const StandbyState 
         }
     }
     if (c && c->receiveOnly && s.entry.empty()) {
-        info << "  RX ONLY";
+        info << (info.size() == 0 ? "" : "  ") << "RX ONLY";
     }
     lib::StaticString<48> text;
     text << cut(info.view(), chars);
