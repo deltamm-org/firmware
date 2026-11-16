@@ -4,6 +4,7 @@
 #pragma once
 
 #include "dmm/services/dmr.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/key_lock.h"
 #include "dmm/services/power_level.h"
 #include "dmm/services/tone.h"
@@ -94,14 +95,15 @@ struct CodeplugSettings
     std::uint8_t zoneB = 0;
     bool sideBMain = false; // side B is the main one
     KeyLockSettings keyLock;
-    std::uint8_t batterySave = 0;       // 0 = off; 1 or 2 = the receiver sleeps 150 or 70 ms per cycle
-    std::uint16_t backlightS = 0;       // backlight time after the last key; 0 = always on
-    std::uint8_t backlightLevel = 4;    // display brightness, 1..5
-    bool voiceEnhancement = false;      // transmit voice shaped by the radio's equalizer
-    std::uint8_t fmMicrophoneLevel = 2; // FM microphone gain, 0..4 (shown 1..5)
-    bool gps = false;                   // GPS receiver on
-    std::uint8_t gpsSystems = 3;        // satellite systems, gps_systems bits
-    std::int16_t timeZoneMinutes = 0;   // local time minus UTC
+    std::uint8_t batterySave = 0;        // 0 = off; 1 or 2 = the receiver sleeps 150 or 70 ms per cycle
+    std::uint16_t backlightS = 0;        // backlight time after the last key; 0 = always on
+    std::uint8_t backlightLevel = 4;     // display brightness, 1..5
+    bool voiceEnhancement = false;       // transmit voice shaped by the radio's equalizer
+    std::uint8_t dmrMicrophoneLevel = 2; // DMR microphone gain, 0..4 (shown 1..5)
+    std::uint8_t fmMicrophoneLevel = 2;  // FM microphone gain, 0..4 (shown 1..5)
+    bool gps = false;                    // GPS receiver on
+    std::uint8_t gpsSystems = 3;         // satellite systems, gps_systems bits
+    std::int16_t timeZoneMinutes = 0;    // local time minus UTC
     RoamingSettings roaming;
     /// The side keys' functions on a short and a long press.
     KeyFunction sideShort[SideKeys] = {};
@@ -113,6 +115,16 @@ struct CodeplugSettings
 /// added gives that field its default here.
 struct RadioPreferences
 {
+    /// What each row of the home screen shows.
+    HomeLayout home;
+    /// The menu's two lines about the chosen row are shown.
+    bool menuHelp = true;
+    /// What Up and Down do on the home screen.
+    HomeUpDown upDown = HomeUpDown::Zone;
+    /// Microphone gain in dB (microphone_gain) on DMR and on FM channels;
+    /// none follows the codeplug's level.
+    std::optional<std::uint8_t> dmrMicGainDb;
+    std::optional<std::uint8_t> fmMicGainDb;
 };
 
 /// One repeater of a roaming zone.

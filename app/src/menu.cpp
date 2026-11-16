@@ -17,8 +17,8 @@ constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Di
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
-constexpr Row SettingsRows[] = {Group::Keys, Group::Battery, Group::Clock};
-constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime};
+constexpr Row SettingsRows[] = {Group::Home, Group::Audio, Group::Keys, Group::Battery, Group::Clock};
+constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime, Item::MenuHelp};
 // The key test, for bringing up a radio, only in builds that have it.
 #ifdef DMM_KEY_TEST
 constexpr Row ToolsRows[] = {Item::Log, Item::KeyTest, Item::Version};
@@ -27,6 +27,9 @@ constexpr std::string_view ToolsAbout = "The log, the key test and the version";
 constexpr Row ToolsRows[] = {Item::Log, Item::Version};
 constexpr std::string_view ToolsAbout = "The log and the version";
 #endif
+constexpr Row HomeRows[] = {Item::HomePreset, Item::HomeTop, Item::HomeClock, Item::HomeBig, Item::HomeMiddle,
+    Item::HomeBeside, Item::HomeBottom, Item::HomeUpDown};
+constexpr Row AudioRows[] = {Item::DmrMicGain, Item::FmMicGain};
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock};
 constexpr Row BatteryRows[] = {Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
@@ -36,9 +39,11 @@ constexpr GroupInfo Groups[] = {
     {"Channel", "Squelch and power of the channel in use", ChannelRows},
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "On or off, the fix and the satellite systems", GpsRows},
-    {"Display", "Brightness and how long the light stays on", DisplayRows},
-    {"Settings", "Keys, battery and clock", SettingsRows},
+    {"Display", "Brightness, light time, help text", DisplayRows},
+    {"Settings", "Home screen, audio, keys, battery, clock", SettingsRows},
     {"Tools", ToolsAbout, ToolsRows},
+    {"Home screen", "What each row of the home screen shows", HomeRows},
+    {"Audio", "The microphone gain on DMR and FM", AudioRows},
     {"Keys", "What the key lock covers, and auto lock", KeysRows},
     {"Battery", "Battery save while the radio is quiet", BatteryRows},
     {"Clock", "The time zone", ClockRows},
@@ -56,11 +61,22 @@ constexpr ItemInfo Items[] = {
     {"Enabled", "The GPS receiver on or off", Kind::Value},
     {"Brightness", "Display brightness", Kind::Value},
     {"Light time", "How long the light stays on after a key", Kind::Value},
+    {"Help text", "These two lines about the chosen row", Kind::Value},
+    {"DMR mic gain", "Voice level sent on DMR, from the next call", Kind::Value},
+    {"FM mic gain", "Voice level sent on FM, from the next call", Kind::Value},
     {"Lock covers", "What the key lock covers", Kind::Value},
     {"Auto lock", "Lock the keys after this long without use", Kind::Value},
     {"Battery save", "Sleep between checks for a signal while quiet", Kind::Value},
     {"Time zone", "Local time's offset from UTC", Kind::Value},
     {"Satellites", "Satellite systems used: GPS, GLONASS, BeiDou", Kind::Value},
+    {"Preset", "A whole layout at once; rows can then change", Kind::Value},
+    {"Top line", "Small line at the top: talkgroup, zone, place", Kind::Value},
+    {"Clock", "The time at the top right", Kind::Value},
+    {"Large name", "The large name: channel, contact or zone", Kind::Value},
+    {"Middle row", "Frequency, contact or signal under the name", Kind::Value},
+    {"Next to power", "Voltage, volume, signal or none", Kind::Value},
+    {"Bottom row", "Details, last caller or GPS position", Kind::Value},
+    {"Up/Down", "Up and Down: next zone, next channel or off", Kind::Value},
     {"Log", "The radio's log; hold Exit for the next screen", Kind::Screen},
     {"Key test", "Shows each key pressed; hold Exit for the next", Kind::Screen},
     {"Version", "The firmware's version and time since start", Kind::Info},
@@ -85,6 +101,22 @@ namespace g = services::gps_systems;
 constexpr Fixed GpsSystems[] = {{g::Gps | g::Beidou, "GPS+BeiDou"}, {g::Gps, "GPS"}, {g::Beidou, "BeiDou"},
     {g::Gps | g::Glonass, "GPS+GLONASS"}, {g::Glonass, "GLONASS"}, {g::Beidou | g::Glonass, "BeiDou+GLONASS"},
     {g::All, "All types"}};
+// The home screen's choices, numbered as services::HomeLayout's.
+constexpr Fixed HomePresets[] = {{static_cast<std::int32_t>(services::HomePreset::Detailed), "Detailed"},
+    {static_cast<std::int32_t>(services::HomePreset::Simple), "Simple"},
+    {static_cast<std::int32_t>(services::HomePreset::Roaming), "Roaming"}};
+constexpr Fixed HomeTops[] = {{0, "Talkgroup"}, {1, "Zone"}, {2, "Number"}, {3, "None"}};
+constexpr Fixed HomeBigs[] = {{0, "Channel"}, {1, "Contact"}, {2, "Zone"}};
+constexpr Fixed HomeMiddles[] = {{0, "Frequency"}, {1, "Talkgroup"}, {2, "Signal"}};
+constexpr Fixed HomeBesides[] = {{0, "Voltage"}, {1, "Volume"}, {2, "Signal"}, {3, "None"}};
+constexpr Fixed HomeBottoms[] = {{0, "Details"}, {1, "Last caller"}, {2, "Position"}, {3, "None"}};
+static_assert(std::size(HomeTops) == static_cast<std::size_t>(services::HomeLayout::Top::Count));
+static_assert(std::size(HomeBigs) == static_cast<std::size_t>(services::HomeLayout::Big::Count));
+static_assert(std::size(HomeMiddles) == static_cast<std::size_t>(services::HomeLayout::Middle::Count));
+static_assert(std::size(HomeBesides) == static_cast<std::size_t>(services::HomeLayout::Beside::Count));
+static_assert(std::size(HomeBottoms) == static_cast<std::size_t>(services::HomeLayout::Bottom::Count));
+constexpr Fixed HomeUpDowns[] = {{0, "Zone"}, {1, "Channel"}, {2, "Off"}};
+static_assert(std::size(HomeUpDowns) == static_cast<std::size_t>(services::HomeUpDown::Count));
 // Light time choices, in seconds.
 constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
 // Time zones: UTC-12:00 to UTC+14:00 in half hours.
@@ -92,6 +124,7 @@ constexpr int ZoneFirstMinutes = -12 * 60;
 constexpr int ZoneLastMinutes = 14 * 60;
 constexpr int ZoneStepMinutes = 30;
 constexpr int MaxLevel = 5;
+namespace mic = services::microphone_gain;
 
 std::span<const Fixed> fixedChoices(Item item)
 {
@@ -102,7 +135,23 @@ std::span<const Fixed> fixedChoices(Item item)
         return Powers;
     case Item::Roaming:
     case Item::Gps:
+    case Item::HomeClock:
+    case Item::MenuHelp:
         return OffOn;
+    case Item::HomePreset:
+        return HomePresets;
+    case Item::HomeTop:
+        return HomeTops;
+    case Item::HomeBig:
+        return HomeBigs;
+    case Item::HomeMiddle:
+        return HomeMiddles;
+    case Item::HomeBeside:
+        return HomeBesides;
+    case Item::HomeBottom:
+        return HomeBottoms;
+    case Item::HomeUpDown:
+        return HomeUpDowns;
     case Item::KeyLock:
         return LockCovers;
     case Item::AutoLock:
@@ -242,6 +291,18 @@ Kept keptIn(Item item)
     case Item::SquelchMode:
     case Item::Power:
         return Kept::Channel;
+    case Item::HomePreset:
+    case Item::HomeTop:
+    case Item::HomeClock:
+    case Item::HomeBig:
+    case Item::HomeMiddle:
+    case Item::HomeBeside:
+    case Item::HomeBottom:
+    case Item::HomeUpDown:
+    case Item::MenuHelp:
+    case Item::DmrMicGain:
+    case Item::FmMicGain:
+        return Kept::Preferences;
     case Item::Squelch:
     case Item::Roaming:
     case Item::RoamZone:
@@ -298,6 +359,10 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return s.backlight;
     case Item::BacklightTime:
         return s.backlightS;
+    case Item::DmrMicGain:
+        return s.dmrMicGainDb ? *s.dmrMicGainDb : FromCodeplug + s.plugDmrMicGainDb;
+    case Item::FmMicGain:
+        return s.fmMicGainDb ? *s.fmMicGainDb : FromCodeplug + s.plugFmMicGainDb;
     case Item::KeyLock:
         return k.knob ? 0 : k.keypad && k.side ? 1
             : k.keypad                         ? 2
@@ -310,6 +375,24 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return s.timeZoneMinutes;
     case Item::GpsSystems:
         return s.gpsSystems;
+    case Item::HomePreset:
+        return static_cast<std::int32_t>(services::presetOf(s.home));
+    case Item::HomeTop:
+        return static_cast<std::int32_t>(s.home.top);
+    case Item::HomeClock:
+        return s.home.clock ? 1 : 0;
+    case Item::MenuHelp:
+        return s.menuHelp ? 1 : 0;
+    case Item::HomeBig:
+        return static_cast<std::int32_t>(s.home.big);
+    case Item::HomeMiddle:
+        return static_cast<std::int32_t>(s.home.middle);
+    case Item::HomeBeside:
+        return static_cast<std::int32_t>(s.home.beside);
+    case Item::HomeBottom:
+        return static_cast<std::int32_t>(s.home.bottom);
+    case Item::HomeUpDown:
+        return static_cast<std::int32_t>(s.upDown);
     case Item::RoamStatus:
     case Item::GpsStatus:
     case Item::Log:
@@ -349,6 +432,12 @@ void setChoice(Item item, std::int32_t value, Settings &s)
     case Item::BacklightTime:
         s.backlightS = static_cast<std::uint16_t>(value);
         break;
+    case Item::DmrMicGain:
+        s.dmrMicGainDb = value < FromCodeplug ? std::optional(byte) : std::nullopt;
+        break;
+    case Item::FmMicGain:
+        s.fmMicGainDb = value < FromCodeplug ? std::optional(byte) : std::nullopt;
+        break;
     case Item::KeyLock:
         s.keyLock.keypad = value != 3;
         s.keyLock.side = value != 2;
@@ -365,6 +454,33 @@ void setChoice(Item item, std::int32_t value, Settings &s)
         break;
     case Item::GpsSystems:
         s.gpsSystems = byte;
+        break;
+    case Item::HomePreset:
+        s.home = services::presetLayout(static_cast<services::HomePreset>(byte));
+        break;
+    case Item::HomeTop:
+        s.home.top = static_cast<services::HomeLayout::Top>(byte);
+        break;
+    case Item::HomeClock:
+        s.home.clock = value != 0;
+        break;
+    case Item::MenuHelp:
+        s.menuHelp = value != 0;
+        break;
+    case Item::HomeBig:
+        s.home.big = static_cast<services::HomeLayout::Big>(byte);
+        break;
+    case Item::HomeMiddle:
+        s.home.middle = static_cast<services::HomeLayout::Middle>(byte);
+        break;
+    case Item::HomeBeside:
+        s.home.beside = static_cast<services::HomeLayout::Beside>(byte);
+        break;
+    case Item::HomeBottom:
+        s.home.bottom = static_cast<services::HomeLayout::Bottom>(byte);
+        break;
+    case Item::HomeUpDown:
+        s.upDown = static_cast<services::HomeUpDown>(byte);
         break;
     case Item::RoamStatus:
     case Item::GpsStatus:
@@ -392,6 +508,14 @@ ValueText valueText(Item item, std::int32_t value)
         return t;
     case Item::BacklightTime:
         return durationText(value);
+    case Item::DmrMicGain:
+    case Item::FmMicGain:
+        if (value >= FromCodeplug) {
+            t << "Plug ";
+            value -= FromCodeplug;
+        }
+        t << '+' << value << " dB";
+        return t;
     case Item::AutoLock:
         if (value == 0) {
             t << "Off";
@@ -404,6 +528,12 @@ ValueText valueText(Item item, std::int32_t value)
     case Item::GpsSystems:
         t << services::gps_systems::name(static_cast<std::uint8_t>(value));
         return t;
+    case Item::HomePreset:
+        if (value == static_cast<std::int32_t>(services::HomePreset::Own)) {
+            t << "Own";
+            return t;
+        }
+        break;
     default:
         break;
     }
@@ -446,7 +576,7 @@ std::size_t Choices::find(std::int32_t value) const
     return m_count;
 }
 
-bool listChoices(Item item, Choices &out)
+bool listChoices(Item item, Choices &out, const Settings &s)
 {
     out.clear();
     switch (item) {
@@ -463,8 +593,8 @@ bool listChoices(Item item, Choices &out)
         }
         return true;
     case Item::BacklightTime:
-        for (const std::uint16_t s : BacklightTimes) {
-            out.add(s, durationText(s).view());
+        for (const std::uint16_t seconds : BacklightTimes) {
+            out.add(seconds, durationText(seconds).view());
         }
         return true;
     case Item::TimeZone:
@@ -472,6 +602,18 @@ bool listChoices(Item item, Choices &out)
             out.add(m, zoneText(m).view());
         }
         return true;
+    case Item::DmrMicGain:
+    case Item::FmMicGain: {
+        const bool dmr = item == Item::DmrMicGain;
+        const std::int32_t plug = FromCodeplug + (dmr ? s.plugDmrMicGainDb : s.plugFmMicGainDb);
+        ValueText text;
+        text << "Codeplug " << valueText(item, plug - FromCodeplug).view();
+        out.add(plug, text.view());
+        for (std::int32_t db = mic::MinDb; db <= (dmr ? mic::MaxDigitalDb : mic::MaxFmDb); ++db) {
+            out.add(db, valueText(item, db).view());
+        }
+        return true;
+    }
     default:
         break;
     }

@@ -57,6 +57,9 @@ enum class BasebandWorkMode : std::uint8_t
 ///   only while told a carrier is present.
 /// - setMicrophone(on): connects the microphone for transmit, or
 ///   disconnects it and restores the receive levels.
+/// - setMicrophoneGain(digitalDb, analogDb): the microphone gain in dB
+///   (microphone_gain) on digital and on analog channels, from the next
+///   time the microphone is connected. Kept across restarts.
 /// - setDigital(settings, receiveHz, transmitHz, repeater): DMR on the
 ///   channel's colour code, at the radio's calibrated levels for the
 ///   channel's frequencies, receiving the channel's slot through a
@@ -82,7 +85,7 @@ enum class BasebandWorkMode : std::uint8_t
 template <class T>
 concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, std::uint16_t ms, int percent, bool on,
     BasebandWorkMode mode, std::string_view text, const dmr::ChannelSettings &dmrSettings, std::uint32_t receiveHz,
-    dmr::Event &event, const dmr::FullLc &lc, PowerLevel level) {
+    dmr::Event &event, const dmr::FullLc &lc, PowerLevel level, int db) {
     { bb.start() } -> std::same_as<bool>;
     { bb.info() } -> std::same_as<BasebandInfo>;
     { bb.setSpeakerVolume(step) } -> std::same_as<bool>;
@@ -92,6 +95,7 @@ concept Baseband = requires(T &bb, const T &state, int step, std::uint16_t hz, s
     { bb.setVoiceEnhancement(on) } -> std::same_as<bool>;
     { bb.setCarrier(on) } -> std::same_as<bool>;
     { bb.setMicrophone(on) } -> std::same_as<bool>;
+    bb.setMicrophoneGain(db, db);
     { bb.setDigital(dmrSettings, receiveHz, receiveHz, on) } -> std::same_as<bool>;
     { bb.nextEvent(event) } -> std::same_as<bool>;
     { bb.searchSlot(step) } -> std::same_as<bool>;

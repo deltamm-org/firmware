@@ -7,6 +7,7 @@
 
 #include <doctest/doctest.h>
 
+#include <optional>
 #include <string_view>
 
 using namespace dmm::app::ui::menu;
@@ -144,6 +145,8 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     CHECK(nav.current().group == Group::Settings);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Settings);
+    CHECK(nav.current().group == Group::Home);
+    moveTo(nav, 2);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Keys);
     CHECK(nav.press(Key::Down) == Step::Moved);
@@ -188,10 +191,13 @@ TEST_CASE("GPS is one group, and GPS and Roaming start with their switch")
 TEST_CASE("Settings holds the keys and the battery in groups of their own")
 {
     const std::span<const Row> rows = info(Group::Settings).rows;
-    REQUIRE(rows.size() >= 3);
-    CHECK(rows[0].group == Group::Keys);
-    CHECK(rows[1].group == Group::Battery);
-    CHECK(rows[2].group == Group::Clock);
+    std::size_t keys = 0;
+    while (keys < rows.size() && rows[keys].group != Group::Keys) {
+        ++keys;
+    }
+    REQUIRE(keys + 2 < rows.size());
+    CHECK(rows[keys + 1].group == Group::Battery);
+    CHECK(rows[keys + 2].group == Group::Clock);
     CHECK(info(Group::Keys).rows.size() == 2);
     REQUIRE(info(Group::Battery).rows.size() == 1);
     CHECK(info(Group::Battery).rows[0].item == Item::BatterySave);
@@ -460,4 +466,109 @@ TEST_CASE("an about text too long for two lines does not fit")
     CHECK(first == "Open, or 1 to 5: higher");
     CHECK(second == "needs a stronger signal");
     CHECK(!splitAbout("This sentence is much too long to fit in the two lines of the panel", first, second));
+}
+
+TEST_CASE("the home screen group sets a preset or each row, kept with the preferences")
+{
+    using dmm::services::HomeLayout;
+    using dmm::services::HomePreset;
+    CHECK(parentOf(Group::Home).group == Group::Settings);
+    CHECK(parentOf(Group::Home).row == 0);
+    CHECK(keptIn(Item::HomeBottom) == Kept::Preferences);
+
+    Settings s;
+    CHECK(valueText(Item::HomePreset, choiceOf(Item::HomePreset, s)).view() == "Detailed");
+    setChoice(Item::HomePreset, static_cast<std::int32_t>(HomePreset::Simple), s);
+    CHECK(s.home == dmm::services::presetLayout(HomePreset::Simple));
+    CHECK(valueText(Item::HomeBottom, choiceOf(Item::HomeBottom, s)).view() == "None");
+
+    // A row changed on its own makes the layout the user's own.
+    setChoice(Item::HomeBeside, static_cast<std::int32_t>(HomeLayout::Beside::Signal), s);
+    CHECK(s.home.beside == HomeLayout::Beside::Signal);
+    CHECK(valueText(Item::HomePreset, choiceOf(Item::HomePreset, s)).view() == "Own");
+    // Own is shown but not offered: the value screen opens on the first preset.
+    Choices c;
+    REQUIRE(listChoices(Item::HomePreset, c));
+    CHECK(c.size() == 3);
+    CHECK(c.find(choiceOf(Item::HomePreset, s)) == c.size());
+}
+
+TEST_CASE("Up/Down sets zones, channels or nothing, zones by default, kept with the preferences")
+{
+    using dmm::services::HomeUpDown;
+    const std::span<const Row> home = info(Group::Home).rows;
+    REQUIRE(!home.empty());
+    CHECK(home.back().item == Item::HomeUpDown);
+    CHECK(keptIn(Item::HomeUpDown) == Kept::Preferences);
+    CHECK(!previews(Item::HomeUpDown));
+
+    Settings s;
+    CHECK(valueText(Item::HomeUpDown, choiceOf(Item::HomeUpDown, s)).view() == "Zone");
+    // Changing the preset leaves it as it is.
+    setChoice(Item::HomeUpDown, static_cast<std::int32_t>(HomeUpDown::Channel), s);
+    setChoice(Item::HomePreset, static_cast<std::int32_t>(dmm::services::HomePreset::Simple), s);
+    CHECK(s.upDown == HomeUpDown::Channel);
+    CHECK(valueText(Item::HomeUpDown, choiceOf(Item::HomeUpDown, s)).view() == "Channel");
+    Choices c;
+    REQUIRE(listChoices(Item::HomeUpDown, c));
+    REQUIRE(c.size() == 3);
+    CHECK(c.find(static_cast<std::int32_t>(HomeUpDown::Off)) == 2);
+}
+
+TEST_CASE("the menu's help text can be hidden, kept with the preferences")
+{
+    const std::span<const Row> display = info(Group::Display).rows;
+    REQUIRE(display.size() == 3);
+    CHECK(display[2].item == Item::MenuHelp);
+    CHECK(keptIn(Item::MenuHelp) == Kept::Preferences);
+    CHECK(!previews(Item::MenuHelp));
+    Settings s;
+    CHECK(s.menuHelp);
+    CHECK(valueText(Item::MenuHelp, choiceOf(Item::MenuHelp, s)).view() == "On");
+    setChoice(Item::MenuHelp, 0, s);
+    CHECK(!s.menuHelp);
+    CHECK(valueText(Item::MenuHelp, choiceOf(Item::MenuHelp, s)).view() == "Off");
+}
+
+TEST_CASE("the microphone gains follow the codeplug's level until set in dB, FM to a lower top")
+{
+    Settings s;
+    s.plugDmrMicGainDb = 14;
+    s.plugFmMicGainDb = 18;
+    CHECK(keptIn(Item::DmrMicGain) == Kept::Preferences);
+    CHECK(choiceOf(Item::DmrMicGain, s) == FromCodeplug + 14);
+    CHECK(valueText(Item::DmrMicGain, choiceOf(Item::DmrMicGain, s)).view() == "Plug +14 dB");
+
+    Choices c;
+    REQUIRE(listChoices(Item::DmrMicGain, c, s));
+    CHECK(c.size() == 32);
+    CHECK(c.value(0) == FromCodeplug + 14);
+    CHECK(c.text(0) == "Codeplug +14 dB");
+    CHECK(c.text(1) == "+0 dB");
+    CHECK(c.value(31) == 30);
+    CHECK(styleOf(c) == Style::Spinner);
+    REQUIRE(listChoices(Item::FmMicGain, c, s));
+    CHECK(c.size() == 26);
+    CHECK(c.text(0) == "Codeplug +18 dB");
+    CHECK(c.value(25) == 24);
+
+    setChoice(Item::FmMicGain, 12, s);
+    CHECK(s.fmMicGainDb == std::optional<std::uint8_t>(12));
+    CHECK(valueText(Item::FmMicGain, choiceOf(Item::FmMicGain, s)).view() == "+12 dB");
+    CHECK(!s.dmrMicGainDb.has_value());
+    setChoice(Item::FmMicGain, FromCodeplug + 18, s);
+    CHECK(!s.fmMicGainDb.has_value());
+}
+
+TEST_CASE("Settings opens Audio with the two microphone gains")
+{
+    Navigator nav;
+    nav.open(Group::Settings);
+    moveTo(nav, 1);
+    REQUIRE(nav.current().group == Group::Audio);
+    CHECK(nav.press(Key::Menu) == Step::Opened);
+    CHECK(groupTitle(Group::Audio).view() == "Settings > Audio");
+    CHECK(nav.current().item == Item::DmrMicGain);
+    CHECK(nav.press(Key::Down) == Step::Moved);
+    CHECK(nav.current().item == Item::FmMicGain);
 }

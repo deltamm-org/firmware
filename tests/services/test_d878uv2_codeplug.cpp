@@ -4,6 +4,7 @@
 #include "../drivers/fake_spi_nand.h"
 #include "dmm/services/d878uv2_codeplug.h"
 #include "dmm/services/d878uv2_storage.h"
+#include "dmm/services/microphone_gain.h"
 
 #include <doctest/doctest.h>
 
@@ -128,6 +129,33 @@ TEST_CASE("the extended settings give the GPS satellite systems")
     e[0x43] = 7; // out of range: the middle one
     dmm::services::decodeSettingsExtension(e, s);
     CHECK(s.fmMicrophoneLevel == 2);
+}
+
+TEST_CASE("microphone gain levels 1 to 5 are 12, 14, 16, 18 and 21 dB around the standard 16 dB")
+{
+    namespace gain = dmm::services::microphone_gain;
+    CHECK(gain::fromLevel(0) == 12);
+    CHECK(gain::fromLevel(1) == 14);
+    CHECK(gain::fromLevel(2) == gain::StandardDb);
+    CHECK(gain::fromLevel(3) == 18);
+    CHECK(gain::fromLevel(4) == 21);
+    CHECK(gain::fromLevel(-1) == gain::StandardDb);
+    CHECK(gain::fromLevel(5) == gain::StandardDb);
+    CHECK(gain::nearestLevel(0) == 0);
+    CHECK(gain::nearestLevel(15) == 1); // as near to 14 as to 16: the lower
+    CHECK(gain::nearestLevel(16) == 2);
+    CHECK(gain::nearestLevel(20) == 4);
+    CHECK(gain::nearestLevel(30) == 4);
+    CHECK(gain::clampDigital(-1) == 0);
+    CHECK(gain::clampDigital(31) == 30);
+    CHECK(gain::clampFm(25) == 24);
+    std::vector<std::uint8_t> b(0x100, 0);
+    b[0x0F] = 0; // level 1
+    CHECK(dmm::services::decodeSettings(b).dmrMicrophoneLevel == 0);
+    b[0x0F] = 3; // level 4
+    CHECK(dmm::services::decodeSettings(b).dmrMicrophoneLevel == 3);
+    b[0x0F] = 0xFF; // erased: the middle one
+    CHECK(dmm::services::decodeSettings(b).dmrMicrophoneLevel == 2);
 }
 
 TEST_CASE("settings: squelch, zones, timeout, key lock, battery save and backlight")

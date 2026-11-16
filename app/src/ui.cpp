@@ -17,12 +17,17 @@
 #include "dmm/services/channel_selector.h"
 #include "dmm/services/clock.h"
 #include "dmm/services/codeplug.h"
+#include "dmm/services/home_screen.h"
 #include "dmm/services/input.h"
 #include "dmm/services/log.h"
+#include "dmm/services/microphone_gain.h"
 #include "dmm/services/power.h"
 #include "dmm/version.h"
 
+#include <algorithm>
+#include <array>
 #include <iterator>
+#include <optional>
 #include <string_view>
 
 namespace dmm::app::ui {
@@ -189,50 +194,45 @@ struct BatteryState
 
 BatteryState batteryState;
 
-// Right-aligned in the header: four bars (red when low) and the voltage.
+// Right-aligned in the header: a battery icon.
 // The radio's own screens put it in their taller status bar.
 int headerHeight = 8;
 int headerTop = 0;
 
-// The battery at the header's right end, in its own field from 48 pixels
-// before the edge: the voltage, then four bars. Everything is drawn in
-// place with only the gaps painted, so an update does not flicker.
+// A battery at the header's right end, in its own field
+// (StandbyScreen::BatteryW): filled from the left by its level, so the
+// outline shows as it drains, red when low. Every pixel is painted once,
+// so an update does not flicker.
 void drawBattery(Display &d)
 {
     const BatteryState &b = batteryState;
     const int w = d.width();
-    const int fieldX = w - 48;
-    const int barsX = w - 13;
-    lib::StaticString<12> text;
+    const int fieldX = w - StandbyScreen::BatteryW;
+    constexpr int BodyW = 19;
+    constexpr int InnerW = BodyW - 2;
+    const int x = w - 5 - BodyW;
+    const int y = headerTop == 0 ? 0 : 2;
+    const int bodyH = std::min(7, headerHeight - y);
+    const Color ink = b.low ? colors::Red : colors::White;
+    int filled = 0;
     if (b.millivolts > 0) {
-        const int cv = (b.millivolts + 5) / 10;
-        text << cv / 100 << '.' << static_cast<char>('0' + cv / 10 % 10) << 'V';
+        // A low battery keeps a sliver.
+        filled = std::max(b.level * InnerW / 3, b.low ? 3 : 0);
     }
-    const int textW = static_cast<int>(text.view().size()) * HeaderFont.width;
-    const int tx = barsX - textW - 2;
-    const int below = headerTop + HeaderFont.height;
-    drawText(d, HeaderFont, tx, headerTop, text.view(), b.low ? colors::Red : colors::White, headerGround);
-    fillArea(d, fieldX, 0, tx - fieldX, headerHeight, headerGround);
-    fillArea(d, tx, 0, textW, headerTop, headerGround);
-    fillArea(d, tx, below, textW, headerHeight - below, headerGround);
-    fillArea(d, tx + textW, 0, barsX - tx - textW, headerHeight, headerGround);
-    if (b.millivolts <= 0) {
-        fillArea(d, barsX, 0, w - barsX, headerHeight, headerGround);
-        return;
-    }
-    const Color on = b.low ? colors::Red : colors::Green;
-    for (int i = 0; i < 4; ++i) {
-        // The first bar always shows, so an empty battery still has one red bar.
-        const bool lit = i == 0 || i <= b.level;
-        const int bx = barsX + i * 3;
-        const int by = headerTop + 7 - (i + 1) * 2 + 1;
-        const int bh = (i + 1) * 2 - 1;
-        d.fillRect(bx, by, 2, bh, lit ? on : rgb(60, 60, 60));
-        fillArea(d, bx, 0, 2, by, headerGround);
-        fillArea(d, bx, by + bh, 2, headerHeight - by - bh, headerGround);
-        fillArea(d, bx + 2, 0, 1, headerHeight, headerGround);
-    }
-    fillArea(d, barsX + 12, 0, w - barsX - 12, headerHeight, headerGround);
+    fillArea(d, fieldX, 0, x - fieldX, headerHeight, headerGround);
+    fillArea(d, x, 0, w - x, y, headerGround);
+    fillArea(d, x, y + bodyH, w - x, headerHeight - y - bodyH, headerGround);
+    d.fillRect(x, y, BodyW, 1, ink);
+    d.fillRect(x, y + bodyH - 1, BodyW, 1, ink);
+    d.fillRect(x, y + 1, 1, bodyH - 2, ink);
+    d.fillRect(x + BodyW - 1, y + 1, 1, bodyH - 2, ink);
+    fillArea(d, x + 1, y + 1, filled, bodyH - 2, ink);
+    fillArea(d, x + 1 + filled, y + 1, InnerW - filled, bodyH - 2, headerGround);
+    // The terminal.
+    d.fillRect(x + BodyW, y + 2, 2, bodyH - 4, ink);
+    fillArea(d, x + BodyW, y, 2, 2, headerGround);
+    fillArea(d, x + BodyW, y + bodyH - 2, 2, 2, headerGround);
+    fillArea(d, x + BodyW + 2, y, w - x - BodyW - 2, bodyH, headerGround);
 }
 
 services::KeyLock keyLock;
@@ -243,7 +243,7 @@ bool transmitting = false;
 constexpr int LockMarkW = 4 * 5 + 3;
 int lockMarkX(const Display &d)
 {
-    return d.width() - 48 - LockMarkW;
+    return d.width() - StandbyScreen::BatteryW - LockMarkW;
 }
 
 void drawLockMark(Display &d)
@@ -427,16 +427,20 @@ std::uint8_t gpsSystems = services::gps_systems::Gps | services::gps_systems::Be
 // Local time minus UTC, from the codeplug, in half-hour steps.
 int timeZoneMinutes = 0;
 
-// The local time as "HH:MM", or empty while the clock does not know it.
-lib::StaticString<6> localClockText()
+// The local time at UTC @p utc as "HH:MM".
+lib::StaticString<6> localClockText(std::uint32_t utc)
 {
     lib::StaticString<6> s;
-    if (const auto utc = system::utcNow()) {
-        const services::DateTime t = services::dateTime(static_cast<std::uint32_t>(static_cast<std::int64_t>(*utc) + timeZoneMinutes * 60));
-        s << lib::zeroPadded(t.hour, 2) << ':' << lib::zeroPadded(t.minute, 2);
-    }
+    const services::DateTime t = services::dateTime(static_cast<std::uint32_t>(static_cast<std::int64_t>(utc) + timeZoneMinutes * 60));
+    s << lib::zeroPadded(t.hour, 2) << ':' << lib::zeroPadded(t.minute, 2);
     return s;
 }
+// What each row of the home screen shows.
+services::HomeLayout homeLayout;
+// The menu's panel about the chosen row is shown.
+bool menuHelp = true;
+// What Up and Down do on the home screen.
+services::HomeUpDown homeUpDown = services::HomeUpDown::Zone;
 // The volume step 0..15, -1 until the knob has been read.
 int volumeLevel = -1;
 bool receiving = false;
@@ -458,12 +462,49 @@ struct HeardCall
 };
 HeardCall heard;
 char callChannel[Channel::NameBytes + 1] = {};
+// The last call heard, for the home screen: the caller's name (empty when
+// not known), ID, and when the call ended (0 for none).
+char lastCaller[CodeplugSource::ContactNameBytes + 1] = {};
+std::uint32_t lastCallerId = 0;
+os::Ticks lastCallAt = 0;
 // Roaming: the roaming zone, how many repeaters it has, and the repeater
 // the radio task last reported.
 std::uint8_t roamingZone = services::RoamingSettings::NoZone;
 std::size_t roamingSites = 0;
 // Auto roaming: the codeplug's choice at start, then the menu's.
 bool autoRoaming = false;
+// Microphone gain on DMR and FM: the codeplug's levels in dB, and the dB
+// set on the radio, which wins.
+std::uint8_t plugDmrMicGainDb = services::microphone_gain::StandardDb;
+std::uint8_t plugFmMicGainDb = services::microphone_gain::StandardDb;
+std::optional<std::uint8_t> dmrMicGainDb;
+std::optional<std::uint8_t> fmMicGainDb;
+
+void postMicrophoneGain()
+{
+    radio::post(radio::MicrophoneGain{static_cast<std::int8_t>(dmrMicGainDb.value_or(plugDmrMicGainDb)),
+        static_cast<std::int8_t>(fmMicGainDb.value_or(plugFmMicGainDb))});
+}
+
+// "+20 dB", or "codeplug" for none.
+lib::StaticString<10> keptGainText(std::optional<std::uint8_t> db)
+{
+    lib::StaticString<10> t;
+    if (db) {
+        t << '+' << *db << " dB";
+    } else {
+        t << "codeplug";
+    }
+    return t;
+}
+
+// "microphone gain: DMR +8 dB (codeplug), FM +20 dB".
+void logMicrophoneGain()
+{
+    log::info("ui") << "microphone gain: DMR +" << dmrMicGainDb.value_or(plugDmrMicGainDb) << " dB"
+                    << (dmrMicGainDb ? "" : " (codeplug)") << ", FM +" << fmMicGainDb.value_or(plugFmMicGainDb) << " dB"
+                    << (fmMicGainDb ? "" : " (codeplug)");
+}
 struct RoamState
 {
     bool searching = false;
@@ -572,6 +613,8 @@ services::KeyFunction sideShort[CodeplugSettings::SideKeys] = {};
 services::KeyFunction sideLong[CodeplugSettings::SideKeys] = {};
 bool sideLongDone[CodeplugSettings::SideKeys] = {};
 constexpr os::Ticks CallHoldMs = 5000;
+// How long the home screen shows a signal's level after it was last read.
+constexpr os::Ticks SignalHoldMs = 2000;
 constexpr std::uint32_t AllCallId = 0xFFFFFF;
 
 template <std::size_t N>
@@ -582,6 +625,41 @@ void copyName(char (&out)[N], const char *text)
         out[n] = text[n];
     }
     out[n] = '\0';
+}
+
+// The channel's contact as the home screen names it ("TG 9", and the
+// contact's name), looked up again only when the contact changes.
+char talkgroupText[16] = {};
+char talkgroupName[CodeplugSource::ContactNameBytes + 1] = {};
+services::dmr::Target talkgroupFor{services::dmr::CallType::All, 0xFFFFFFFF};
+
+// A DMR channel with a contact to call.
+bool hasTalkgroup(const Channel &c)
+{
+    return c.digital() && (c.dmr.contact.id != 0 || c.dmr.contact.type == services::dmr::CallType::All);
+}
+
+void nameTalkgroup(const services::dmr::Target &t)
+{
+    if (t == talkgroupFor) {
+        return;
+    }
+    talkgroupFor = t;
+    lib::StaticString<16> text;
+    if (t.type == services::dmr::CallType::All) {
+        text << "ALL CALL";
+    } else {
+        text << (t.type == services::dmr::CallType::Group ? "TG " : "PC ") << t.id;
+    }
+    const std::size_t n = std::min(text.view().size(), sizeof(talkgroupText) - 1);
+    std::copy_n(text.view().data(), n, talkgroupText);
+    talkgroupText[n] = '\0';
+    talkgroupName[0] = '\0';
+    std::array<char, CodeplugSource::ContactNameBytes + 1> name{};
+    if (t.type != services::dmr::CallType::All && codeplug != nullptr &&
+        codeplug->contactName(t.id, t.type == services::dmr::CallType::Group, name)) {
+        copyName(talkgroupName, name.data());
+    }
 }
 
 // Names for a call from the codeplug: the caller's own contact entry
@@ -610,8 +688,10 @@ void nameCall(HeardCall &h, CodeplugSource *plug)
         copyName(h.callerName, user.name.data());
     }
 }
-// The standby screen's quick-key hint.
+// The standby screen's quick-key hint, up to the mode # switches to, and
+// the whole hint.
 lib::StaticString<40> quickKeys;
+lib::StaticString<44> keysText;
 // Frequency digits typed on the standby screen.
 constexpr std::size_t EntryDigits = 6;
 char entry[EntryDigits + 1] = {};
@@ -747,7 +827,7 @@ void uiMain(void *)
     log::info("ui") << "display " << d.width() << " x " << d.height();
 
     quickKeys << keyText(Key::Menu) << "  " << keyText(Key::Front1) << " Zone  " << keyText(Key::Front2) << " Chan  "
-              << keyText(Key::Hash) << " VFO";
+              << keyText(Key::Hash) << ' ';
 
     // The codeplug: settings, and the channel the radio starts on.
     if (codeplug != nullptr) {
@@ -764,7 +844,10 @@ void uiMain(void *)
             if (selector.settings().voiceEnhancement) {
                 radio::post(radio::VoiceEnhancement{true});
             }
-            radio::post(radio::FmMicrophoneLevel{selector.settings().fmMicrophoneLevel});
+            plugDmrMicGainDb =
+                static_cast<std::uint8_t>(services::microphone_gain::fromLevel(selector.settings().dmrMicrophoneLevel));
+            plugFmMicGainDb =
+                static_cast<std::uint8_t>(services::microphone_gain::fromLevel(selector.settings().fmMicrophoneLevel));
             gpsAtStart = selector.settings().gps;
             gpsSystems = selector.settings().gpsSystems;
             timeZoneMinutes = selector.settings().timeZoneMinutes;
@@ -781,6 +864,14 @@ void uiMain(void *)
         } else {
             log::warning("ui") << "codeplug: no channel to start on";
         }
+        if (const auto p = codeplug->preferences()) {
+            homeLayout = p->home;
+            menuHelp = p->menuHelp;
+            homeUpDown = p->upDown;
+            dmrMicGainDb = p->dmrMicGainDb;
+            fmMicGainDb = p->fmMicGainDb;
+        }
+        postMicrophoneGain();
     }
 
     View view = View::Start;
@@ -819,7 +910,10 @@ void uiMain(void *)
         notice("Please wait...");
     };
     lib::StaticString<6> clockText;
-    os::Ticks lastClockMinute = 0;
+    lib::StaticString<12> lastCallerText;
+    // The home screen's live rows are checked this often.
+    constexpr os::Ticks HomeCheckMs = 250;
+    os::Ticks lastHomeCheck = 0;
     bool gpsScreenNeed = false;
     // Battery save also decides whether the GPS receiver sleeps between fixes.
     auto setBatterySave = [&](std::uint8_t mode) {
@@ -833,22 +927,73 @@ void uiMain(void *)
         s.receiving = receiving;
         s.locked = keyLock.locked() || keyLock.settings().forced;
         s.entry = std::string_view(entry, entryLength);
-        s.volume = volumeLevel;
-        s.keys = quickKeys.view();
+        keysText.clear();
+        keysText << quickKeys.view() << (channels != nullptr && channels->vfoMode() ? "MEM" : "VFO");
+        s.keys = keysText.view();
         s.gps = gpsState;
-        clockText = localClockText();
-        s.clock = clockText.view();
-        if (channels != nullptr) {
-            const std::optional<Channel> &ch = channels->current();
-            s.roaming = ch && ch->digital() && ch->roaming && roamingSites > 0;
+        s.layout = homeLayout;
+        services::HomeReadings &r = s.readings;
+        clockText.clear();
+        if (const auto utc = system::utcNow()) {
+            clockText = localClockText(*utc);
+            r.clockMinutes = (static_cast<std::int64_t>(*utc) + timeZoneMinutes * 60) / 60;
         }
+        s.clock = clockText.view();
+        r.volume = volumeLevel;
+        r.centivolts = (batteryState.millivolts + 5) / 10;
+        r.batteryLow = batteryState.low;
+        const Channel *ch = channels != nullptr && channels->current() ? &*channels->current() : nullptr;
+        s.roaming = ch != nullptr && ch->digital() && ch->roaming && roamingSites > 0;
         s.roamSearching = roam.searching;
         s.roamLost = roam.lost;
         s.roamHz = roam.receiveHz;
         s.roamColourCode = roam.colourCode;
+        s.roamPosition = roam.site + 1;
         s.roamSite = roam.name;
+        if (ch != nullptr && hasTalkgroup(*ch)) {
+            nameTalkgroup(ch->dmr.contact);
+            s.talkgroup = talkgroupText;
+            s.talkgroupName = talkgroupName;
+        }
+        // The signal: a quiet roaming repeater's last level while it is
+        // current, else the level heard in the last moments.
+        const os::Ticks now = os::nowMs();
+        if (homeLayout.showsSignal()) {
+            if (s.roaming && !receiving && roam.site >= 0) {
+                radio::roamingView(roamView);
+                for (std::size_t i = 0; i < roamView.count; ++i) {
+                    const auto &e = roamView.entries[i];
+                    if (e.position == roam.site && e.current(now)) {
+                        r.signalKnown = true;
+                        r.signalDbm = e.levelDbm;
+                    }
+                }
+            }
+            const radio::SignalLevel level = radio::signalLevel();
+            if (!r.signalKnown && level.known && now - level.atMs < SignalHoldMs) {
+                r.signalKnown = true;
+                r.signalDbm = level.dbm;
+            }
+        }
+        if (lastCallAt != 0) {
+            r.lastCallAt = lastCallAt;
+            r.lastCallAge = services::ageOf((now - lastCallAt) / 1000);
+            s.lastCaller = lastCaller;
+            if (lastCaller[0] == '\0') {
+                lastCallerText.clear();
+                lastCallerText << lastCallerId;
+                s.lastCaller = lastCallerText.view();
+            }
+        }
+        if (gpsState.on && gpsState.fix.valid) {
+            r.positionKnown = true;
+            r.latitudeE5 = gpsState.fix.latitudeE7 / 100;
+            r.longitudeE5 = gpsState.fix.longitudeE7 / 100;
+        }
         return s;
     };
+    // The home screen is up, not the call screen.
+    auto homeShown = [&] { return view == View::Standby && !heard.shown && channels != nullptr; };
     auto callInfo = [&] {
         CallInfo c;
         c.active = heard.active;
@@ -894,6 +1039,13 @@ void uiMain(void *)
         s.gps = gpsState.on;
         s.gpsSystems = gpsSystems;
         s.timeZoneMinutes = static_cast<std::int16_t>(timeZoneMinutes);
+        s.home = homeLayout;
+        s.upDown = homeUpDown;
+        s.menuHelp = menuHelp;
+        s.dmrMicGainDb = dmrMicGainDb;
+        s.fmMicGainDb = fmMicGainDb;
+        s.plugDmrMicGainDb = plugDmrMicGainDb;
+        s.plugFmMicGainDb = plugFmMicGainDb;
         return s;
     };
     // A row's value: the setting's, or the state of what the row opens.
@@ -930,17 +1082,28 @@ void uiMain(void *)
     };
     // The menu list: up to five rows around the one chosen, and the panel
     // about it.
+    // Without the panel, as a list of ListRows rows, the version as its
+    // row's value.
     auto drawMenu = [&] {
-        static ListRow rows[MenuRows];
-        static menu::ValueText values[MenuRows];
+        static ListRow rows[ListRows];
+        static menu::ValueText values[ListRows];
         const menu::GroupInfo &g = menuNav.groupInfo();
-        const std::size_t first = firstShown(menuNav.row(), g.rows.size(), MenuRows);
+        const int shown = menuHelp ? MenuRows : ListRows;
+        const std::size_t first = firstShown(menuNav.row(), g.rows.size(), shown);
         const menu::Settings s = menuSettings();
         std::size_t n = 0;
-        for (; n < std::size(rows) && first + n < g.rows.size(); ++n) {
+        for (; n < static_cast<std::size_t>(shown) && first + n < g.rows.size(); ++n) {
             const menu::Row row = g.rows[first + n];
             values[n] = rowValue(row, s);
+            if (!menuHelp && !row.opensGroup() && row.item == menu::Item::Version) {
+                values[n] << Version;
+            }
             rows[n] = {menu::label(row), values[n].view(), row.opensGroup() || menu::info(row.item).kind == menu::Kind::Screen};
+        }
+        if (!menuHelp) {
+            drawListScreen(d, menu::groupTitle(menuNav.group()).view(), std::span(rows, n), first, g.rows.size(),
+                menuNav.row(), menuNav.hint());
+            return;
         }
         std::string_view about1;
         std::string_view about2;
@@ -1040,6 +1203,17 @@ void uiMain(void *)
         s.roaming.automatic = autoRoaming;
         settingsStore->keepSettings(s, os::nowMs());
     };
+    auto keepPreferences = [&] {
+        if (settingsStore != nullptr) {
+            services::RadioPreferences p;
+            p.home = homeLayout;
+            p.menuHelp = menuHelp;
+            p.upDown = homeUpDown;
+            p.dmrMicGainDb = dmrMicGainDb;
+            p.fmMicGainDb = fmMicGainDb;
+            settingsStore->keepPreferences(p, os::nowMs());
+        }
+    };
     auto keepChannel = [&] {
         if (settingsStore != nullptr && channels != nullptr && channels->current() &&
             channels->channelIndex() != CodeplugSource::NoChannel) {
@@ -1069,6 +1243,26 @@ void uiMain(void *)
             settingsStore->keepZone(channels->sideB(), channels->zone(),
                 static_cast<std::uint16_t>(channels->position() - 1), os::nowMs());
         }
+    };
+    // The zone and channel in use, to the log; @p ok false says the one
+    // asked for was not found.
+    auto logPlace = [&](bool ok) {
+        const auto &c = channels->current();
+        log::info("ui") << (ok ? "" : "not found; ") << "zone " << static_cast<int>(channels->zone()) << " ("
+                        << channels->zoneName() << "), channel " << channels->position() << " of "
+                        << channels->zoneSize() << ": " << (c ? c->name : "-") << ", " << (c ? c->receiveHz / 1000 : 0)
+                        << " kHz" << (c && c->roaming ? ", roaming" : "");
+    };
+    // The channel, or in the VFO its frequency, @p moved steps on, as the
+    // channel knob turns it.
+    auto stepChannel = [&](int moved) {
+        entryLength = 0;
+        if (channels->vfoMode()) {
+            channels->tune(channels->current()->receiveHz + static_cast<std::uint32_t>(moved * static_cast<int>(VfoStepHz)));
+        } else {
+            channels->step(moved);
+        }
+        useChannel();
     };
     auto tuneEntry = [&] {
         std::uint32_t khz = 0;
@@ -1154,6 +1348,25 @@ void uiMain(void *)
             timeZoneMinutes = s.timeZoneMinutes;
             log::info("ui") << "time zone " << menu::valueText(menu::Item::TimeZone, timeZoneMinutes).view();
         }
+        if (s.menuHelp != was.menuHelp) {
+            menuHelp = s.menuHelp;
+            log::info("ui") << "menu help " << (menuHelp ? "shown" : "hidden");
+        }
+        if (s.home != was.home) {
+            homeLayout = s.home;
+            log::info("ui") << "home screen "
+                            << menu::valueText(menu::Item::HomePreset, menu::choiceOf(menu::Item::HomePreset, s)).view();
+        }
+        if (s.upDown != was.upDown) {
+            homeUpDown = s.upDown;
+            log::info("ui") << "up/down "
+                            << menu::valueText(menu::Item::HomeUpDown, menu::choiceOf(menu::Item::HomeUpDown, s)).view();
+        }
+        if (s.dmrMicGainDb != was.dmrMicGainDb || s.fmMicGainDb != was.fmMicGainDb) {
+            dmrMicGainDb = s.dmrMicGainDb;
+            fmMicGainDb = s.fmMicGainDb;
+            postMicrophoneGain();
+        }
         if (channel) {
             useChannel(false);
         }
@@ -1171,6 +1384,9 @@ void uiMain(void *)
         switch (menu::keptIn(item)) {
         case menu::Kept::Settings:
             keepSettings();
+            break;
+        case menu::Kept::Preferences:
+            keepPreferences();
             break;
         case menu::Kept::Channel:
             keepChannel();
@@ -1238,7 +1454,7 @@ void uiMain(void *)
             break;
         case Step::Choose: {
             const menu::Item item = menuNav.current().item;
-            if (!menu::listChoices(item, menuNav.choices())) {
+            if (!menu::listChoices(item, menuNav.choices(), menuSettings())) {
                 listCodeplugChoices(item, menuNav.choices());
             }
             menuNav.choose(menu::choiceOf(item, menuSettings()));
@@ -1308,8 +1524,19 @@ void uiMain(void *)
                 return;
             }
         }
-        // Up and Down do nothing here: the knob steps the channel.
-        if (press && key >= Key::Digit0 && key <= Key::Digit9) {
+        // Up and Down step the zone, or the channel as the knob does, as
+        // set in the menu; a zone step does nothing in the VFO.
+        if (step && (key == Key::Up || key == Key::Down)) {
+            const int dir = key == Key::Up ? 1 : -1;
+            if (homeUpDown == services::HomeUpDown::Channel) {
+                stepChannel(dir);
+            } else if (homeUpDown == services::HomeUpDown::Zone && !channels->vfoMode()) {
+                entryLength = 0;
+                const bool ok = channels->stepZone(dir);
+                useChannel();
+                logPlace(ok);
+            }
+        } else if (press && key >= Key::Digit0 && key <= Key::Digit9) {
             if (entryLength < EntryDigits) {
                 entry[entryLength++] = static_cast<char>('0' + static_cast<int>(key) - static_cast<int>(Key::Digit0));
             }
@@ -1526,6 +1753,9 @@ void uiMain(void *)
                                } else if (heard.active) {
                                    heard.active = false;
                                    heard.ended = os::nowMs();
+                                   copyName(lastCaller, heard.caller);
+                                   lastCallerId = heard.source;
+                                   lastCallAt = heard.ended;
                                }
                                if (view == View::Standby && !noticeShown) {
                                    redrawView();
@@ -1577,6 +1807,22 @@ void uiMain(void *)
                                radio::post(radio::RoamAutomatic{autoRoaming});
                                keepSettings();
                            },
+                           [&](const MicrophoneGain &g) {
+                               auto set = [](std::int8_t db, std::optional<std::uint8_t> &kept) {
+                                   if (db == MicrophoneGain::Unchanged) {
+                                       return false;
+                                   }
+                                   kept = db == MicrophoneGain::FromCodeplug ? std::nullopt
+                                                                             : std::optional(static_cast<std::uint8_t>(db));
+                                   return true;
+                               };
+                               const bool dmr = set(g.dmrDb, dmrMicGainDb);
+                               if (set(g.fmDb, fmMicGainDb) || dmr) {
+                                   postMicrophoneGain();
+                                   keepPreferences();
+                               }
+                               logMicrophoneGain();
+                           },
                            [&](const KeyLockSettings &s) {
                                keyLock.setSettings(s.settings);
                                refreshLockMark();
@@ -1601,12 +1847,7 @@ void uiMain(void *)
                                    show(View::Standby);
                                    useChannel();
                                }
-                               const auto &c = channels->current();
-                               log::info("ui") << (ok ? "" : "not found; ") << "zone " << static_cast<int>(channels->zone()) << " ("
-                                               << channels->zoneName() << "), channel " << channels->position() << " of "
-                                               << channels->zoneSize() << ": " << (c ? c->name : "-") << ", "
-                                               << (c ? c->receiveHz / 1000 : 0) << " kHz"
-                                               << (c && c->roaming ? ", roaming" : "");
+                               logPlace(ok);
                            },
                            [&](const SettingsReport &) {
                                if (settingsStore != nullptr) {
@@ -1626,7 +1867,19 @@ void uiMain(void *)
                                                    << ", auto roaming " << (s->roaming.automatic ? "on" : "off")
                                                    << ", roaming zone " << s->roaming.zone;
                                }
-                               log::info("ui") << (codeplug->preferences() ? "preferences record: valid" : "no preferences record");
+                               if (const auto p = codeplug->preferences()) {
+                                   const services::HomeLayout &h = p->home;
+                                   log::info("ui") << "preferences record: home screen " << static_cast<int>(h.top) << ' '
+                                                   << (h.clock ? 1 : 0) << ' ' << static_cast<int>(h.big) << ' '
+                                                   << static_cast<int>(h.middle) << ' ' << static_cast<int>(h.beside) << ' '
+                                                   << static_cast<int>(h.bottom) << ", menu help "
+                                                   << (p->menuHelp ? "on" : "off") << ", up/down "
+                                                   << static_cast<int>(p->upDown) << ", mic gain DMR "
+                                                   << keptGainText(p->dmrMicGainDb).view() << ", FM "
+                                                   << keptGainText(p->fmMicGainDb).view();
+                               } else {
+                                   log::info("ui") << "no preferences record";
+                               }
                            },
                            [&](const EncoderClicks &c) {
                                useLight(d);
@@ -1653,14 +1906,7 @@ void uiMain(void *)
                                        zonePicker.move(moved);
                                        zonePicker.draw(d, listHint());
                                    } else if (view == View::Standby) {
-                                       entryLength = 0;
-                                       if (channels->vfoMode()) {
-                                           channels->tune(channels->current()->receiveHz +
-                                               static_cast<std::uint32_t>(moved * static_cast<int>(VfoStepHz)));
-                                       } else {
-                                           channels->step(moved);
-                                       }
-                                       useChannel();
+                                       stepChannel(moved);
                                    }
                                }
                            },
@@ -1683,10 +1929,8 @@ void uiMain(void *)
                                }
                                volumeLevel = step;
                                if (changed && view == View::Standby) {
-                                   // Only what changes: the status bar's volume
-                                   // field, and the notice's number and bar once
-                                   // it is up.
-                                   standby.drawVolume(d, standbyState());
+                                   // Only what changes: the notice's number and
+                                   // bar once it is up.
                                    drawVolumeNotice(d, step, !(noticeShown && volumeNoticeUp));
                                    noticeShown = true;
                                    volumeNoticeUp = true;
@@ -1694,8 +1938,13 @@ void uiMain(void *)
                                }
                            },
                            [&](const Battery &b) {
+                               // The icon only when its fill or colour changes.
+                               const BatteryState before = batteryState;
                                batteryState = {b.millivolts, b.level, b.low};
-                               if (view != View::Start && view != View::TestPattern && view != View::Message) {
+                               const bool iconChanged = b.level != before.level || b.low != before.low ||
+                                   (b.millivolts > 0) != (before.millivolts > 0);
+                               if (iconChanged && view != View::Start && view != View::TestPattern &&
+                                   view != View::Message) {
                                    drawBattery(d);
                                }
                            },
@@ -1770,15 +2019,11 @@ void uiMain(void *)
             gpsScreenNeed = view == View::Gps;
             gps::post(gps::Need{services::GpsSchedule::Client::Screen, gpsScreenNeed ? 1000u : 0u});
         }
-        // The status bar's clock moves on each minute.
-        if (const auto utc = system::utcNow()) {
-            const os::Ticks minute = *utc / 60;
-            if (minute != lastClockMinute) {
-                lastClockMinute = minute;
-                if (!noticeShown) {
-                    refreshLockMark();
-                }
-            }
+        // The home screen's rows that change by themselves: only those whose
+        // values changed are drawn again.
+        if (homeShown() && !noticeShown && os::nowMs() - lastHomeCheck >= HomeCheckMs) {
+            lastHomeCheck = os::nowMs();
+            standby.refresh(d, *channels, standbyState());
         }
         // The call screen: its time each second, back to standby a moment
         // after the call.
