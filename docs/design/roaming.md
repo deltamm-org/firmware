@@ -184,12 +184,24 @@ repeater in use, so that this stays known.
 
 ### 3.3 The heard list
 
-Up to 8 repeaters heard lately, each with its level (the average of the
-last two readings), how many readings and when. A level is current for 2
-minutes. It is read when the slot timing of a transmission is found.
-While a repeater keeps transmitting (calls back to back), each DMR burst
-from it keeps its level current; a carrier alone does not, since it may
-be another signal or noise.
+Up to 8 repeaters heard lately, each with its level, how many readings
+and when. A level is current for 2 minutes.
+
+A check or a search reads a repeater once. The repeater in use is read
+the same way whether it sends a beacon or a call: a reading is the mean
+of its DMR bursts over the first 1.5 s of a transmission, about what a
+beacon gives before the radio may listen elsewhere, and again every
+10 s while the transmission goes on. A reading cut short by the end of
+the transmission counts with 8 bursts or more. Each burst also keeps the
+level current; a carrier alone does neither, since it may be another
+signal or noise.
+
+A reading moves a current level by dt / (dt + 60 s) of the way, dt being
+the time since the last reading: half way after a minute, as for beacons
+a minute apart, and about as far over a minute however often readings
+come. So a repeater fading during a long call shows as fair within a
+minute or two, then poor, and a few dB of terrain from one reading to the
+next does not flip its state. An old level is replaced.
 
 A wake-up the repeater in use did not answer marks it in the list until
 it is heard again. A repeater marked so and never heard, with no level,

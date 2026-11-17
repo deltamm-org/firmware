@@ -553,22 +553,28 @@ void callHeard()
 void level(int dbm)
 {
     if (roamingChannel && !away && site >= 0) {
-        noteHeard(site, dbm);
+        // A reading of the repeater in use begins; its bursts make it.
+        const int floorDbm = floorAt(site); // takes sitesLock itself
+        sitesLock.lock();
+        heardList.started(static_cast<std::uint8_t>(site), dbm, floorDbm, os::nowMs(), Levels.fairDb);
+        sitesLock.unlock();
     }
 }
 
-void burst(std::uint8_t colourCode, bool call)
+void burst(std::uint8_t colourCode, bool call, int dbm)
 {
     if (!roamingChannel || away) {
         return;
     }
     const std::uint32_t now = os::nowMs();
     activity.heard(call, now);
-    // Its level is read when its slot timing is found, which stays locked
-    // through back-to-back calls: each burst keeps it current meanwhile.
+    // Its slot timing stays locked through back-to-back calls: meanwhile
+    // its bursts keep it current and are read again now and then, so that
+    // a level changing during a long call is followed.
     if (site >= 0 && colourCode == tunedColourCode()) {
+        const int floorDbm = floorAt(site); // takes sitesLock itself
         sitesLock.lock();
-        heardList.stillHeard(static_cast<std::uint8_t>(site), now);
+        heardList.stillHeard(static_cast<std::uint8_t>(site), dbm, floorDbm, now, Levels.fairDb);
         sitesLock.unlock();
     }
 }
@@ -641,6 +647,9 @@ void logStatus()
 
 void step()
 {
+    sitesLock.lock();
+    heardList.flush(os::nowMs());
+    sitesLock.unlock();
     roamStep();
 }
 

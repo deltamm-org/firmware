@@ -34,10 +34,10 @@ void show(bool searching);
 
 /// What the radio hears on the frequency it is tuned to: DMR slot timing;
 /// its level, once the timing is verified; a burst with @p colourCode, of a
-/// call (@p call) or of an idle transmission.
+/// call (@p call) or of an idle transmission, heard at @p dbm.
 void slotTiming();
 void level(int dbm);
-void burst(std::uint8_t colourCode, bool call);
+void burst(std::uint8_t colourCode, bool call, int dbm);
 /// A call on the repeater in use goes on, or has just ended: no listening
 /// until the gap between overs has passed from then.
 void callHeard();

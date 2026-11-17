@@ -89,10 +89,17 @@ void HeardList::keep(int position)
 void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
 {
     Entry &e = place(position, nowMs);
-    // A current level is smoothed; an old one is replaced.
+    // A reading moves a current level part of the way; an old one is replaced.
     const bool current = e.current(nowMs);
-    const int half = 2 * clampDbm(levelDbm);
-    e.levelHalfDbm = static_cast<std::int16_t>(current ? (e.levelHalfDbm + half) / 2 : half);
+    const std::int32_t to = 16 * clampDbm(levelDbm);
+    if (current) {
+        const auto dt = static_cast<std::int32_t>(std::min(nowMs - e.readMs, ValidMs));
+        const std::int32_t way = (to - e.level16Dbm) * dt;
+        const std::int32_t whole = dt + static_cast<std::int32_t>(CombineMs);
+        e.level16Dbm = static_cast<std::int16_t>(e.level16Dbm + (way + (way < 0 ? -whole : whole) / 2) / whole);
+    } else {
+        e.level16Dbm = static_cast<std::int16_t>(to);
+    }
     e.floorDbm = clampDbm(floorDbm);
     if (!current || e.levelDb() >= fairDb) {
         e.aboveFairMs = nowMs;
@@ -100,14 +107,56 @@ void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::ui
     e.unanswered = false;
     e.samples = current ? static_cast<std::uint8_t>(std::min(e.samples + 1, 255)) : 1;
     e.measuredMs = nowMs;
+    e.readMs = nowMs;
 }
 
-void HeardList::stillHeard(std::uint8_t position, std::uint32_t nowMs)
+void HeardList::take()
 {
+    const Pending p = m_pending;
+    m_pending = {};
+    if (p.position < 0 || p.bursts == 0) {
+        return;
+    }
+    const Entry *e = find(static_cast<std::uint8_t>(p.position));
+    if (p.bursts < ReadingBursts && e != nullptr && e->current(p.lastMs)) {
+        return;
+    }
+    // The mean, rounded to the nearest dB.
+    const int mean = static_cast<int>((2 * p.sumDbm + (p.sumDbm < 0 ? -p.bursts : p.bursts)) / (2 * p.bursts));
+    heard(static_cast<std::uint8_t>(p.position), mean, p.floorDbm, p.lastMs, p.fairDb);
+}
+
+void HeardList::started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+{
+    take();
+    m_pending = {position, floorDbm, fairDb, clampDbm(levelDbm), 1, nowMs, nowMs};
+}
+
+void HeardList::stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+{
+    Entry *e = nullptr;
     for (std::size_t i = 0; i < m_count; ++i) {
         if (m_entries[i].position == position && m_entries[i].current(nowMs)) {
-            m_entries[i].measuredMs = nowMs;
+            e = &m_entries[i];
+            e->measuredMs = nowMs;
         }
+    }
+    if (m_pending.position == position) {
+        m_pending.sumDbm += clampDbm(levelDbm);
+        ++m_pending.bursts;
+        m_pending.lastMs = nowMs;
+        if (nowMs - m_pending.fromMs >= ReadingSpanMs) {
+            take();
+        }
+    } else if (e == nullptr || nowMs - e->readMs >= ReadingMs) {
+        started(position, levelDbm, floorDbm, nowMs, fairDb);
+    }
+}
+
+void HeardList::flush(std::uint32_t nowMs)
+{
+    if (m_pending.position >= 0 && (nowMs - m_pending.lastMs >= ReadingGapMs || nowMs - m_pending.fromMs >= ReadingSpanMs)) {
+        take();
     }
 }
 
@@ -131,6 +180,7 @@ void HeardList::renumber(std::span<const std::int16_t> moved)
     }
     m_count = kept;
     m_keep = to(m_keep);
+    m_pending = {}; // a reading of the old zone
 }
 
 const HeardList::Entry *HeardList::find(std::uint8_t position) const
