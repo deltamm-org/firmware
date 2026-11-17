@@ -18,6 +18,7 @@ add_library(dmm_hal_gd32f30x STATIC
     src/reset.cpp
     src/startup.cpp
     src/step_timer.cpp
+    src/timed_adc.cpp
     src/usbd.cpp
     src/watchdog.cpp)
 target_include_directories(dmm_hal_gd32f30x PUBLIC include)
