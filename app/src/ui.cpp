@@ -3,6 +3,7 @@
 
 #include "ui.h"
 
+#include "aprs.h"
 #include "audio.h"
 #include "draw.h"
 #include "gps.h"
@@ -424,6 +425,11 @@ bool gpsAtStart = false;
 std::uint8_t gpsSystems = services::gps_systems::Gps | services::gps_systems::Beidou;
 // Local time minus UTC, from the codeplug, in half-hour steps.
 int timeZoneMinutes = 0;
+// APRS: the beacon interval and power (the codeplug's at start), and
+// whether the codeplug has a station to send as.
+std::uint16_t beaconIntervalS = 0;
+PowerLevel beaconPower = PowerLevel::Low;
+bool aprsStation = false;
 
 // The local time at UTC @p utc as "HH:MM".
 lib::StaticString<6> localClockText(std::uint32_t utc)
@@ -832,6 +838,12 @@ void uiMain(void *)
             menuHelp = p->menuHelp;
             homeUpDown = p->upDown;
         }
+        if (const auto a = codeplug->aprsSettings()) {
+            beaconIntervalS = a->beaconIntervalS;
+            beaconPower = a->power;
+            aprsStation = a->callsign[0] != '\0';
+            aprs::setStation(*a);
+        }
     }
 
     View view = View::Start;
@@ -886,6 +898,7 @@ void uiMain(void *)
         s.transmitting = transmitting;
         s.receiving = receiving;
         s.locked = keyLock.locked() || keyLock.settings().forced;
+        s.beacons = aprsStation && beaconIntervalS != 0;
         s.entry = std::string_view(entry, entryLength);
         keysText.clear();
         keysText << quickKeys.view() << (channels != nullptr && channels->vfoMode() ? "MEM" : "VFO");
@@ -1002,6 +1015,8 @@ void uiMain(void *)
         s.home = homeLayout;
         s.upDown = homeUpDown;
         s.menuHelp = menuHelp;
+        s.beaconIntervalS = beaconIntervalS;
+        s.beaconPower = beaconPower;
         return s;
     };
     // A row's value: the setting's, or the state of what the row opens.
@@ -1316,6 +1331,15 @@ void uiMain(void *)
             log::info("ui") << "up/down "
                             << menu::valueText(menu::Item::HomeUpDown, menu::choiceOf(menu::Item::HomeUpDown, s)).view();
         }
+        if (s.beaconIntervalS != was.beaconIntervalS) {
+            beaconIntervalS = s.beaconIntervalS;
+            aprs::post(aprs::BeaconInterval{beaconIntervalS});
+            refreshLockMark();
+        }
+        if (s.beaconPower != was.beaconPower) {
+            beaconPower = s.beaconPower;
+            aprs::post(aprs::BeaconPower{beaconPower});
+        }
         if (channel) {
             useChannel(false);
         }
@@ -1339,6 +1363,11 @@ void uiMain(void *)
             break;
         case menu::Kept::Channel:
             keepChannel();
+            break;
+        case menu::Kept::Aprs:
+            if (settingsStore != nullptr) {
+                settingsStore->keepAprs(beaconIntervalS, beaconPower, os::nowMs());
+            }
             break;
         case menu::Kept::No:
             break;
@@ -1370,6 +1399,11 @@ void uiMain(void *)
             break;
         case menu::Item::GpsStatus:
             show(View::Gps);
+            break;
+        case menu::Item::AprsSend:
+            aprs::post(aprs::BeaconNow{});
+            show(View::Menu);
+            notice("Position queued");
             break;
         case menu::Item::Log:
             show(View::Log);
@@ -1899,6 +1933,15 @@ void uiMain(void *)
                                        drawMenu();
                                    }
                                }
+                           },
+                           [&](const Packet &p) {
+                               notice(p.sent ? "Beacon sent" : "Beacon not sent");
+                           },
+                           [&](const AprsProblem &p) {
+                               notice(p.kind == AprsProblem::Kind::NoCallsign     ? "No APRS callsign"
+                                       : p.kind == AprsProblem::Kind::NoFrequency ? "No APRS frequency"
+                                       : p.kind == AprsProblem::Kind::NoFix       ? "No GPS position"
+                                                                                  : "Radio busy");
                            },
                            [&](const SwitchingOff &) {
                                view = View::Message;

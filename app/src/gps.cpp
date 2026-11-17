@@ -16,6 +16,7 @@
 #include "dmm/services/nmea.h"
 
 #include <cstdlib>
+#include <optional>
 
 namespace dmm::app::gps {
 
@@ -29,6 +30,21 @@ board::Gps *port = nullptr;
 board::GpsReceiver receiver;
 os::Task<640> gpsTask;
 os::Queue<Message, 4> inbox;
+
+// The latest valid fix, for other tasks.
+os::Mutex fixLock;
+GpsFix sharedFix;
+os::Ticks sharedFixAt = 0;
+bool sharedFixValid = false;
+
+void shareFix(const GpsFix &f)
+{
+    fixLock.lock();
+    sharedFix = f;
+    sharedFixAt = os::nowMs();
+    sharedFixValid = true;
+    fixLock.unlock();
+}
 
 constexpr os::Ticks PollMs = 50;
 // Silence after power-on, or between sentences, that counts as no data.
@@ -67,6 +83,8 @@ const char *clientName(services::GpsSchedule::Client client)
         return "screen";
     case services::GpsSchedule::Client::Console:
         return "console";
+    case services::GpsSchedule::Client::Aprs:
+        return "APRS";
     case services::GpsSchedule::Client::Count:
         break;
     }
@@ -221,6 +239,16 @@ void gpsMain(void *)
                                    log::info("gps") << "systems " << services::gps_systems::name(systems);
                                }
                            },
+                           [&](const Fake &f) {
+                               GpsFix fix = parser.fix();
+                               fix.valid = true;
+                               fix.quality = 1;
+                               fix.satellitesUsed = 4;
+                               fix.latitudeE7 = f.latitudeE7;
+                               fix.longitudeE7 = f.longitudeE7;
+                               shareFix(fix);
+                               logFix(fix, "fake fix: ");
+                           },
                            [&](const ChipCommand &c) {
                                if (!powered) {
                                    log::info("gps") << "the receiver is off";
@@ -286,6 +314,7 @@ void gpsMain(void *)
                 // receiver is not switched off before the fix is logged.
                 if (s == NmeaParser::Sentence::Gga && parser.fix().valid) {
                     schedule.fix(os::nowMs());
+                    shareFix(parser.fix());
                 }
                 tellUi();
             }
@@ -317,6 +346,17 @@ bool post(const Message &message)
         return false;
     }
     return inbox.send(message);
+}
+
+std::optional<services::GpsFix> latestFix(std::uint32_t maxAgeMs)
+{
+    std::optional<GpsFix> f;
+    fixLock.lock();
+    if (sharedFixValid && os::nowMs() - sharedFixAt <= maxAgeMs) {
+        f = sharedFix;
+    }
+    fixLock.unlock();
+    return f;
 }
 
 } // namespace dmm::app::gps

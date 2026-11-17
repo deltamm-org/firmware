@@ -7,6 +7,7 @@
 #include "dmm/lib/fn_ref.h"
 #include "dmm/lib/format.h"
 #include "dmm/os/os.h"
+#include "dmm/services/ax25.h"
 #include "dmm/services/codeplug.h"
 #include "dmm/services/fm_transceiver.h"
 #include "dmm/services/roaming.h"
@@ -199,12 +200,40 @@ struct GpsPower
 {
     bool on;
 };
+/// A frame was queued with sendPacket().
+struct SendPacket
+{
+};
+/// How packets go out: flags before the frame, and the audio level in
+/// percent of the board's full level.
+struct PacketSettings
+{
+    std::uint16_t leadMs;
+    std::uint8_t levelPercent;
+};
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower, SendPacket, PacketSettings>;
 
-/// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
-/// board without one) and brings them up.
-void start(board::Fm &fm, board::Baseband *baseband);
+/// Starts the radio task, which owns @p fm, @p baseband and @p modem
+/// (each nullptr on a board without one) and brings them up.
+void start(board::Fm &fm, board::Baseband *baseband, board::Modem *modem);
+
+/// Where a packet goes out: simplex on @c hz (0 = the current FM channel),
+/// without a tone.
+struct PacketChannel
+{
+    std::uint32_t hz = 0;
+    bool wide = true;
+    services::PowerLevel power = services::PowerLevel::Low;
+};
+
+/// Queues @p frame for @p channel. The radio tunes there if it is
+/// elsewhere, waits until the channel is free, sends the frame with the
+/// microphone muted and goes back to the working channel; it gives the
+/// frame up if the channel stays busy, or the user transmits or changes
+/// channel meanwhile. The ui hears whether it went out. False while
+/// another frame waits, or without a modem.
+bool sendPacket(const services::ax25::Frame &frame, const PacketChannel &channel);
 
 /// Queues a message for the radio task; false when the queue is full or
 /// the task has not started.
