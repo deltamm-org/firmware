@@ -376,6 +376,8 @@ lib::StaticString<48> bottomText(const ChannelSelector &sel, const StandbyState 
         // The repeater a roaming channel works through, counted from 1.
         if (s.roamSearching) {
             info << "Looking for a repeater";
+        } else if (s.roamLost) {
+            info << "No repeater";
         } else if (s.roamPosition > 0) {
             info << "via " << (s.roamSite.empty() ? "repeater " : "") << s.roamPosition;
             if (!s.roamSite.empty()) {
