@@ -9,9 +9,11 @@
 #include "board_display.h"
 #include "board_fm_tuning.h"
 #include "board_rf.h"
+#include "dmm/board/board_audio_sampler.h"
 #include "dmm/board/board_battery.h"
 #include "dmm/board/board_gps.h"
 #include "dmm/board/board_input.h"
+#include "dmm/board/board_modem.h"
 #include "dmm/board/board_rtc.h"
 #include "panel_bus.h"
 #include "pins.h"
@@ -382,12 +384,14 @@ void hal::boardMain()
     static BoardBattery battery;
     battery.configure();
     static BoardAudio audio;
+    static BoardModem modem;
     audio.configure();
     static BoardRf rf;
     rf.configure();
     static BoardGps gps;
     static BoardRtc rtc;
     gps.configure();
+    static BoardAudioSampler audioSampler;
     static dmm::drivers::baseband::Sct3258 basebandChip{basebandBoard.bus(), BoardBaseband::pollDelayUs};
     // Called from the radio task; empty until the system task has read the
     // calibration.
@@ -465,6 +469,8 @@ void hal::boardMain()
         .settingsStore = &settingsStore,
         .gps = &gps,
         .rtc = &rtc,
+        .modem = &modem,
+        .audioSampler = &audioSampler,
     };
     dmm::app::start(platform);
     dmm::os::runScheduler();

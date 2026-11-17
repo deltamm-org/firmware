@@ -6,8 +6,10 @@
 #include "dmm/board/parts.h"
 #include "dmm/lib/format.h"
 #include "dmm/services/gps_schedule.h"
+#include "dmm/services/nmea.h"
 
 #include <cstdint>
+#include <optional>
 #include <variant>
 
 namespace dmm::app::gps {
@@ -53,7 +55,15 @@ struct ChipCommand
     lib::StaticString<64> text;
 };
 
-using Message = std::variant<Power, PowerSave, Need, Report, Raw, Systems, ChipCommand>;
+/// A made-up fix at the given position, shared as if the receiver had
+/// sent it (console test).
+struct Fake
+{
+    std::int32_t latitudeE7;
+    std::int32_t longitudeE7;
+};
+
+using Message = std::variant<Power, PowerSave, Need, Report, Raw, Systems, ChipCommand, Fake>;
 
 /// Starts the gps task, which owns @p port. The receiver stays off until
 /// a Power message.
@@ -65,5 +75,8 @@ const char *debugHelp();
 /// Queues a message for the gps task; false when the queue is full or there
 /// is no receiver.
 bool post(const Message &message);
+
+/// The latest valid fix, if it is at most @p maxAgeMs old.
+std::optional<services::GpsFix> latestFix(std::uint32_t maxAgeMs);
 
 } // namespace dmm::app::gps

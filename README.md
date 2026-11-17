@@ -70,6 +70,24 @@ it sleeps.
 GPS fix corrects it. The home screen shows the local time from the
 codeplug's time zone.
 
+**APRS.** Position beacons from the GPS, with the codeplug's APRS
+callsign, path, symbol, comment, frequency and power, at the codeplug's
+interval or now from the menu. Each packet waits for a free channel and
+goes out simplex on the APRS frequency; from another channel the radio
+goes there and comes back. Without an APRS frequency in the codeplug no
+beacon goes out. `APRS` in the status bar shows that beacons go out on
+their own.
+
+**APRS mode.** Holds the radio's one receiver on the codeplug's APRS
+frequency until it is turned off, and decodes the packets heard there
+from the receiver's audio on the radio's own processor, so every
+D878UVII receives APRS, with or without the optional APRS board
+(`docs/dedicated-modes.md`, `docs/design/aprs-decoder.md`). A list keeps
+the stations heard with their distance and bearing. The home screen
+then shows the station heard last, the stations and packets heard, and
+the next beacon; PTT sends a beacon, never voice. The mode is kept over
+a restart, and turning it off tunes back to the channel as it was.
+
 **Programming.** Codeplug tools that speak the radio's own programming
 protocol read and write the codeplug over USB. Tested with QDMR.
 
@@ -180,18 +198,19 @@ included. Each release has a hardware checklist in `docs/hw-tests/`.
 | `0`-`9` | Type a frequency |
 | `#` | Switch between VFO and memory |
 | P1 | Zone list |
-| P2 | Channel settings (squelch, power) |
+| P2 | Channel settings (squelch, power); in APRS mode the heard list |
 | Menu | The menu |
 | Hold `*` | Lock keys; Menu then `*` unlocks |
 | Hold Exit | Cycle standby and log screens (and the key test in debug builds) |
 
 The menu lists what is used while operating first: Channel (squelch,
 squelch type, power), Roaming (on or off, status, roaming zone), GPS
-(on or off, status, satellite systems) and Display (brightness, light
-time, help text). Settings holds the setup in groups: Home screen (a
-preset, or what each row shows, and what Up and Down do), Keys (what
-the lock covers, auto lock), Battery (battery save) and Clock (time
-zone).
+(on or off, status, satellite systems), APRS (APRS mode, send now, auto
+send, stations heard) and Display (brightness, light time, help text).
+Settings holds the setup in groups: Home screen (a preset, or what each
+row shows, and what Up and Down do), Keys (what the lock covers, auto
+lock), Battery (battery save), Clock (time zone) and APRS (send power,
+packets on the speaker).
 Tools opens the log and shows the version; debug builds also have the
 key test there (built in any build with `-DDMM_KEY_TEST=ON`). The panel
 under the list says what the chosen row does (Display > Help text Off
@@ -208,6 +227,29 @@ logs every sentence the receiver sends; `gps query`, `gps restart` and
 `gps send` talk to the receiver itself; `gps need <s>` asks for a
 position every so many seconds (0: none). `time` logs the clock, and
 `time set YYYY-MM-DD HH:MM:SS` sets it (UTC).
+
+Menu > APRS holds APRS mode (On or Off), Send now, Auto send (the beacon
+interval, kept in the codeplug) and Heard (the stations heard; Menu opens
+one with its position, distance and bearing, altitude, speed, text and
+the digipeater it came through). Menu > Settings > APRS holds the send
+power (kept in the codeplug) and Hear packets, which opens the speaker
+for packets in APRS mode (quiet by default). While APRS mode is on, Up,
+Down, P2 and the knob open the heard list, Menu opens Menu > APRS, PTT
+sends a beacon, and P1, `#` and the digits are refused with the notice
+"In APRS mode".
+
+The console's `aprs` logs the station and the beacon state, `aprs send`
+sends a beacon (`aprs send here`: on the current channel, for tests),
+`aprs every <s>` sets the interval, `aprs mode on|off` turns APRS mode
+on and off, and `aprs lead <ms>` and `aprs level <%>` set the packet's
+lead-in and audio level. `aprs rx` reports the decoder,
+`aprs rx decode on|off|any` sets where it decodes (in APRS mode, never,
+or on any analog channel for a test) and `aprs rx repair on|off` lets it
+repair a frame with one wrong bit or tone (off by default).
+`gps fake <lat> <lon>` (10^-4 degrees, south and west negative) makes up
+a position for tests.
+The checklist is `docs/hw-tests/aprs.md`; the PC tool `afsk-decode`
+decodes a WAV recording with the same decoder.
 
 The GPS mark in the status bar, shown while the GPS is on:
 

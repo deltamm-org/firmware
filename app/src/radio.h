@@ -7,6 +7,7 @@
 #include "dmm/lib/fn_ref.h"
 #include "dmm/lib/format.h"
 #include "dmm/os/os.h"
+#include "dmm/services/ax25.h"
 #include "dmm/services/codeplug.h"
 #include "dmm/services/fm_transceiver.h"
 #include "dmm/services/roaming.h"
@@ -162,6 +163,18 @@ struct UseChannel
     services::Channel channel;
     std::uint8_t squelch;
 };
+/// A dedicated mode holds the receiver (@c on) at @c hz, analog, or gives
+/// it back to the channel last given with UseChannel. While held, a
+/// UseChannel is kept for then (its squelch level applies at once), the
+/// receiver does not sleep for battery save, PTT gives no voice, and a
+/// signal opens the speaker only when @c audible.
+struct LockReceiver
+{
+    bool on;
+    std::uint32_t hz;
+    bool wide;
+    bool audible;
+};
 /// Looks for the best repeater of the roaming zone now.
 struct RoamNow
 {
@@ -199,12 +212,40 @@ struct GpsPower
 {
     bool on;
 };
+/// A frame was queued with sendPacket().
+struct SendPacket
+{
+};
+/// How packets go out: flags before the frame, and the audio level in
+/// percent of the board's full level.
+struct PacketSettings
+{
+    std::uint16_t leadMs;
+    std::uint8_t levelPercent;
+};
 
-using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, RoamNow, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower>;
+using Message = std::variant<Info, Restart, ChipTone, SpeakerVolume, ChipCommand, Microphone, FmReceive, FmIdle, FmSquelch, FmStatus, Ptt, PttFor, FmTransmitFrequency, FmTone, FmPower, FmTimeout, FmTransmitAudio, DmrReceive, DmrTarget, DmrOwnId, UseChannel, LockReceiver, RoamNow, RoamingSetup, RoamStatus, RoamUse, RoamForget, RoamAutomatic, BatterySave, BatterySaveStatus, VoiceEnhancement, FmMicrophoneLevel, GpsPower, SendPacket, PacketSettings>;
 
-/// Starts the radio task, which owns @p fm and @p baseband (nullptr on a
-/// board without one) and brings them up.
-void start(board::Fm &fm, board::Baseband *baseband);
+/// Starts the radio task, which owns @p fm, @p baseband and @p modem
+/// (each nullptr on a board without one) and brings them up.
+void start(board::Fm &fm, board::Baseband *baseband, board::Modem *modem);
+
+/// Where a packet goes out: simplex on @c hz (0 = the current FM channel),
+/// without a tone.
+struct PacketChannel
+{
+    std::uint32_t hz = 0;
+    bool wide = true;
+    services::PowerLevel power = services::PowerLevel::Low;
+};
+
+/// Queues @p frame for @p channel. The radio tunes there if it is
+/// elsewhere, waits until the channel is free, sends the frame with the
+/// microphone muted and goes back to the working channel; it gives the
+/// frame up if the channel stays busy, or the user transmits or changes
+/// channel meanwhile. The ui hears whether it went out. False while
+/// another frame waits, or without a modem.
+bool sendPacket(const services::ax25::Frame &frame, const PacketChannel &channel);
 
 /// Queues a message for the radio task; false when the queue is full or
 /// the task has not started.
@@ -227,6 +268,11 @@ bool carrier();
 /// Logs each minute the lowest, middle and highest level read on a DMR
 /// channel's own frequency. Off from start; any task may switch it.
 void setLevelLog(bool on);
+
+/// The receive frequency of the analog FM channel the radio listens on;
+/// 0 while it transmits, works on a DMR channel or does not receive. Any
+/// task may ask.
+std::uint32_t analogListeningHz();
 
 /// True once the radio's chips are up and it takes commands that reach the
 /// air; false while they start or restart. Any task may ask.

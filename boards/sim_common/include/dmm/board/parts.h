@@ -6,17 +6,21 @@
 // The simulators' parts that the app uses as concrete types: the radio's
 // calibration format with sample data, no baseband and no data port.
 
+#include "sim_audio_sampler.h"
 #include "sim_battery.h"
 #include "sim_fm.h"
 #include "sim_gps.h"
 #include "sim_input.h"
+#include "sim_modem.h"
 #include "sim_rtc.h"
 
+#include "dmm/services/audio_sampler.h"
 #include "dmm/services/baseband.h"
 #include "dmm/services/casic_receiver.h"
 #include "dmm/services/d878uv2_calibration.h"
 #include "dmm/services/d878uv2_programming.h"
 #include "dmm/services/d878uv2_settings_store.h"
+#include "dmm/services/packet_modem.h"
 #include "dmm/services/programming.h"
 #include "dmm/services/settings_store.h"
 #include "dmm/services/usb_channel.h"
@@ -35,6 +39,8 @@ using DataChannel = services::UsbChannel;
 using GpsReceiver = services::CasicReceiver;
 using Gps = SimGps;
 using Rtc = SimRtc;
+using Modem = SimModem;
+using AudioSampler = SimAudioSampler;
 
 /// The floor for roaming: repeater levels are judged in dB above it. The
 /// simulator hears nothing anywhere.
@@ -52,5 +58,7 @@ static_assert(services::BatterySensor<Battery>);
 static_assert(services::GpsPort<Gps>);
 static_assert(services::GpsReceiver<GpsReceiver>);
 static_assert(services::RealTimeClock<Rtc>);
+static_assert(services::PacketModem<Modem>);
+static_assert(services::AudioSampler<AudioSampler>);
 
 } // namespace dmm::board

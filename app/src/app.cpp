@@ -3,6 +3,7 @@
 
 #include "dmm/app/app.h"
 
+#include "aprs.h"
 #include "audio.h"
 #include "gps.h"
 #include "input.h"
@@ -221,6 +222,35 @@ bool numbersAfter(std::string_view command, std::string_view prefix, int base, s
         }
     }
     return true;
+}
+
+// "gps fake <lat> <lon>": a made-up position in 10^-4 degrees, south and
+// west negative, for tests.
+std::optional<gps::Fake> fakePosition(std::string_view command)
+{
+    constexpr std::string_view Prefix = "gps fake ";
+    if (!lib::startsWith(command, Prefix)) {
+        return std::nullopt;
+    }
+    command.remove_prefix(Prefix.size());
+    std::int32_t e4[2] = {};
+    constexpr std::int32_t Limits[] = {900'000, 1'800'000};
+    for (int i = 0; i < 2; ++i) {
+        std::string_view word = lib::takeWord(command);
+        const bool negative = !word.empty() && word[0] == '-';
+        if (negative) {
+            word.remove_prefix(1);
+        }
+        const std::optional<std::int32_t> n = lib::parseNumber(word, 10);
+        if (!n || *n > Limits[i]) {
+            return std::nullopt;
+        }
+        e4[i] = negative ? -*n : *n;
+    }
+    if (!command.empty()) {
+        return std::nullopt;
+    }
+    return gps::Fake{e4[0] * 1000, e4[1] * 1000};
 }
 
 // "fm tone tx|rx <tone>": off, a CTCSS tone in 0.1 Hz (600..2600), or a
@@ -470,8 +500,10 @@ void runCommand(std::string_view command)
             log::info("console") << "board: " << board;
         }
         withBaseband(platform->baseband, [](auto &b) { log::info("console") << "baseband chip: " << b.debugHelp(); });
-        log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>; clock: time, time set YYYY-MM-DD HH:MM:SS (UTC)";
+        log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>, gps fake <lat> <lon> (10^-4 degrees, south and west negative); clock: time, time set YYYY-MM-DD HH:MM:SS (UTC)";
         log::info("console") << "GPS receiver: " << gps::debugHelp();
+        log::info("console") << aprs::consoleHelp();
+        log::info("console") << aprs::receiveHelp();
     } else if (command == "fault") {
         log::info("console") << "crashing on purpose";
         flushLog();
@@ -541,6 +573,8 @@ void runCommand(std::string_view command)
             posted = gps::post(gps::Power{command == "gps on"});
         } else if (command == "gps raw on" || command == "gps raw off") {
             posted = gps::post(gps::Raw{command == "gps raw on"});
+        } else if (const auto fake = fakePosition(command)) {
+            posted = gps::post(*fake);
         } else if (numbersAfter(command, "gps need ", 10, needS, 1)) {
             // The console's own need, for tests: a position every <seconds>, 0 = none.
             posted = gps::post(
@@ -554,6 +588,7 @@ void runCommand(std::string_view command)
             log::info("console") << "no GPS receiver";
         }
     } else if (radioCommand(command)) {
+    } else if (aprs::runCommand(command)) {
     } else if (!command.empty()) {
         log::info("console") << "unknown command, try help";
     }
@@ -681,7 +716,8 @@ void start(Platform &p)
     if (p.audio != nullptr) {
         audio::start(*p.audio);
     }
-    radio::start(p.fm, p.baseband);
+    radio::start(p.fm, p.baseband, p.modem);
+    aprs::start(p.audioSampler);
     if (p.gps != nullptr) {
         gps::start(*p.gps);
     }

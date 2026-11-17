@@ -19,6 +19,7 @@ namespace rcu {
 inline constexpr std::uintptr_t Base = 0x40021000;
 inline constexpr std::uintptr_t Ctl = Base + 0x00;
 inline constexpr std::uintptr_t Cfg0 = Base + 0x04;
+inline constexpr std::uintptr_t AhbEn = Base + 0x14;
 inline constexpr std::uintptr_t Apb2En = Base + 0x18;
 inline constexpr std::uintptr_t Apb1En = Base + 0x1C;
 inline constexpr std::uintptr_t Bdctl = Base + 0x20;       // RCU_BDCTL, backup domain
@@ -56,10 +57,15 @@ constexpr std::uint32_t pllMultiplier(unsigned multiplier)
 inline constexpr std::uint32_t AdcPrescalerMask = (3u << 14) | (1u << 28);
 inline constexpr std::uint32_t AdcApb2Div8 = 3u << 14;
 
+// RCU_AHBEN
+inline constexpr std::uint32_t Dma1Clock = 1u << 1;
+
 // RCU_APB2EN
 inline constexpr std::uint32_t AfioClock = 1u << 0;
 inline constexpr std::uint32_t Adc0Clock = 1u << 9;
+inline constexpr std::uint32_t Timer0Clock = 1u << 11;
 inline constexpr std::uint32_t Timer7Clock = 1u << 13;
+inline constexpr std::uint32_t Adc2Clock = 1u << 15;
 constexpr std::uint32_t gpioClock(unsigned port)
 {
     return 1u << (2 + port);
@@ -228,7 +234,9 @@ inline constexpr std::uintptr_t Pd = Base + 0x14;
 
 namespace adc {
 inline constexpr std::uintptr_t Adc0 = 0x40012400;
+inline constexpr std::uintptr_t Adc2 = 0x40013C00;
 inline constexpr std::uintptr_t Stat = 0x00;
+inline constexpr std::uintptr_t Ctl0 = 0x04;
 inline constexpr std::uintptr_t Ctl1 = 0x08;
 inline constexpr std::uintptr_t Sampt0 = 0x0C; // channels 10..17
 inline constexpr std::uintptr_t Sampt1 = 0x10; // channels 0..9
@@ -240,7 +248,10 @@ inline constexpr std::uint32_t EndOfConversion = 1u << 1;
 inline constexpr std::uint32_t On = 1u << 0;
 inline constexpr std::uint32_t Calibrate = 1u << 2;
 inline constexpr std::uint32_t ResetCalibration = 1u << 3;
+inline constexpr std::uint32_t DmaRequest = 1u << 8;
 inline constexpr std::uint32_t SoftwareTrigger = 7u << 17;
+/// ADC2's regular trigger source 2: TIMER0 channel 2 (ADC0/1 use other lists).
+inline constexpr std::uint32_t Adc2TriggerTimer0Ch2 = 2u << 17;
 inline constexpr std::uint32_t TriggerEnable = 1u << 20;
 inline constexpr std::uint32_t SoftwareStart = 1u << 22;
 inline constexpr std::uint32_t LongestSample = 7; // 239.5 cycles
@@ -267,6 +278,7 @@ constexpr std::uint32_t bufferOff(unsigned channel)
 } // namespace dac
 
 namespace timer {
+inline constexpr std::uintptr_t Timer0 = 0x40012C00;
 inline constexpr std::uintptr_t Timer2 = 0x40000400;
 inline constexpr std::uintptr_t Timer3 = 0x40000800;
 inline constexpr std::uintptr_t Timer4 = 0x40000C00;
@@ -310,6 +322,41 @@ constexpr std::uint32_t complementaryPolarity(unsigned n)
     return 1u << (4 * n + 3);
 }
 } // namespace timer
+
+namespace dma {
+inline constexpr std::uintptr_t Dma1 = 0x40020400;
+inline constexpr std::uintptr_t Intc = 0x04;
+/// Registers of channel n (0..6; DMA1 has 0..4).
+constexpr std::uintptr_t channelCtl(unsigned n)
+{
+    return 0x08 + 0x14 * n;
+}
+constexpr std::uintptr_t channelCount(unsigned n)
+{
+    return 0x0C + 0x14 * n;
+}
+constexpr std::uintptr_t channelPeripheral(unsigned n)
+{
+    return 0x10 + 0x14 * n;
+}
+constexpr std::uintptr_t channelMemory(unsigned n)
+{
+    return 0x14 + 0x14 * n;
+}
+/// DMA_INTC: clears all four flags of channel n.
+constexpr std::uint32_t clearFlags(unsigned n)
+{
+    return 0xFu << (4 * n);
+}
+
+// DMA_CHxCTL
+inline constexpr std::uint32_t ChannelEnable = 1u << 0;
+inline constexpr std::uint32_t Circular = 1u << 5;
+inline constexpr std::uint32_t MemoryIncrement = 1u << 7;
+inline constexpr std::uint32_t Peripheral16Bit = 1u << 8;
+inline constexpr std::uint32_t Memory16Bit = 1u << 10;
+inline constexpr std::uint32_t PriorityHigh = 2u << 12;
+} // namespace dma
 
 namespace fmc {
 inline constexpr std::uintptr_t WaitState = 0x40022000; // FMC_WS

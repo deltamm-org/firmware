@@ -44,7 +44,8 @@ A part the app or a service uses comes in one of two forms.
   `boards/<name>/include/dmm/board/parts.h`, the one board header shared
   code includes: `board::Fm`, `board::Baseband`, `board::Calibration`,
   `board::Input`, `board::Battery`, `board::DataChannel`, `board::Gps`,
-  `board::GpsReceiver`, `board::Rtc`, `board::SettingsStore`. The shared
+  `board::GpsReceiver`, `board::Rtc`, `board::SettingsStore`,
+  `board::Modem`, `board::AudioSampler`. The shared
   header writes the part down as a C++20 concept, and the board checks its
   type against it. Calls are direct. The headers in the board's `include/dmm/board/` include no
   MCU headers.
@@ -88,6 +89,7 @@ urgent.
 | 7 | radio | FM transceiver, DMR baseband, PA power, RF switches, GPS supply, transmit timeout |
 | 6 | audio | speaker amplifier and routing, beeps |
 | 5 | input | keypad, side keys, PTT, channel knob, volume knob (every 10 ms) |
+| 5 | aprs | received audio sampler and its decoder, beacons, heard list |
 | 4 | ui | screens, menus, key lock, codeplug reading, display, backlight |
 | 3 | gps | GPS receiver's serial link: NMEA sentences, fix, when the receiver sleeps |
 | 2 | link | USB: data protocol, log console |
@@ -102,6 +104,11 @@ Safety rules that the structure enforces:
 - PTT goes `input → ui → radio`, so the key lock decides in one place.
 - The radio task keeps its own transmit timeout and band limits, and any
   other command to it ends a transmission first.
+- Packets go out from the radio task too: simplex on their own
+  frequency, at the codeplug's APRS power, without a tone and with the
+  microphone muted, once the channel is free. PTT or a channel change
+  gives a packet waiting on another frequency up; on the channel in use
+  it waits for the user's transmission.
 
 ## Memory
 
@@ -194,6 +201,13 @@ the SCT3258 are built when the option is given.
   sleep, and every power-on is a cold start: from half a minute to a few
   minutes to a fix indoors. `gps_schedule` decides when the supply is on from how often
   each client needs a position.
+- APRS sending: the AFSK samples go to the beep PWM, which also reaches
+  the transmitter's modulation input while the microphone is muted
+  (`board_modem`).
+- APRS receiving: the FM transceiver's audio output also reaches an ADC
+  input, ahead of the speaker path and with the squelch closed too; a
+  timer paces the ADC and DMA fills a ring (`board_audio_sampler`), which
+  the aprs task decodes (`afsk_demodulator`).
 - Display: 160 × 128 colour panel on an 8-bit parallel bus.
 - Storage: SPI NAND flash.
 - USB: full-speed device on PA11/PA12, clocked from the crystal PLL; a

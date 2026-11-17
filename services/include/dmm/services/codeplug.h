@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "dmm/services/dedicated_mode.h"
 #include "dmm/services/dmr.h"
 #include "dmm/services/home_screen.h"
 #include "dmm/services/key_lock.h"
@@ -120,6 +121,11 @@ struct RadioPreferences
     bool menuHelp = true;
     /// What Up and Down do on the home screen.
     HomeUpDown upDown = HomeUpDown::Zone;
+    /// The dedicated receive mode on at the last change; it comes back on
+    /// after a restart.
+    DedicatedMode mode = DedicatedMode::Off;
+    /// The speaker opens for packets in APRS mode.
+    bool aprsAudible = false;
 };
 
 /// One repeater of a roaming zone.
@@ -131,6 +137,30 @@ struct RoamingSite
     std::uint32_t receiveHz = 0;  // the repeater's output
     std::uint32_t transmitHz = 0; // its input
     std::uint8_t colourCode = ChannelColourCode;
+};
+
+/// The analog APRS settings DeltaMM uses.
+struct AprsSettings
+{
+    static constexpr std::size_t CallBytes = 6;
+    static constexpr std::size_t PathBytes = 20;
+    static constexpr std::size_t CommentBytes = 60;
+
+    /// Our callsign (letters and digits, zero-terminated) and its SSID.
+    char callsign[CallBytes + 1] = {};
+    std::uint8_t ssid = 0;
+    /// The digipeater path, such as "WIDE1-1,WIDE2-1"; empty for none.
+    char path[PathBytes + 1] = {};
+    char symbolTable = '/';
+    char symbol = '[';
+    /// Text sent after the position, zero-terminated.
+    char comment[CommentBytes + 1] = {};
+    /// Where packets go out; 0 = not set.
+    std::uint32_t frequencyHz = 0;
+    bool wide = true;
+    PowerLevel power = PowerLevel::Low;
+    /// Time between automatic beacons; 0 = off.
+    std::uint16_t beaconIntervalS = 0;
 };
 
 /// What the radio reads from its codeplug, whatever its format. The
@@ -148,6 +178,8 @@ public:
     virtual std::optional<CodeplugSettings> settings() = 0;
     /// DeltaMM's own preferences, if a valid record was kept.
     virtual std::optional<RadioPreferences> preferences() = 0;
+    /// The APRS settings, if the codeplug has a callsign for them.
+    virtual std::optional<AprsSettings> aprsSettings() = 0;
     /// Channel @p index (0-based), if it is in use.
     virtual std::optional<Channel> channel(std::uint16_t index) = 0;
     /// The VFO of side A or B: a channel record whose frequency and

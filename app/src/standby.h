@@ -33,6 +33,8 @@ struct StandbyState
     bool transmitting = false;
     bool receiving = false;
     bool locked = false;
+    /// APRS beacons go out on their own.
+    bool beacons = false;
     /// Digits typed for a frequency, or empty.
     std::string_view entry;
     /// The quick-key hint for the bottom bar.

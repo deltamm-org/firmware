@@ -20,6 +20,7 @@ public:
         Clock,   // keeps the real-time clock right
         Screen,  // the GPS screen is open
         Console, // the console's gps need, for tests
+        Aprs,    // position beacons
         Count,
     };
 

@@ -67,9 +67,25 @@ void PwmToneOutput::stop()
     m_synth.stop();
 }
 
+void PwmToneOutput::playSamples(int (*source)())
+{
+    m_synth.stop();
+    m_source = source;
+    sampler(timer::Ctl0) = timer::CounterEnable;
+}
+
 void PwmToneOutput::onSampleInterrupt()
 {
     sampler(timer::Intf) = ~timer::UpdateInterrupt;
+    if (int (*const source)() = m_source; source != nullptr) {
+        const int duty = source();
+        if (duty >= 0) {
+            pwm(timer::channelValue(ToneChannel)) = static_cast<std::uint32_t>(duty);
+            return;
+        }
+        m_source = nullptr;
+        pwm(timer::channelValue(ToneChannel)) = 0;
+    }
     pwm(timer::channelValue(ToneChannel)) = m_synth.next();
     if (!m_synth.running()) {
         sampler(timer::Ctl0) = 0;

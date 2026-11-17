@@ -227,6 +227,20 @@ TEST_CASE("settings store: zone, channel and preferences go out in one write, in
     CHECK(r.codeplug.preferences().has_value());
 }
 
+TEST_CASE("settings store: the APRS beacon interval and power go to the APRS settings")
+{
+    Radio r;
+    r.store.keepAprs(300, PowerLevel::High, 0);
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0] == std::vector<std::uint32_t>{Settings + 0x100B, Settings + 0x103B});
+    CHECK(r.byte(Settings + 0x100B) == 10);
+    CHECK((r.byte(Settings + 0x103B) & 3) == 2);
+    // The same values again write nothing.
+    r.store.keepAprs(300, PowerLevel::High, 0);
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Unchanged);
+}
+
 TEST_CASE("settings store: changes on several channels are kept and written together")
 {
     Radio r;
@@ -450,6 +464,43 @@ TEST_CASE("preferences record: round trip, and none in an erased codeplug")
     CHECK(e[5] <= dmm::services::d878uv2::PreferencesFieldBytes);
     CHECK(e[e.size() - 5] == 0xFF);
     CHECK(dmm::services::d878uv2::decodePreferences(e).has_value());
+}
+
+TEST_CASE("preferences record: the dedicated mode and packet sound at field bytes 12 and 13")
+{
+    RadioPreferences p;
+    Record r = encoded(p);
+    CHECK(r[5] == 14);
+    // The reserved field bytes stay erased; the defaults: no mode, quiet.
+    for (std::size_t i = 6 + 8; i < 6 + 12; ++i) {
+        CHECK(r[i] == 0xFF);
+    }
+    CHECK(r[6 + 12] == 0);
+    CHECK(r[6 + 13] == 0);
+
+    p.mode = dmm::services::DedicatedMode::Aprs;
+    p.aprsAudible = true;
+    r = encoded(p);
+    CHECK(r[6 + 12] == 1);
+    CHECK(r[6 + 13] == 1);
+    auto q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->mode == dmm::services::DedicatedMode::Aprs);
+    CHECK(q->aprsAudible);
+    // Out of range: no mode.
+    r[6 + 12] = 9;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->mode == dmm::services::DedicatedMode::Off);
+    // A record from before the fields: no mode, and quiet.
+    r = encoded(p);
+    r[5] = 8;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->mode == dmm::services::DedicatedMode::Off);
+    CHECK_FALSE(q->aprsAudible);
 }
 
 TEST_CASE("preferences record: a damaged record, or another mark or version, counts as none")

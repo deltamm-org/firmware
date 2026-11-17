@@ -24,17 +24,21 @@ The code: `services/settings_store.h` (the interface the app uses),
 | Place in each zone's channel list | Zone channel selections | `ZoneSelections` |
 | GPS satellite systems | Extended general settings | `SettingsExtension` |
 | A channel's power and squelch mode | The channel's record | `ChannelBanks` |
+| APRS beacon interval (Menu > APRS > Auto send) and send power (Menu > Settings > APRS > Send power) | APRS settings | `AprsSettingsBlock` |
 | Home screen layout (Menu > Settings > Home screen) | Preferences record | `Preferences` |
 | Menu help text shown or hidden (Menu > Display > Help text) | Preferences record | `Preferences` |
 | What Up and Down do on the home screen (Menu > Settings > Home screen > Up/Down) | Preferences record | `Preferences` |
+| APRS mode on or off (Menu > APRS > APRS mode, console `aprs mode`) | Preferences record | `Preferences` |
+| Packets on the speaker in APRS mode (Menu > Settings > APRS > Hear packets) | Preferences record | `Preferences` |
 
 The auto lock time shares its field with the menu exit time, in 5 s
-steps up to 60 s.
+steps up to 60 s. The APRS beacon interval is kept in 30 s steps, the
+codeplug's own.
 
 The app hands over values as they change: the menu, the zone list, the
-channel knob, and the console's `save`, `light time` and `roam auto`. The
-VFO and the console's other commands (`lock ...`, `light`, `fm ...`,
-`gps ...`) are not kept.
+channel knob, and the console's `save`, `light time`, `roam auto` and
+`aprs mode`. The VFO and the console's other commands (`lock ...`,
+`light`, `fm ...`, `gps ...`, `aprs every ...`) are not kept.
 
 ## When it is written
 
@@ -120,6 +124,17 @@ below).
 | 5 | How many field bytes follow |
 | 6 on | The fields, each at a fixed place; unused bytes 0xFF |
 | last 4 | CRC-32 of everything before, little-endian |
+
+The fields, by record byte (`d878uv2_preferences.cpp`):
+
+| Byte | Field |
+| --- | --- |
+| 6-11 | Home screen layout: top line, clock, large name, middle row, next to power, bottom row |
+| 12 | Menu help text: 0 hidden, 1 shown |
+| 13 | Up and Down on the home screen |
+| 14-17 | Reserved |
+| 18 | The dedicated receive mode on: 0 none, 1 APRS |
+| 19 | Packets on the speaker in APRS mode: 0 off, 1 on |
 
 A record with another mark or version, more field bytes than fit, or a
 wrong checksum counts as none: every preference then has its default.

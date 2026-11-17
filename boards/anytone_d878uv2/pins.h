@@ -93,6 +93,15 @@ inline constexpr Pin BatterySense{Port::C, 1};
 inline constexpr unsigned BatteryChannel = 11;
 inline constexpr int BatteryFullScaleMv = 13200;
 
+// The ADC's full scale (4095) is the 3.3 V supply.
+inline constexpr int AdcFullScaleMv = 3300;
+
+// Received audio from the FM transceiver on PC0, ADC channel 10, biased to
+// about a third of the supply. Measured with ADC2 paced by TIMER0 channel
+// 2, whose pin (PA10) is the PTT input, so the trigger reaches no pin.
+inline constexpr Pin ReceiveAudioSense{Port::C, 0};
+inline constexpr unsigned ReceiveAudioChannel = 10;
+
 // Held low from the first instructions on: the transmit path and power
 // amplifier enables, the speaker amplifier, its receive-audio switch and
 // the Bluetooth module's power.
@@ -118,11 +127,15 @@ inline constexpr std::uint16_t ReceiveTunePeriod = 0xFFF;
 
 // Beeps: PWM on PB9 (TIMER3 channel 3), mixed in before the amplifier. The
 // amplifier needs this long after switching on before a beep sounds clean.
+// The same pin also reaches the transmitter's modulation input; with the
+// FM transceiver's microphone input muted, packets go out on it as AFSK.
 inline constexpr Pin ToneOutput{Port::B, 9};
 inline constexpr unsigned AmplifierSettleMs = 150;
 inline constexpr unsigned ToneIrqPriority = 2;
 // Beep level 15 gives this PWM duty peak (of 255).
 inline constexpr unsigned LoudestTonePeak = 90;
+// Flags after a packet, so its end is not cut by the transmitter ramping down.
+inline constexpr std::uint8_t PacketTailFlags = 3;
 
 // DMR baseband (SCT3258): an 8-bit host port on PD8-PD15 with chip select
 // PD2, write PD3 and read PD4; PD5 is low while the chip has data. PD6 is

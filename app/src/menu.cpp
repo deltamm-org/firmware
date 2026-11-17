@@ -13,11 +13,13 @@ namespace {
 
 using services::Key;
 
-constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Display, Group::Settings, Group::Tools};
+constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Aprs, Group::Display, Group::Settings,
+    Group::Tools};
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
-constexpr Row SettingsRows[] = {Group::Home, Group::Keys, Group::Battery, Group::Clock};
+constexpr Row AprsRows[] = {Item::AprsMode, Item::AprsSend, Item::AprsBeacon, Item::AprsHeard};
+constexpr Row SettingsRows[] = {Group::Home, Group::Keys, Group::Battery, Group::Clock, Group::AprsSettings};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime, Item::MenuHelp};
 // The key test, for bringing up a radio, only in builds that have it.
 #ifdef DMM_KEY_TEST
@@ -32,19 +34,22 @@ constexpr Row HomeRows[] = {Item::HomePreset, Item::HomeTop, Item::HomeClock, It
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock};
 constexpr Row BatteryRows[] = {Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
+constexpr Row AprsSettingsRows[] = {Item::AprsPower, Item::AprsAudible};
 
 constexpr GroupInfo Groups[] = {
     {"Menu", "", TopRows},
     {"Channel", "Squelch and power of the channel in use", ChannelRows},
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "On or off, the fix and the satellite systems", GpsRows},
+    {"APRS", "APRS mode, sending the position, stations heard", AprsRows},
     {"Display", "Brightness, light time, help text", DisplayRows},
-    {"Settings", "Home screen, keys, battery and clock", SettingsRows},
+    {"Settings", "Home screen, keys, battery, clock and APRS", SettingsRows},
     {"Tools", ToolsAbout, ToolsRows},
     {"Home screen", "What each row of the home screen shows", HomeRows},
     {"Keys", "What the key lock covers, and auto lock", KeysRows},
     {"Battery", "Battery save while the radio is quiet", BatteryRows},
     {"Clock", "The time zone", ClockRows},
+    {"APRS", "Send power, and packets on the speaker", AprsSettingsRows},
 };
 static_assert(std::size(Groups) == static_cast<std::size_t>(Group::Count));
 
@@ -57,6 +62,10 @@ constexpr ItemInfo Items[] = {
     {"Roam zone", "The repeaters to move between", Kind::Value},
     {"Status", "Position, satellites and time from the GPS", Kind::Screen},
     {"Enabled", "The GPS receiver on or off", Kind::Value},
+    {"APRS mode", "One receiver: APRS mode listens only on APRS", Kind::Value},
+    {"Send now", "Sends the position once, when the channel is free", Kind::Action},
+    {"Auto send", "How often the position is sent by itself", Kind::Value},
+    {"Heard", "Stations heard, newest first; Menu opens one", Kind::Screen},
     {"Brightness", "Display brightness", Kind::Value},
     {"Light time", "How long the light stays on after a key", Kind::Value},
     {"Help text", "These two lines about the chosen row", Kind::Value},
@@ -65,6 +74,8 @@ constexpr ItemInfo Items[] = {
     {"Battery save", "Sleep between checks for a signal while quiet", Kind::Value},
     {"Time zone", "Local time's offset from UTC", Kind::Value},
     {"Satellites", "Satellite systems used: GPS, GLONASS, BeiDou", Kind::Value},
+    {"Send power", "Transmit power for sending the position", Kind::Value},
+    {"Hear packets", "In APRS mode: packets heard on the speaker", Kind::Value},
     {"Preset", "A whole layout at once; rows can then change", Kind::Value},
     {"Top line", "Small line at the top: talkgroup, zone, place", Kind::Value},
     {"Clock", "The time at the top right", Kind::Value},
@@ -115,6 +126,8 @@ constexpr Fixed HomeUpDowns[] = {{0, "Zone"}, {1, "Channel"}, {2, "Off"}};
 static_assert(std::size(HomeUpDowns) == static_cast<std::size_t>(services::HomeUpDown::Count));
 // Light time choices, in seconds.
 constexpr std::uint16_t BacklightTimes[] = {0, 5, 10, 15, 20, 25, 30, 60, 120, 180, 240, 300, 900, 1800, 2700, 3600};
+// Automatic APRS beacon intervals, in seconds; 0 = off.
+constexpr std::uint16_t BeaconIntervals[] = {0, 60, 120, 300, 600, 900, 1200, 1800, 3600};
 // Time zones: UTC-12:00 to UTC+14:00 in half hours.
 constexpr int ZoneFirstMinutes = -12 * 60;
 constexpr int ZoneLastMinutes = 14 * 60;
@@ -132,7 +145,11 @@ std::span<const Fixed> fixedChoices(Item item)
     case Item::Gps:
     case Item::HomeClock:
     case Item::MenuHelp:
+    case Item::AprsMode:
+    case Item::AprsAudible:
         return OffOn;
+    case Item::AprsPower:
+        return Powers;
     case Item::HomePreset:
         return HomePresets;
     case Item::HomeTop:
@@ -295,7 +312,12 @@ Kept keptIn(Item item)
     case Item::HomeBottom:
     case Item::HomeUpDown:
     case Item::MenuHelp:
+    case Item::AprsMode:
+    case Item::AprsAudible:
         return Kept::Preferences;
+    case Item::AprsBeacon:
+    case Item::AprsPower:
+        return Kept::Aprs;
     case Item::Squelch:
     case Item::Roaming:
     case Item::RoamZone:
@@ -310,6 +332,8 @@ Kept keptIn(Item item)
         return Kept::Settings;
     case Item::RoamStatus:
     case Item::GpsStatus:
+    case Item::AprsSend:
+    case Item::AprsHeard:
     case Item::Log:
     case Item::KeyTest:
     case Item::Version:
@@ -382,8 +406,18 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return static_cast<std::int32_t>(s.home.bottom);
     case Item::HomeUpDown:
         return static_cast<std::int32_t>(s.upDown);
+    case Item::AprsBeacon:
+        return s.beaconIntervalS;
+    case Item::AprsPower:
+        return static_cast<std::int32_t>(s.beaconPower);
+    case Item::AprsMode:
+        return s.aprsMode ? 1 : 0;
+    case Item::AprsAudible:
+        return s.aprsAudible ? 1 : 0;
     case Item::RoamStatus:
     case Item::GpsStatus:
+    case Item::AprsSend:
+    case Item::AprsHeard:
     case Item::Log:
     case Item::KeyTest:
     case Item::Version:
@@ -465,8 +499,22 @@ void setChoice(Item item, std::int32_t value, Settings &s)
     case Item::HomeUpDown:
         s.upDown = static_cast<services::HomeUpDown>(byte);
         break;
+    case Item::AprsBeacon:
+        s.beaconIntervalS = static_cast<std::uint16_t>(value);
+        break;
+    case Item::AprsPower:
+        s.beaconPower = static_cast<services::PowerLevel>(byte & 3);
+        break;
+    case Item::AprsMode:
+        s.aprsMode = value != 0;
+        break;
+    case Item::AprsAudible:
+        s.aprsAudible = value != 0;
+        break;
     case Item::RoamStatus:
     case Item::GpsStatus:
+    case Item::AprsSend:
+    case Item::AprsHeard:
     case Item::Log:
     case Item::KeyTest:
     case Item::Version:
@@ -490,6 +538,12 @@ ValueText valueText(Item item, std::int32_t value)
         t << value;
         return t;
     case Item::BacklightTime:
+        return durationText(value);
+    case Item::AprsBeacon:
+        if (value == 0) {
+            t << "Off";
+            return t;
+        }
         return durationText(value);
     case Item::AutoLock:
         if (value == 0) {
@@ -570,6 +624,11 @@ bool listChoices(Item item, Choices &out)
     case Item::BacklightTime:
         for (const std::uint16_t s : BacklightTimes) {
             out.add(s, durationText(s).view());
+        }
+        return true;
+    case Item::AprsBeacon:
+        for (const std::uint16_t seconds : BeaconIntervals) {
+            out.add(seconds, valueText(item, seconds).view());
         }
         return true;
     case Item::TimeZone:
@@ -681,6 +740,7 @@ Navigator::Step Navigator::select()
     case Kind::Value:
         return Step::Choose;
     case Kind::Screen:
+    case Kind::Action:
         return Step::Show;
     case Kind::Info:
         break;
@@ -715,6 +775,9 @@ std::string_view Navigator::hint() const
     }
     if (info(r.item).kind == Kind::Value) {
         return "Menu: change   Exit: back";
+    }
+    if (info(r.item).kind == Kind::Action) {
+        return "Menu: send   Exit: back";
     }
     return "Exit: back";
 }

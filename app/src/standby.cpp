@@ -137,6 +137,10 @@ void StandbyScreen::drawStatus(Display &d, const StandbyState &s)
             cursor = tag(d, cursor, "GPS", p::Transmit, p::Text);
         }
     }
+    if (s.beacons) {
+        gapTo(cursor + 2);
+        cursor = tag(d, cursor, "APRS", p::Beacon, p::Text);
+    }
     gapTo(batteryX(d));
     d.fillRect(0, StatusH - 1, d.width(), 1, p::Rule);
 }

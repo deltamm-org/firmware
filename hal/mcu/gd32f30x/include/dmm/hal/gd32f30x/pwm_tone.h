@@ -30,11 +30,19 @@ public:
     /// stops itself.
     void stop();
 
+    /// Takes each sample's duty (0..255) from @p source, called in the
+    /// sample interrupt, until it returns a negative value; replaces a tone.
+    void playSamples(int (*source)());
+
+    /// True while a tone or samples play.
+    bool playing() const { return m_synth.running() || m_source != nullptr; }
+
     /// Call from the TIMER4 interrupt handler.
     void onSampleInterrupt();
 
 private:
     lib::ToneSynth m_synth;
+    int (*volatile m_source)() = nullptr;
 };
 
 } // namespace dmm::hal::gd32f30x

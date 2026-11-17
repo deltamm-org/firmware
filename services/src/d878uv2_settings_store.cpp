@@ -90,6 +90,7 @@ void D878Uv2SettingsStore::drop()
     m_failures = 0;
     m_settings.reset();
     m_preferences.reset();
+    m_aprsInterval.reset();
     m_zone[0].reset();
     m_zone[1].reset();
     m_channelCount = 0;
@@ -104,6 +105,13 @@ void D878Uv2SettingsStore::keepSettings(const CodeplugSettings &s, std::uint32_t
 void D878Uv2SettingsStore::keepPreferences(const RadioPreferences &p, std::uint32_t nowMs)
 {
     m_preferences = p;
+    changed(nowMs);
+}
+
+void D878Uv2SettingsStore::keepAprs(std::uint16_t beaconIntervalS, PowerLevel power, std::uint32_t nowMs)
+{
+    m_aprsInterval = beaconIntervalS;
+    m_aprsPower = power;
     changed(nowMs);
 }
 
@@ -189,6 +197,26 @@ bool D878Uv2SettingsStore::collect()
             addPiece(at, m_selection[side]);
         }
     }
+    if (m_aprsInterval) {
+        // The automatic beacon interval in 30 s steps; the power in bits
+        // 0..1.
+        constexpr std::uint32_t IntervalAt = AprsSettingsBlock + 0x0B;
+        constexpr std::uint32_t PowerAt = AprsSettingsBlock + 0x3B;
+        std::uint8_t interval = 0;
+        std::uint8_t power = 0;
+        if (!readable(m_codeplug.read(IntervalAt, std::span(&interval, 1))) ||
+            !readable(m_codeplug.read(PowerAt, std::span(&power, 1)))) {
+            return false;
+        }
+        m_aprs[0] = clampTo((*m_aprsInterval + 15) / 30, 0, 255);
+        m_aprs[1] = static_cast<std::uint8_t>((power & ~3u) | (static_cast<unsigned>(m_aprsPower) & 3u));
+        if (interval != m_aprs[0]) {
+            addPiece(IntervalAt, std::span(&m_aprs[0], 1));
+        }
+        if (power != m_aprs[1]) {
+            addPiece(PowerAt, std::span(&m_aprs[1], 1));
+        }
+    }
     if (m_settings) {
         // The mode 0..6 is one less than the systems' bits.
         std::uint8_t read = 0;
@@ -259,7 +287,8 @@ void D878Uv2SettingsStore::report() const
     if (!m_pending) {
         line << "nothing pending";
     } else {
-        line << "pending:" << (m_settings ? " settings" : "") << (m_preferences ? " preferences" : "");
+        line << "pending:" << (m_settings ? " settings" : "") << (m_preferences ? " preferences" : "")
+             << (m_aprsInterval ? " APRS" : "");
         for (int side = 0; side < 2; ++side) {
             if (m_zone[side]) {
                 line << " zone " << (side == 0 ? 'A' : 'B') << '=' << m_zone[side]->zone << '/'

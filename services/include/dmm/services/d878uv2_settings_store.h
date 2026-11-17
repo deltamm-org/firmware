@@ -50,6 +50,8 @@ public:
     /// time zone, the roaming zone and roaming on or off.
     void keepSettings(const CodeplugSettings &s, std::uint32_t nowMs);
     void keepPreferences(const RadioPreferences &p, std::uint32_t nowMs);
+    /// The APRS beacon interval and power, in the APRS settings.
+    void keepAprs(std::uint16_t beaconIntervalS, PowerLevel power, std::uint32_t nowMs);
     void keepZone(bool sideB, std::uint8_t zone, std::uint16_t position, std::uint32_t nowMs);
     /// Kept for up to MaxKeptChannels channels until written; a later
     /// change on a kept channel replaces its values. A further channel
@@ -93,6 +95,8 @@ private:
     std::optional<SaveResult> m_last;
     std::optional<CodeplugSettings> m_settings;
     std::optional<RadioPreferences> m_preferences;
+    std::optional<std::uint16_t> m_aprsInterval;
+    PowerLevel m_aprsPower = PowerLevel::Low;
     std::optional<Zone> m_zone[2];
     ChannelValues m_channels[MaxKeptChannels] = {};
     std::size_t m_channelCount = 0;
@@ -103,9 +107,10 @@ private:
     std::uint8_t m_settingsBytes[0x100] = {};
     std::uint8_t m_extension[1] = {};
     std::uint8_t m_selection[2][2] = {};
+    std::uint8_t m_aprs[2] = {};
     std::uint8_t m_preferenceBytes[d878uv2::PreferencesRecordBytes] = {};
     std::uint8_t m_channelBytes[MaxKeptChannels][0x40] = {};
-    static constexpr std::size_t MaxPieces = 5 + MaxKeptChannels;
+    static constexpr std::size_t MaxPieces = 7 + MaxKeptChannels;
     Piece m_pieces[MaxPieces] = {};
     std::size_t m_pieceCount = 0;
 };

@@ -34,6 +34,18 @@ void moveTo(Navigator &nav, std::size_t row)
     nav.turn(static_cast<int>(row) - static_cast<int>(nav.row()));
 }
 
+// The place of the row that opens @p group in @p parent.
+std::size_t rowOf(Group parent, Group group)
+{
+    const auto rows = info(parent).rows;
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i].group == group) {
+            return i;
+        }
+    }
+    return rows.size();
+}
+
 // The navigator in a fresh state, each value screen listed from the model.
 Step chooseHere(Navigator &nav, const Settings &s)
 {
@@ -140,12 +152,12 @@ TEST_CASE("Menu opens a group and Exit goes back one level onto the row that ope
     CHECK(nav.row() == 0);
 
     // Settings > Keys.
-    moveTo(nav, 4);
+    moveTo(nav, rowOf(Group::Top, Group::Settings));
     CHECK(nav.current().group == Group::Settings);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Settings);
     CHECK(nav.current().group == Group::Home);
-    CHECK(nav.press(Key::Down) == Step::Moved);
+    moveTo(nav, rowOf(Group::Settings, Group::Keys));
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.group() == Group::Keys);
     CHECK(nav.press(Key::Down) == Step::Moved);
@@ -207,7 +219,7 @@ TEST_CASE("Display opens from the top of the menu")
 {
     Navigator nav;
     nav.open();
-    moveTo(nav, 3);
+    moveTo(nav, rowOf(Group::Top, Group::Display));
     CHECK(nav.current().group == Group::Display);
     CHECK(nav.press(Key::Menu) == Step::Opened);
     CHECK(nav.current().item == Item::Backlight);
