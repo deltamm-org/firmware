@@ -466,6 +466,43 @@ TEST_CASE("preferences record: round trip, and none in an erased codeplug")
     CHECK(dmm::services::d878uv2::decodePreferences(e).has_value());
 }
 
+TEST_CASE("preferences record: the dedicated mode and packet sound at field bytes 12 and 13")
+{
+    RadioPreferences p;
+    Record r = encoded(p);
+    CHECK(r[5] == 14);
+    // The reserved field bytes stay erased; the defaults: no mode, quiet.
+    for (std::size_t i = 6 + 8; i < 6 + 12; ++i) {
+        CHECK(r[i] == 0xFF);
+    }
+    CHECK(r[6 + 12] == 0);
+    CHECK(r[6 + 13] == 0);
+
+    p.mode = dmm::services::DedicatedMode::Aprs;
+    p.aprsAudible = true;
+    r = encoded(p);
+    CHECK(r[6 + 12] == 1);
+    CHECK(r[6 + 13] == 1);
+    auto q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->mode == dmm::services::DedicatedMode::Aprs);
+    CHECK(q->aprsAudible);
+    // Out of range: no mode.
+    r[6 + 12] = 9;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->mode == dmm::services::DedicatedMode::Off);
+    // A record from before the fields: no mode, and quiet.
+    r = encoded(p);
+    r[5] = 8;
+    seal(r);
+    q = dmm::services::d878uv2::decodePreferences(r);
+    REQUIRE(q.has_value());
+    CHECK(q->mode == dmm::services::DedicatedMode::Off);
+    CHECK_FALSE(q->aprsAudible);
+}
+
 TEST_CASE("preferences record: a damaged record, or another mark or version, counts as none")
 {
     const RadioPreferences p{};

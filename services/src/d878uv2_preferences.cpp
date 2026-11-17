@@ -35,7 +35,12 @@ constexpr std::size_t HomeBottomAt = FieldsAt + 5;
 constexpr std::size_t MenuHelpAt = FieldsAt + 6;
 // What Up and Down do on the home screen, a choice of HomeUpDown's.
 constexpr std::size_t HomeUpDownAt = FieldsAt + 7;
-constexpr std::size_t FieldsEnd = FieldsAt + 8;
+// Field bytes 8 to 11 are reserved.
+// The dedicated receive mode on, a choice of DedicatedMode's.
+constexpr std::size_t ModeAt = FieldsAt + 12;
+// Packets heard on the speaker in APRS mode: 0 off, 1 on.
+constexpr std::size_t AprsAudibleAt = FieldsAt + 13;
+constexpr std::size_t FieldsEnd = FieldsAt + 14;
 static_assert(FieldsEnd <= CrcAt);
 
 // The field bytes a record holds; a field past them reads as its default.
@@ -95,6 +100,8 @@ std::optional<RadioPreferences> decodePreferences(std::span<const std::uint8_t, 
     p.home.bottom = f.choice(HomeBottomAt, d.home.bottom);
     p.menuHelp = f.flag(MenuHelpAt, d.menuHelp);
     p.upDown = f.choice(HomeUpDownAt, d.upDown);
+    p.mode = f.choice(ModeAt, d.mode);
+    p.aprsAudible = f.flag(AprsAudibleAt, d.aprsAudible);
     return p;
 }
 
@@ -112,6 +119,8 @@ void encodePreferences(const RadioPreferences &p, std::span<std::uint8_t, Prefer
     record[HomeBottomAt] = static_cast<std::uint8_t>(p.home.bottom);
     record[MenuHelpAt] = p.menuHelp ? 1 : 0;
     record[HomeUpDownAt] = static_cast<std::uint8_t>(p.upDown);
+    record[ModeAt] = static_cast<std::uint8_t>(p.mode);
+    record[AprsAudibleAt] = p.aprsAudible ? 1 : 0;
     const std::uint32_t crc = lib::crc32(record.data(), CrcAt);
     for (std::size_t i = 0; i < 4; ++i) {
         record[CrcAt + i] = static_cast<std::uint8_t>(crc >> (8 * i));

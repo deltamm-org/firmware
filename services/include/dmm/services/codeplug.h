@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "dmm/services/dedicated_mode.h"
 #include "dmm/services/dmr.h"
 #include "dmm/services/home_screen.h"
 #include "dmm/services/key_lock.h"
@@ -120,6 +121,11 @@ struct RadioPreferences
     bool menuHelp = true;
     /// What Up and Down do on the home screen.
     HomeUpDown upDown = HomeUpDown::Zone;
+    /// The dedicated receive mode on at the last change; it comes back on
+    /// after a restart.
+    DedicatedMode mode = DedicatedMode::Off;
+    /// The speaker opens for packets in APRS mode.
+    bool aprsAudible = false;
 };
 
 /// One repeater of a roaming zone.
