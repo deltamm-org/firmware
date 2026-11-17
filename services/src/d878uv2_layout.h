@@ -28,6 +28,10 @@ constexpr std::uint32_t SettingsBytes = 0x100;
 // The extended general settings, after the general settings.
 constexpr std::uint32_t SettingsExtension = 0x02501400;
 constexpr std::uint32_t SettingsExtensionBytes = 0x44;
+// APRS: the settings, and the text sent after the position.
+constexpr std::uint32_t AprsSettingsBlock = 0x02501000;
+constexpr std::uint32_t AprsSettingsBytes = 0xCC;
+constexpr std::uint32_t AprsComment = 0x02501200;
 constexpr std::uint32_t ZoneSelections = 0x02500100; // u16 list position per zone, side A then B
 constexpr std::uint32_t ZoneSelectionSideB = 0x200;
 constexpr std::uint32_t ZoneNames = 0x02540000;

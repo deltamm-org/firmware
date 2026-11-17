@@ -227,6 +227,20 @@ TEST_CASE("settings store: zone, channel and preferences go out in one write, in
     CHECK(r.codeplug.preferences().has_value());
 }
 
+TEST_CASE("settings store: the APRS beacon interval and power go to the APRS settings")
+{
+    Radio r;
+    r.store.keepAprs(300, PowerLevel::High, 0);
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Saved);
+    REQUIRE(r.writes.size() == 1);
+    CHECK(r.writes[0] == std::vector<std::uint32_t>{Settings + 0x100B, Settings + 0x103B});
+    CHECK(r.byte(Settings + 0x100B) == 10);
+    CHECK((r.byte(Settings + 0x103B) & 3) == 2);
+    // The same values again write nothing.
+    r.store.keepAprs(300, PowerLevel::High, 0);
+    CHECK(r.store.flush(D878Uv2SettingsStore::QuietMs) == SaveResult::Unchanged);
+}
+
 TEST_CASE("settings store: changes on several channels are kept and written together")
 {
     Radio r;
