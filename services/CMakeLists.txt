@@ -3,6 +3,7 @@
 
 add_library(dmm_services STATIC
     src/afsk.cpp
+    src/afsk_demodulator.cpp
     src/aprs.cpp
     src/ax25.cpp
     src/battery.cpp

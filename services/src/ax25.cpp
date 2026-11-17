@@ -193,4 +193,21 @@ bool decode(std::span<const std::uint8_t> bytes, Frame &out)
     return true;
 }
 
+bool RecentFrames::seen(std::span<const std::uint8_t> frame, std::uint32_t now, std::uint32_t window)
+{
+    if (frame.size() < 2) {
+        return false;
+    }
+    const auto check = static_cast<std::uint16_t>(frame[frame.size() - 2] | (frame[frame.size() - 1] << 8));
+    const auto length = static_cast<std::uint16_t>(frame.size());
+    for (const Entry &e : m_entries) {
+        if (e.length == length && e.check == check && now - e.at < window) {
+            return true;
+        }
+    }
+    m_entries[m_next] = Entry{now, check, length};
+    m_next = (m_next + 1) % m_entries.size();
+    return false;
+}
+
 } // namespace dmm::services::ax25

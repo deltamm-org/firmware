@@ -6,6 +6,7 @@
 #include "dmm/lib/fixed_vector.h"
 #include "dmm/lib/format.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -61,6 +62,29 @@ std::size_t encode(const Frame &frame, std::span<std::uint8_t> out);
 /// False if the check fails, the address field is malformed, or it is not
 /// a UI frame without layer 3.
 bool decode(std::span<const std::uint8_t> bytes, Frame &out);
+
+/// Frames seen lately, to drop copies of one frame that arrive more than
+/// once within a short time (from several decoders). Frames are told apart
+/// by their length and frame check sequence.
+class RecentFrames
+{
+public:
+    /// True if a frame with the same length and check (its last two bytes)
+    /// was seen within @p window before @p now (in any unit of time);
+    /// otherwise remembers it.
+    bool seen(std::span<const std::uint8_t> frame, std::uint32_t now, std::uint32_t window);
+
+private:
+    struct Entry
+    {
+        std::uint32_t at = 0;
+        std::uint16_t check = 0;
+        std::uint16_t length = 0;
+    };
+
+    std::array<Entry, 8> m_entries{};
+    std::size_t m_next = 0;
+};
 
 /// "SOURCE>DEST,PATH1*,PATH2:info", the usual way to print a packet.
 template <typename Writer>
