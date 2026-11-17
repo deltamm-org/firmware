@@ -76,6 +76,12 @@ constexpr int CtcssClosePolls = 15;
 constexpr int DcsClosePolls = 90;
 services::SquelchGate toneGate(ToneOpenPolls, CtcssClosePolls);
 bool speakerOpen = false;
+// A dedicated mode holds the receiver: whether a signal opens the speaker
+// meanwhile, and the channel to go back to after it.
+bool locked = false;
+bool lockAudible = false;
+UseChannel keptChannel{};
+bool channelKept = false;
 
 // DMR receive: the channel's settings, whether it works through a
 // repeater, and the call being heard.
@@ -181,6 +187,9 @@ os::Ticks listenUntil = 0;
 os::Ticks packetAirMs = 0;
 // The receiver heard a carrier at the last poll.
 bool carrierAtPoll = false;
+// The analog channel's receive frequency while the radio listens on it,
+// else 0; kept for other tasks.
+std::atomic<std::uint32_t> listeningHz{0};
 std::uint32_t randomState = 0x2545F491;
 
 // Transmit only inside the 2 m and 70 cm amateur bands.
@@ -263,7 +272,7 @@ void setSpeaker(bool open)
     if (!fmChannel.digital) {
         withBaseband([open](auto &b) { b.setCarrier(open); });
     }
-    audio::post(audio::ReceiveAudio{open});
+    audio::post(audio::ReceiveAudio{open && (!locked || lockAudible)});
 }
 
 // Log lines of the receive set-up are built in their own frames, kept out
@@ -809,7 +818,7 @@ bool searchInterrupted()
         if (std::holds_alternative<Ptt>(m) || std::holds_alternative<PttFor>(m) || std::holds_alternative<UseChannel>(m) ||
             std::holds_alternative<RoamNow>(m) || std::holds_alternative<FmReceive>(m) ||
             std::holds_alternative<DmrReceive>(m) || std::holds_alternative<FmIdle>(m) ||
-            std::holds_alternative<Restart>(m)) {
+            std::holds_alternative<Restart>(m) || std::holds_alternative<LockReceiver>(m)) {
             return true;
         }
     }
@@ -1104,6 +1113,10 @@ void startTransmit(bool packet = false)
     if (transmitting) {
         return;
     }
+    if (locked && !packet) {
+        refused("fm", "a dedicated mode holds the receiver", "Mode is on");
+        return;
+    }
     if (!fm->receiving() || system::calibration() == nullptr) {
         refused("fm", "no FM channel set (fm rx first)", "No channel");
         return;
@@ -1369,7 +1382,8 @@ void saveStep()
     // Battery save sleeps only an FM receiver; a DMR receiver would lose
     // the signal's timing.
     // A waiting packet needs the receiver listening for the channel.
-    const bool receiverOn = !fmChannel.digital && !transmitting && packetState == PacketState::None &&
+    // A dedicated mode decodes every sample.
+    const bool receiverOn = !locked && !fmChannel.digital && !transmitting && packetState == PacketState::None &&
         (fm->receiving() || fm->receiverAsleep());
     const bool wasActive = saver.active();
     switch (saver.update(os::nowMs(), power::idleForMs(), receiverOn)) {
@@ -1392,6 +1406,77 @@ void saveStep()
     }
 }
 
+// Works on the channel @p u gives: its frequencies and settings, and on a
+// roaming channel the zone's repeater in use.
+void useChannel(const UseChannel &u)
+{
+    const services::Channel &c = u.channel;
+    const bool toneSquelch = c.squelchMode == services::SquelchMode::Tone && c.analog();
+    fmChannel = services::FmChannel{c.receiveHz, c.transmitHz, c.wide && c.analog(),
+        toneSquelch ? c.receiveTone : services::Tone{}, c.analog() ? c.transmitTone : services::Tone{},
+        c.digital()};
+    dmrSettings = c.dmr;
+    // A digital channel works through a repeater when it
+    // receives and transmits on different frequencies.
+    dmrRepeater = c.receiveHz != c.transmitHz;
+    transmitHz = c.transmitHz;
+    transmitTone = c.transmitTone;
+    powerLevel = c.power;
+    receiveOnly = c.receiveOnly;
+    squelchLevel = u.squelch;
+    roam::useChannel(c);
+    receive();
+    roam::show(false);
+}
+
+[[gnu::noinline]] void logLock(const LockReceiver &l)
+{
+    if (l.on) {
+        log::info("radio") << "receiver held at " << mhz(l.hz).view() << " MHz, " << (l.wide ? "25" : "12.5") << " kHz"
+                           << (l.audible ? "" : ", speaker quiet");
+    } else {
+        log::info("radio") << "receiver back to the channel";
+    }
+}
+
+// Holds the receiver for a dedicated mode, or gives it back to the channel.
+void lockReceiver(const LockReceiver &l)
+{
+    if (!l.on && !locked) {
+        return;
+    }
+    logLock(l);
+    // The speaker starts closed either way, so it opens anew as the mode
+    // allows.
+    setSpeaker(false);
+    locked = l.on;
+    lockAudible = l.audible;
+    if (!l.on) {
+        if (channelKept) {
+            useChannel(keptChannel);
+        } else {
+            fm->idle();
+        }
+        return;
+    }
+    endCall("left");
+    fmChannel = services::FmChannel{l.hz, l.hz, l.wide, {}, {}, false};
+    dmrSettings = {};
+    roam::leave();
+    transmitHz = 0;
+    transmitTone = {};
+    receive();
+}
+
+// A console receive command while a mode holds the receiver is refused.
+[[gnu::noinline]] bool heldByMode()
+{
+    if (locked) {
+        log::info("radio") << "refused: a dedicated mode holds the receiver";
+    }
+    return locked;
+}
+
 void handle(Message &message)
 {
     // Every command finds the receiver awake; battery save's own messages
@@ -1410,7 +1495,7 @@ void handle(Message &message)
     if (hopped && packetState == PacketState::Waiting) {
         const Ptt *ptt = std::get_if<Ptt>(&message);
         if ((ptt != nullptr && ptt->down) || std::get_if<PttFor>(&message) != nullptr ||
-            std::get_if<UseChannel>(&message) != nullptr ||
+            std::get_if<UseChannel>(&message) != nullptr || std::get_if<LockReceiver>(&message) != nullptr ||
             std::get_if<FmReceive>(&message) != nullptr || std::get_if<FmIdle>(&message) != nullptr ||
             std::get_if<DmrReceive>(&message) != nullptr || std::get_if<RoamNow>(&message) != nullptr) {
             log::info("packet") << "dropped: the radio is in use";
@@ -1439,6 +1524,9 @@ void handle(Message &message)
                        });
                    },
                    [](const FmReceive &r) {
+                       if (heldByMode()) {
+                           return;
+                       }
                        const services::Tone receiveTone = fmChannel.receiveTone;
                        fmChannel = services::FmChannel{r.receiveHz, r.receiveHz, r.wide, {}, {}, false};
                        dmrSettings = {};
@@ -1513,6 +1601,9 @@ void handle(Message &message)
                        log::info("fm") << "transmit timeout " << timeoutS << " s";
                    },
                    [](const DmrReceive &r) {
+                       if (heldByMode()) {
+                           return;
+                       }
                        fmChannel = services::FmChannel{r.receiveHz, r.receiveHz, false, {}, {}, true};
                        dmrSettings = {};
                        roam::leave();
@@ -1538,24 +1629,16 @@ void handle(Message &message)
                        log::info("dmr") << "own ID " << o.id << (o.id == 0 ? " (the channel's)" : "");
                    },
                    [](const UseChannel &u) {
-                       const services::Channel &c = u.channel;
-                       const bool toneSquelch = c.squelchMode == services::SquelchMode::Tone && c.analog();
-                       fmChannel = services::FmChannel{c.receiveHz, c.transmitHz, c.wide && c.analog(),
-                           toneSquelch ? c.receiveTone : services::Tone{}, c.analog() ? c.transmitTone : services::Tone{},
-                           c.digital()};
-                       dmrSettings = c.dmr;
-                       // A digital channel works through a repeater when it
-                       // receives and transmits on different frequencies.
-                       dmrRepeater = c.receiveHz != c.transmitHz;
-                       transmitHz = c.transmitHz;
-                       transmitTone = c.transmitTone;
-                       powerLevel = c.power;
-                       receiveOnly = c.receiveOnly;
-                       squelchLevel = u.squelch;
-                       roam::useChannel(c);
-                       receive();
-                       roam::show(false);
+                       keptChannel = u;
+                       channelKept = true;
+                       if (!locked) {
+                           useChannel(u);
+                       } else if (u.squelch != squelchLevel) {
+                           squelchLevel = u.squelch;
+                           receive();
+                       }
                    },
+                   [](const LockReceiver &l) { lockReceiver(l); },
                    [](const RoamNow &) { roam::searchNow(); },
                    [](const RoamAutomatic &r) { roam::setAutomatic(r.on); },
                    [](const RoamingSetup &r) { roam::setup(r.settings); },
@@ -1668,6 +1751,9 @@ void radioMain(void *)
             signalDbm.store(fm->status().rssiDbm);
             signalAt.store(lastSignalRead);
         }
+        // Battery save's sleep counts as listening: it wakes on a signal.
+        const bool listening = !onAir && !transmitting && !fmChannel.digital && (fm->receiving() || fm->receiverAsleep());
+        listeningHz.store(listening ? fmChannel.receiveHz : 0);
     }
 }
 
@@ -1712,6 +1798,11 @@ bool carrier()
 void setLevelLog(bool on)
 {
     levelLog.store(on, std::memory_order_relaxed);
+}
+
+std::uint32_t analogListeningHz()
+{
+    return listeningHz.load();
 }
 
 bool ready()

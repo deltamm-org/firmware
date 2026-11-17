@@ -36,8 +36,10 @@ enum class Item : std::uint8_t
     RoamZone,
     GpsStatus, // opens the GPS screen
     Gps,
+    AprsMode, // holds the receiver on the APRS frequency
     AprsSend, // sends the position once
     AprsBeacon,
+    AprsHeard, // opens the stations heard
     Backlight,
     BacklightTime,
     MenuHelp, // the panel about the chosen row, shown or not
@@ -47,6 +49,7 @@ enum class Item : std::uint8_t
     TimeZone,
     GpsSystems,
     AprsPower,
+    AprsAudible,
     HomePreset, // a whole home screen layout at once
     HomeTop,
     HomeClock,
@@ -175,6 +178,9 @@ struct Settings
     /// APRS: the time between automatic beacons (0 off) and their power.
     std::uint16_t beaconIntervalS = 0;
     services::PowerLevel beaconPower = services::PowerLevel::Low;
+    /// APRS mode on, and packets heard on the speaker meanwhile.
+    bool aprsMode = false;
+    bool aprsAudible = false;
 };
 
 /// Where a setting is kept: the general settings, the radio's own

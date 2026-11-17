@@ -503,6 +503,7 @@ void runCommand(std::string_view command)
         log::info("console") << "gps: gps, gps on|off, gps raw on|off, gps need <s>, gps fake <lat> <lon> (10^-4 degrees, south and west negative); clock: time, time set YYYY-MM-DD HH:MM:SS (UTC)";
         log::info("console") << "GPS receiver: " << gps::debugHelp();
         log::info("console") << aprs::consoleHelp();
+        log::info("console") << aprs::receiveHelp();
     } else if (command == "fault") {
         log::info("console") << "crashing on purpose";
         flushLog();
@@ -716,7 +717,7 @@ void start(Platform &p)
         audio::start(*p.audio);
     }
     radio::start(p.fm, p.baseband, p.modem);
-    aprs::start();
+    aprs::start(p.audioSampler);
     if (p.gps != nullptr) {
         gps::start(*p.gps);
     }

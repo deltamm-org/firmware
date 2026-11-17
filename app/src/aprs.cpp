@@ -11,10 +11,12 @@
 #include "dmm/lib/strings.h"
 #include "dmm/lib/variant.h"
 #include "dmm/os/os.h"
+#include "dmm/services/afsk_demodulator.h"
 #include "dmm/services/aprs.h"
 #include "dmm/services/ax25.h"
 #include "dmm/services/log.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -30,9 +32,13 @@ namespace ax25 = services::ax25;
 using services::AprsSettings;
 using services::GpsSchedule;
 
-// Room for building a beacon down to its log line, and a margin.
-os::Task<512> aprsTask;
-constexpr unsigned AprsPriority = 2;
+// Room for the deepest path, a packet decoded down to the heard list and
+// the log (about 1.7 KB with the kernel's calls and an interrupt), and a
+// margin.
+os::Task<640> aprsTask;
+// Above the ui, gps and console tasks: a long screen redraw or codeplug
+// write must not keep the task from the sampler's ring.
+constexpr unsigned AprsPriority = 5;
 os::Queue<Message, 4> inbox;
 
 // The destination names the software (an experimental APZ tocall).
@@ -58,13 +64,53 @@ os::Ticks pendingSince = 0;
 os::Ticks nextTry = 0;
 bool waitingForFix = false;
 
-// Too big for the stack.
+// Too big for the stack. The task builds beacons and reads received
+// packets in turn, so they share the frame and the position.
 ax25::Frame frame;
 services::aprs::Position position;
 
-// Guards the station from the codeplug, which the ui hands over.
+// Decoding the received audio: in APRS mode it starts once the radio has
+// listened on the mode's frequency for a moment, and stops as soon as it
+// does not (a transmission).
+board::AudioSampler *sampler = nullptr;
+services::AfskDemodulator demodulator;
+bool modeOn = false;
+std::uint32_t modeHz = 0;
+DecodeMode decodeMode = DecodeMode::On;
+bool decoding = false;
+bool listenSeen = false;
+os::Ticks listenSince = 0;
+std::uint32_t lostSeen = 0;
+std::uint32_t lostTotal = 0;
+// The longest time between two reads of the sampler and when it ended,
+// and the longest one pass of decoding took.
+os::Ticks lastReadAt = 0;
+os::Ticks longestGapMs = 0;
+os::Ticks longestGapAt = 0;
+os::Ticks longestPassMs = 0;
+constexpr os::Ticks DecodeSettleMs = 1000;
+// How often the sampler is read while the radio listens for packets.
+constexpr os::Ticks ReceivePollMs = 20;
+using services::AfskDemodulator;
+
+// For the home screen, read by other tasks.
+std::atomic<bool> decodingShown{false};
+std::atomic<std::uint32_t> packetsHeard{0};
+std::atomic<services::aprs::BeaconStatus::State> beaconShown{services::aprs::BeaconStatus::State::NoStation};
+std::atomic<os::Ticks> nextBeaconShown{0};
+
+// Guards what other tasks hand over or read: the station from the
+// codeplug, and the heard list, newest first.
 os::Mutex lock;
 std::optional<AprsSettings> newStation;
+std::array<HeardStation, MaxHeard> heardList{};
+std::size_t heardTotal = 0;
+
+const char *decodeModeText()
+{
+    return decodeMode == DecodeMode::Off ? "off" : decodeMode == DecodeMode::On ? "in APRS mode"
+                                                                                : "on any analog channel";
+}
 
 lib::StaticString<12> frequencyText(std::uint32_t hz)
 {
@@ -80,6 +126,11 @@ void setGpsNeed(std::uint32_t intervalMs)
 
 void report()
 {
+    log::info("aprs") << "APRS mode " << (modeOn ? "on" : "off");
+    if (sampler != nullptr) {
+        log::info("aprs") << "decoding " << decodeModeText() << (decoding ? ", running" : "") << ": "
+                          << demodulator.stats().passed << " frames";
+    }
     if (!station) {
         log::info("aprs") << "no station: the codeplug has no APRS callsign";
         return;
@@ -229,6 +280,205 @@ void startBeacon(bool here = false)
     nextTry = pendingSince;
 }
 
+void copyText(char *to, std::size_t bytes, std::string_view text)
+{
+    std::size_t n = 0;
+    for (char ch : text) {
+        if (n == bytes) {
+            break;
+        }
+        to[n++] = ch >= ' ' && ch <= '~' ? ch : ' ';
+    }
+    to[n] = '\0';
+}
+
+// Puts what @p frame says into the list, at the top.
+void remember()
+{
+    HeardStation h;
+    copyText(h.call, HeardStation::CallBytes, ax25::addressText(frame.source).view());
+    for (const ax25::Address &a : frame.path) {
+        if (a.repeated) {
+            ax25::Address plain = a;
+            plain.repeated = false;
+            copyText(h.via, HeardStation::CallBytes, ax25::addressText(plain).view());
+        }
+    }
+    const std::optional<services::aprs::Position> read = services::aprs::readPosition(frame);
+    if (read) {
+        position = *read;
+        const services::aprs::Position *p = &position;
+        h.hasPosition = true;
+        h.latitudeE7 = p->latitudeE7;
+        h.longitudeE7 = p->longitudeE7;
+        h.symbolTable = p->symbolTable;
+        h.symbol = p->symbol;
+        h.hasAltitude = p->hasAltitude;
+        h.altitudeM = p->altitudeM;
+        h.hasCourse = p->hasCourse;
+        h.courseDeg = p->courseDeg;
+        h.speedKnots = p->speedKnots;
+        copyText(h.text, HeardStation::TextBytes, p->comment.view());
+    } else {
+        std::string_view info = frame.info.view();
+        if (!info.empty() && info[0] == '>') {
+            info.remove_prefix(1);
+        }
+        copyText(h.text, HeardStation::TextBytes, info);
+    }
+    h.heardAtMs = os::nowMs();
+
+    lock.lock();
+    std::size_t at = heardTotal;
+    for (std::size_t i = 0; i < heardTotal; ++i) {
+        if (std::strcmp(heardList[i].call, h.call) == 0) {
+            at = i;
+            break;
+        }
+    }
+    if (at < heardTotal) {
+        h.packets = static_cast<std::uint16_t>(heardList[at].packets + 1);
+        // A packet without a position keeps the last one heard.
+        if (!h.hasPosition && heardList[at].hasPosition) {
+            const HeardStation &old = heardList[at];
+            h.hasPosition = true;
+            h.latitudeE7 = old.latitudeE7;
+            h.longitudeE7 = old.longitudeE7;
+            h.symbolTable = old.symbolTable;
+            h.symbol = old.symbol;
+        }
+    } else {
+        h.packets = 1;
+        at = heardTotal < MaxHeard ? heardTotal++ : MaxHeard - 1;
+    }
+    for (std::size_t i = at; i > 0; --i) {
+        heardList[i] = heardList[i - 1];
+    }
+    heardList[0] = h;
+    lock.unlock();
+}
+
+// A frame with a right check from the decoder.
+void heardFrame(std::span<const std::uint8_t> bytes, const AfskDemodulator::FrameInfo &info)
+{
+    if (!ax25::decode(bytes, frame)) {
+        return;
+    }
+    packetsHeard.store(packetsHeard.load() + 1);
+    remember();
+    auto line = log::info("aprs");
+    line << "heard ";
+    if (info.repaired) {
+        line << "(repaired) ";
+    }
+    ax25::writeText(line, frame);
+    ui::post(ui::AprsHeard{});
+}
+
+// The radio listens where the decoder works: on the mode's frequency, or
+// anywhere for a test.
+bool onDecodingFrequency()
+{
+    const std::uint32_t hz = radio::analogListeningHz();
+    return hz != 0 && (decodeMode == DecodeMode::AnyChannel || (modeOn && hz == modeHz));
+}
+
+void stopDecoding()
+{
+    if (!decoding) {
+        return;
+    }
+    sampler->stop();
+    decoding = false;
+    log::info("aprs") << "decoding off";
+}
+
+// Starts or stops decoding as the radio and the settings say.
+void updateDecoding()
+{
+    const bool wanted = decodeMode != DecodeMode::Off && sampler != nullptr && onDecodingFrequency();
+    if (!wanted) {
+        listenSeen = false;
+        stopDecoding();
+        return;
+    }
+    const os::Ticks now = os::nowMs();
+    if (decoding) {
+        return;
+    }
+    if (!listenSeen) {
+        listenSeen = true;
+        listenSince = now;
+        return;
+    }
+    if (now - listenSince < DecodeSettleMs) {
+        return;
+    }
+    if (!sampler->start(AfskDemodulator::SampleRateHz)) {
+        decodeMode = DecodeMode::Off;
+        log::warning("aprs") << "decoding off: the audio cannot be sampled at " << AfskDemodulator::SampleRateHz << " Hz";
+        return;
+    }
+    demodulator.reset();
+    lostSeen = sampler->lostSamples();
+    lastReadAt = now;
+    decoding = true;
+    log::info("aprs") << "decoding on at " << frequencyText(radio::analogListeningHz()).view() << " MHz";
+}
+
+[[gnu::noinline, gnu::cold]] void logLost(std::uint32_t samples, os::Ticks gapMs)
+{
+    log::info("aprs") << samples << " samples lost: no read for " << gapMs << " ms";
+}
+
+// Decodes the samples taken since the last poll. Kept apart from the
+// task's other work, so a frame's path down to the log stays short.
+[[gnu::noinline]] void pollSampler()
+{
+    static std::uint16_t chunk[64];
+    const os::Ticks start = os::nowMs();
+    const os::Ticks gap = start - lastReadAt;
+    lastReadAt = start;
+    if (gap > longestGapMs) {
+        longestGapMs = gap;
+        longestGapAt = start;
+    }
+    for (;;) {
+        const std::size_t n = sampler->read(chunk);
+        const std::uint32_t lost = sampler->lostSamples();
+        if (lost != lostSeen) {
+            // A gap breaks the frame in progress.
+            logLost(lost - lostSeen, gap);
+            lostTotal += lost - lostSeen;
+            lostSeen = lost;
+            demodulator.reset();
+        }
+        if (n == 0) {
+            break;
+        }
+        demodulator.process(std::span<const std::uint16_t>(chunk, n), heardFrame);
+    }
+    longestPassMs = std::max(longestPassMs, os::nowMs() - start);
+}
+
+void receiveReport()
+{
+    log::info("aprs") << "APRS mode " << (modeOn ? "on" : "off") << "; decoding " << decodeModeText()
+                      << (decoding ? ", running" : ", not running") << ", repair " << (demodulator.repair() ? "on" : "off");
+    const AfskDemodulator::Stats &st = demodulator.stats();
+    log::info("aprs") << "frames: " << st.passed << " (" << st.repaired << " repaired); "
+                      << st.samples / AfskDemodulator::SampleRateHz << " s of audio, " << lostTotal
+                      << " samples lost, " << st.duplicates << " copies between slicers";
+    log::info("aprs") << "reads: longest gap " << longestGapMs << " ms (at " << longestGapAt / 1000
+                      << " s), longest decoding pass " << longestPassMs << " ms";
+    auto line = log::info("aprs");
+    line << "slicers (dB right/failed):";
+    for (std::size_t i = 0; i < AfskDemodulator::Slicers; ++i) {
+        const int db = AfskDemodulator::MarkGainDb[i];
+        line << ' ' << (db < 0 ? "-" : "+") << (db < 0 ? -db : db) << ' ' << st.frames[i] << '/' << st.failed[i];
+    }
+}
+
 [[gnu::noinline]] void handle(const Message &message)
 {
     lib::visit(lib::Overload{
@@ -244,6 +494,22 @@ void startBeacon(bool here = false)
                    [](const BeaconPower &p) { power = p.level; },
                    [](const BeaconNow &b) { startBeacon(b.here); },
                    [](const Report &) { report(); },
+                   [](const ModeOn &m) {
+                       modeOn = m.on;
+                       modeHz = m.hz;
+                       log::info("aprs") << "APRS mode " << (m.on ? "on at " : "off")
+                                         << (m.on ? frequencyText(m.hz).view() : std::string_view())
+                                         << (m.on ? " MHz" : "");
+                   },
+                   [](const Decode &m) {
+                       decodeMode = m.mode;
+                       log::info("aprs") << "decoding " << decodeModeText();
+                   },
+                   [](const RepairFrames &r) {
+                       demodulator.setRepair(r.on);
+                       log::info("aprs") << "repair " << (r.on ? "on" : "off");
+                   },
+                   [](const ReceiveReport &) { receiveReport(); },
                },
         message);
 }
@@ -266,14 +532,34 @@ void takeStation()
     report();
 }
 
+// What the home screen shows of the beacon, for other tasks.
+void showBeacon()
+{
+    using State = services::aprs::BeaconStatus::State;
+    const State state = !station   ? State::NoStation
+        : pending && waitingForFix ? State::WaitingForFix
+        : pending                  ? State::Queued
+        : intervalS == 0           ? State::Off
+                                   : State::Next;
+    beaconShown.store(state);
+    nextBeaconShown.store(nextBeaconAt);
+    decodingShown.store(decoding);
+}
+
 void aprsMain(void *)
 {
     while (!os::stopRequested()) {
         Message m;
-        if (inbox.receive(m, pending ? RetryMs : IdleMs)) {
+        const bool listening = decoding || modeOn || decodeMode == DecodeMode::AnyChannel;
+        if (inbox.receive(m, listening ? ReceivePollMs : pending ? RetryMs
+                                                                 : IdleMs)) {
             handle(m);
         }
         takeStation();
+        updateDecoding();
+        if (decoding) {
+            pollSampler();
+        }
         const os::Ticks now = os::nowMs();
         if (intervalS != 0 && static_cast<std::int32_t>(now - nextBeaconAt) >= 0) {
             nextBeaconAt = now + static_cast<os::Ticks>(intervalS) * 1000;
@@ -282,6 +568,7 @@ void aprsMain(void *)
         if (pending && static_cast<std::int32_t>(now - nextTry) >= 0) {
             tryBeacon();
         }
+        showBeacon();
     }
 }
 
@@ -291,8 +578,9 @@ std::uint8_t levelPercent = 5;
 
 } // namespace
 
-void start()
+void start(board::AudioSampler *s)
 {
+    sampler = s;
     aprsTask.start("aprs", AprsPriority, aprsMain, nullptr);
 }
 
@@ -303,14 +591,66 @@ void setStation(const AprsSettings &settings)
     lock.unlock();
 }
 
+bool heardStation(std::size_t index, HeardStation &out)
+{
+    lock.lock();
+    const bool found = index < heardTotal;
+    if (found) {
+        out = heardList[index];
+    }
+    lock.unlock();
+    return found;
+}
+
+bool heardStation(std::string_view call, HeardStation &out)
+{
+    lock.lock();
+    bool found = false;
+    for (std::size_t i = 0; i < heardTotal && !found; ++i) {
+        if (call == heardList[i].call) {
+            out = heardList[i];
+            found = true;
+        }
+    }
+    lock.unlock();
+    return found;
+}
+
+std::size_t heardCount()
+{
+    lock.lock();
+    const std::size_t n = heardTotal;
+    lock.unlock();
+    return n;
+}
+
 bool post(const Message &message)
 {
     return inbox.send(message);
 }
 
+ReceiveView receiveView()
+{
+    return {decodingShown.load(), packetsHeard.load()};
+}
+
+services::aprs::BeaconStatus beaconStatus()
+{
+    services::aprs::BeaconStatus b;
+    b.state = beaconShown.load();
+    const auto left = static_cast<std::int32_t>(nextBeaconShown.load() - os::nowMs());
+    b.nextInS = left > 0 ? static_cast<std::uint32_t>(left + 999) / 1000 : 0;
+    return b;
+}
+
 const char *consoleHelp()
 {
-    return "aprs, aprs send [here], aprs every <s> (0 = off), aprs lead <ms>, aprs level <%>";
+    return "aprs, aprs mode on|off, aprs send [here], aprs every <s> (0 = off), aprs lead <ms>, aprs level <%>";
+}
+
+const char *receiveHelp()
+{
+    return "aprs rx, aprs rx decode on|off|any, aprs rx repair on|off";
 }
 
 bool runCommand(std::string_view command)
@@ -324,6 +664,31 @@ bool runCommand(std::string_view command)
     }
     std::string_view rest(command.data() + 5, command.size() - 5);
     const std::string_view word = lib::takeWord(rest);
+    if (word == "rx") {
+        const std::string_view what = lib::takeWord(rest);
+        const std::string_view value = lib::takeWord(rest);
+        bool posted = true;
+        if (what.empty()) {
+            posted = post(ReceiveReport{});
+        } else if (what == "decode" && rest.empty() && (value == "on" || value == "off" || value == "any")) {
+            posted = post(Decode{value == "on" ? DecodeMode::On : value == "off" ? DecodeMode::Off
+                                                                                 : DecodeMode::AnyChannel});
+        } else if (what == "repair" && rest.empty() && (value == "on" || value == "off")) {
+            posted = post(RepairFrames{value == "on"});
+        } else {
+            log::info("console") << receiveHelp();
+        }
+        if (!posted) {
+            log::info("console") << "busy";
+        }
+        return true;
+    }
+    if (word == "mode" && (rest == "on" || rest == "off")) {
+        if (!ui::post(ui::SetMode{rest == "on" ? services::DedicatedMode::Aprs : services::DedicatedMode::Off})) {
+            log::info("console") << "busy";
+        }
+        return true;
+    }
     if (word == "send" && (rest.empty() || rest == "here")) {
         post(BeaconNow{rest == "here"});
         return true;

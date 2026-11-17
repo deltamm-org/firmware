@@ -18,7 +18,7 @@ constexpr Row TopRows[] = {Group::Channel, Group::Roaming, Group::Gps, Group::Ap
 constexpr Row ChannelRows[] = {Item::Squelch, Item::SquelchMode, Item::Power};
 constexpr Row RoamingRows[] = {Item::Roaming, Item::RoamStatus, Item::RoamZone};
 constexpr Row GpsRows[] = {Item::Gps, Item::GpsStatus, Item::GpsSystems};
-constexpr Row AprsRows[] = {Item::AprsSend, Item::AprsBeacon};
+constexpr Row AprsRows[] = {Item::AprsMode, Item::AprsSend, Item::AprsBeacon, Item::AprsHeard};
 constexpr Row SettingsRows[] = {Group::Home, Group::Keys, Group::Battery, Group::Clock, Group::AprsSettings};
 constexpr Row DisplayRows[] = {Item::Backlight, Item::BacklightTime, Item::MenuHelp};
 // The key test, for bringing up a radio, only in builds that have it.
@@ -34,14 +34,14 @@ constexpr Row HomeRows[] = {Item::HomePreset, Item::HomeTop, Item::HomeClock, It
 constexpr Row KeysRows[] = {Item::KeyLock, Item::AutoLock};
 constexpr Row BatteryRows[] = {Item::BatterySave};
 constexpr Row ClockRows[] = {Item::TimeZone};
-constexpr Row AprsSettingsRows[] = {Item::AprsPower};
+constexpr Row AprsSettingsRows[] = {Item::AprsPower, Item::AprsAudible};
 
 constexpr GroupInfo Groups[] = {
     {"Menu", "", TopRows},
     {"Channel", "Squelch and power of the channel in use", ChannelRows},
     {"Roaming", "Moving between the roaming zone's repeaters", RoamingRows},
     {"GPS", "On or off, the fix and the satellite systems", GpsRows},
-    {"APRS", "Sending the position, now and on its own", AprsRows},
+    {"APRS", "APRS mode, sending the position, stations heard", AprsRows},
     {"Display", "Brightness, light time, help text", DisplayRows},
     {"Settings", "Home screen, keys, battery, clock and APRS", SettingsRows},
     {"Tools", ToolsAbout, ToolsRows},
@@ -49,7 +49,7 @@ constexpr GroupInfo Groups[] = {
     {"Keys", "What the key lock covers, and auto lock", KeysRows},
     {"Battery", "Battery save while the radio is quiet", BatteryRows},
     {"Clock", "The time zone", ClockRows},
-    {"APRS", "The power for sending the position", AprsSettingsRows},
+    {"APRS", "Send power, and packets on the speaker", AprsSettingsRows},
 };
 static_assert(std::size(Groups) == static_cast<std::size_t>(Group::Count));
 
@@ -62,8 +62,10 @@ constexpr ItemInfo Items[] = {
     {"Roam zone", "The repeaters to move between", Kind::Value},
     {"Status", "Position, satellites and time from the GPS", Kind::Screen},
     {"Enabled", "The GPS receiver on or off", Kind::Value},
+    {"APRS mode", "One receiver: APRS mode listens only on APRS", Kind::Value},
     {"Send now", "Sends the position once, when the channel is free", Kind::Action},
     {"Auto send", "How often the position is sent by itself", Kind::Value},
+    {"Heard", "Stations heard, newest first; Menu opens one", Kind::Screen},
     {"Brightness", "Display brightness", Kind::Value},
     {"Light time", "How long the light stays on after a key", Kind::Value},
     {"Help text", "These two lines about the chosen row", Kind::Value},
@@ -73,6 +75,7 @@ constexpr ItemInfo Items[] = {
     {"Time zone", "Local time's offset from UTC", Kind::Value},
     {"Satellites", "Satellite systems used: GPS, GLONASS, BeiDou", Kind::Value},
     {"Send power", "Transmit power for sending the position", Kind::Value},
+    {"Hear packets", "In APRS mode: packets heard on the speaker", Kind::Value},
     {"Preset", "A whole layout at once; rows can then change", Kind::Value},
     {"Top line", "Small line at the top: talkgroup, zone, place", Kind::Value},
     {"Clock", "The time at the top right", Kind::Value},
@@ -142,6 +145,8 @@ std::span<const Fixed> fixedChoices(Item item)
     case Item::Gps:
     case Item::HomeClock:
     case Item::MenuHelp:
+    case Item::AprsMode:
+    case Item::AprsAudible:
         return OffOn;
     case Item::AprsPower:
         return Powers;
@@ -307,6 +312,8 @@ Kept keptIn(Item item)
     case Item::HomeBottom:
     case Item::HomeUpDown:
     case Item::MenuHelp:
+    case Item::AprsMode:
+    case Item::AprsAudible:
         return Kept::Preferences;
     case Item::AprsBeacon:
     case Item::AprsPower:
@@ -326,6 +333,7 @@ Kept keptIn(Item item)
     case Item::RoamStatus:
     case Item::GpsStatus:
     case Item::AprsSend:
+    case Item::AprsHeard:
     case Item::Log:
     case Item::KeyTest:
     case Item::Version:
@@ -402,9 +410,14 @@ std::int32_t choiceOf(Item item, const Settings &s)
         return s.beaconIntervalS;
     case Item::AprsPower:
         return static_cast<std::int32_t>(s.beaconPower);
+    case Item::AprsMode:
+        return s.aprsMode ? 1 : 0;
+    case Item::AprsAudible:
+        return s.aprsAudible ? 1 : 0;
     case Item::RoamStatus:
     case Item::GpsStatus:
     case Item::AprsSend:
+    case Item::AprsHeard:
     case Item::Log:
     case Item::KeyTest:
     case Item::Version:
@@ -492,9 +505,16 @@ void setChoice(Item item, std::int32_t value, Settings &s)
     case Item::AprsPower:
         s.beaconPower = static_cast<services::PowerLevel>(byte & 3);
         break;
+    case Item::AprsMode:
+        s.aprsMode = value != 0;
+        break;
+    case Item::AprsAudible:
+        s.aprsAudible = value != 0;
+        break;
     case Item::RoamStatus:
     case Item::GpsStatus:
     case Item::AprsSend:
+    case Item::AprsHeard:
     case Item::Log:
     case Item::KeyTest:
     case Item::Version:
