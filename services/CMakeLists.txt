@@ -2,6 +2,9 @@
 # Copyright (c) 2026 Tommi Tauriainen
 
 add_library(dmm_services STATIC
+    src/afsk.cpp
+    src/aprs.cpp
+    src/ax25.cpp
     src/battery.cpp
     src/channel_selector.cpp
     src/d878uv2_calibration.cpp
