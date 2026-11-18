@@ -24,32 +24,66 @@ public:
     /// A level is current for this long after it was measured or the
     /// repeater was last heard.
     static constexpr std::uint32_t ValidMs = 120'000;
+    /// A reading of the repeater in use is the mean of its bursts over
+    /// ReadingSpanMs, about what a beacon gives before the radio may listen
+    /// elsewhere: from the start of each transmission, and again ReadingMs
+    /// after the last reading while it goes on, so that a call reads like a
+    /// beacon. Its bursts stopping for ReadingGapMs end it early. Of a
+    /// current level, a reading of fewer than ReadingBursts is dropped.
+    static constexpr std::uint32_t ReadingMs = 10'000;
+    static constexpr std::uint32_t ReadingSpanMs = 1'500;
+    static constexpr std::uint32_t ReadingGapMs = 300;
+    static constexpr int ReadingBursts = 8;
+    /// A reading moves a current level dt / (dt + CombineMs) of the way, dt
+    /// the time since the last: half way after a minute, as beacons a minute
+    /// apart, and as far over a minute however often readings come.
+    static constexpr std::uint32_t CombineMs = 60'000;
 
     struct Entry
     {
         std::uint8_t position = 0;
-        std::int8_t levelDbm = 0;
+        // In 1/16 dB: a reading moves the level a small part of the way,
+        // which in whole dB would round away and leave it short of a
+        // steady new level.
+        std::int16_t level16Dbm = 0;
         std::int8_t floorDbm = 0;
-        std::uint8_t samples = 0; // levels measured while current, up to 255; 0: none
-        bool unanswered = false;  // a wake-up went unanswered since it was last heard
-        std::uint32_t measuredMs = 0;
+        std::uint8_t samples = 0;     // levels measured while current, up to 255; 0: none
+        bool unanswered = false;      // a wake-up went unanswered since it was last heard
+        std::uint32_t measuredMs = 0; // when it was last heard
+        std::uint32_t readMs = 0;     // when its level was last read
+        // When it was last at or above the fair level, or when its current
+        // levels began if it has not been since.
+        std::uint32_t aboveFairMs = 0;
 
-        int levelDb() const { return levelDbm - floorDbm; }
+        // Rounded to the nearest dB, so that a steady level reads as itself
+        // from either side.
+        int levelDbm() const { return (level16Dbm + 8) >> 4; }
+        int levelDb() const { return levelDbm() - floorDbm; }
         bool current(std::uint32_t nowMs) const { return samples > 0 && nowMs - measuredMs < ValidMs; }
     };
 
-    void clear() { m_count = 0; }
+    void clear()
+    {
+        m_count = 0;
+        m_pending = {};
+    }
     /// Repeater @p position (-1: none) is in use: a full list never drops
     /// it, so that how it was last heard stays known while others come and
     /// go. An entry with no level, which only marks the one in use as not
     /// answering, goes once another is in use.
     void keep(int position);
-    /// Repeater @p position heard at @p levelDbm on a channel whose floor is
-    /// @p floorDbm.
-    void heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs);
-    /// Repeater @p position is heard again without a new level: a current
-    /// level stays current.
-    void stillHeard(std::uint8_t position, std::uint32_t nowMs);
+    /// Repeater @p position read at @p levelDbm on a channel whose floor is
+    /// @p floorDbm; @p fairDb is the fair level it is judged against.
+    void heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    /// A transmission of repeater @p position starts, its first burst at
+    /// @p levelDbm: a reading begins, after an open one is taken.
+    void started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    /// A burst of repeater @p position at @p levelDbm, still on the air: a
+    /// current level stays current, the burst counts towards an open
+    /// reading, and a reading begins ReadingMs after the last.
+    void stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    /// Takes an open reading whose span has passed or whose bursts stopped.
+    void flush(std::uint32_t nowMs);
     /// Repeater @p position did not answer a wake-up: until it is heard
     /// again.
     void unanswered(std::uint8_t position, std::uint32_t nowMs);
@@ -61,11 +95,24 @@ public:
     std::span<const Entry> entries() const { return {m_entries, m_count}; }
 
 private:
+    struct Pending
+    {
+        int position = -1; // -1: no reading open
+        int floorDbm = 0;
+        int fairDb = 0;
+        std::int32_t sumDbm = 0;
+        int bursts = 0;
+        std::uint32_t fromMs = 0;
+        std::uint32_t lastMs = 0;
+    };
+
     Entry &place(std::uint8_t position, std::uint32_t nowMs);
+    void take();
 
     Entry m_entries[Capacity];
     std::size_t m_count = 0;
     int m_keep = -1;
+    Pending m_pending;
 };
 
 /// The order a search tries the zone's @p zoneSize repeaters in: @p current
@@ -101,25 +148,30 @@ private:
 /// longer be told from no signal.
 struct Levels
 {
-    int goodDb = 10;  // a search stops here; a quiet repeater is left for one this strong
-    int weakDb = 6;   // below: look for a better repeater
-    int marginDb = 6; // better by this to leave a weak repeater
+    int searchDb = 10; // a search stops here; a quiet repeater is left for one at this level
+    int fairDb = 6;    // below: look for a better repeater
+    int marginDb = 6;  // better by this to leave a good or fair repeater
+    int strongDb = 20; // at or above: no listening, no move
 };
+static_assert(Levels{}.fairDb == 6, "HeardList::heard() takes the same fair level by default");
 
 /// How the repeater in use is doing.
 enum class Health : std::uint8_t
 {
-    Good,
-    Weak,  // below the weak level, or heard lately but a wake-up went unanswered
-    Quiet, // not heard lately, last heard at the weak level or above, or none in use yet
-    Lost,  // not heard lately, and a wake-up went unanswered or it was last heard below the weak level
+    Strong, // at the strong level or above
+    Good,   // below the strong level, at the fair level or above
+    Fair,   // below the fair level, or heard lately but a wake-up went unanswered
+    Poor,   // heard, but only below the fair level for as long as a level stays current
+    Quiet,  // not heard lately, last heard at the fair level or above, or none in use yet
+    Lost,   // not heard lately, and a wake-up went unanswered or it was last heard below the fair level
 };
 
 /// The health of repeater @p site (-1: none in use).
 Health health(const HeardList &heard, int site, const Levels &levels, std::uint32_t nowMs);
 
-/// The repeater to move to from @p site, or -1 to stay. Weak: the
-/// strongest current one, measured twice, better by the margin. Quiet: the
+/// The repeater to move to from @p site, or -1 to stay. Strong: none.
+/// Good or fair: the strongest current one, measured twice, better by the
+/// margin. Poor: the strongest current one, better by the margin. Quiet: the
 /// strongest current one at the good level. Lost: the strongest current
 /// one; after fading out, only when it is stronger than the one in use was
 /// last heard.
@@ -177,25 +229,48 @@ class Listening
 public:
     /// Zone positions a pass can hold: as many as a roaming zone has.
     static constexpr std::size_t MaxZone = 64;
-    /// Good or weak: one check at most this often, while the repeater in
+    /// Good or fair: one check at most this often, while the repeater in
     /// use sends idle bursts.
     static constexpr std::uint32_t HopMs = 400;
-    /// Quiet or lost: passes one after another for BurstMs, long enough to
-    /// span a repeater's beacon period; then a gap. Quiet: doubling from
-    /// FirstGapMs up to MaxGapMs, kept short so that a repeater met after a
-    /// long stretch without any is found soon. Lost: always FirstGapMs, as
-    /// no call on the repeater in use can be missed then.
+    /// Good or fair: also a burst of passes this long after the last one
+    /// (or after it was first below strong), as repeaters that beacon at
+    /// other times than the one in use are not heard during its idle bursts.
+    static constexpr std::uint32_t ScanGoodMs = 900'000;
+    static constexpr std::uint32_t ScanFairMs = 600'000;
+    /// Poor, quiet or lost: passes one after another for BurstMs, long
+    /// enough to span a repeater's beacon period; then a gap. Poor or quiet:
+    /// doubling from FirstGapMs up to MaxGapMs, kept short so that a
+    /// repeater met after a long stretch without any is found soon. Lost:
+    /// always FirstGapMs, as no call on the repeater in use can be missed
+    /// then, until nothing at all was heard for SilentMs.
     static constexpr std::uint32_t BurstMs = 60'000;
     static constexpr std::uint32_t FirstGapMs = 120'000;
     static constexpr std::uint32_t MaxGapMs = 300'000;
+    /// Lost with nothing at all heard for this long: the gaps grow, as while
+    /// quiet.
+    static constexpr std::uint32_t SilentMs = 3'600'000;
     /// Between passes the radio stays this long on the repeater in use, to
     /// hear it if it is on the air.
     static constexpr std::uint32_t DwellMs = 500;
 
-    /// Whether to listen at @p nowMs: good or weak, one check while the
-    /// repeater in use sends idle bursts (@p idle); quiet or lost, a pass.
-    /// Never while the repeater in use is good at the good level.
-    bool due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs);
+    /// Whether to listen at @p nowMs: good or fair, one check while the
+    /// repeater in use sends idle bursts (@p idle), and a burst now and then,
+    /// not started while the repeater in use is @p busy; quiet or lost, a
+    /// pass. Never while the repeater in use is strong.
+    bool due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs,
+        bool busy = false);
+    /// The listening due() allowed is a pass, not a single check.
+    bool passing() const { return m_scanning || m_scanBurst; }
+    /// For display, as of the last due(): whether bursts of passes are
+    /// planned, and whether one runs at @p nowMs or when the next one starts
+    /// (@p nextMs, set for Later).
+    enum class Bursts : std::uint8_t
+    {
+        None,
+        Now,
+        Later,
+    };
+    Bursts bursts(std::uint32_t nowMs, std::uint32_t &nextMs) const;
     /// The zone position to check next, or -1 for none. In passes: the
     /// repeaters heard lately, strongest first, then the rest of the zone in
     /// its order. Each frequency once a pass, and never the frequency of
@@ -226,6 +301,15 @@ private:
     bool m_scanning = false;
     std::uint32_t m_burstEndMs = 0;
     std::uint32_t m_gapMs = FirstGapMs;
+    bool m_scanTimer = false;
+    bool m_scanBurst = false;
+    std::uint32_t m_scanLastMs = 0;
+    std::uint32_t m_scanEndMs = 0;
+    int m_scanSite = -1;
+    std::uint32_t m_passesFromMs = 0;
+    bool m_planned = false;
+    bool m_fixedGap = false;
+    std::uint32_t m_scanPeriodMs = ScanGoodMs;
 };
 
 } // namespace dmm::services::roaming

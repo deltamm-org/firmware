@@ -504,11 +504,12 @@ std::string_view notRoamingText()
     }
     return roamingSites == 0 ? "No zone" : "Not set";
 }
-// How the repeater in use is doing, or what roaming is doing instead.
-lib::StaticString<9> roamStateText(const radio::RoamingView &v)
+// How the repeater in use is doing, by the name of its state, or what
+// roaming is doing instead.
+lib::StaticString<10> roamStateText(const radio::RoamingView &v)
 {
-    constexpr const char *States[] = {"Good", "Weak", "Quiet", "Lost"};
-    lib::StaticString<9> t;
+    constexpr const char *States[] = {"Strong", "Good", "Fair", "Poor", "Quiet", "Lost"};
+    lib::StaticString<10> t;
     if (!v.roaming) {
         t << notRoamingText();
     } else if (v.searching) {
@@ -520,11 +521,12 @@ lib::StaticString<9> roamStateText(const radio::RoamingView &v)
     }
     return t;
 }
-// Fills @p list with what roaming knows: the repeater in use, then each
-// repeater heard by its name with its level and the age of that level, the
-// one in use marked, and a row that searches now. The cursor stays on the
-// same row.
+// Fills @p list with what roaming knows: the state of the repeater in
+// use, the site search running in the background, then each repeater heard
+// by its name with its level and the age of that level, the one in use
+// marked, and a row that searches now. The cursor stays on the same row.
 constexpr std::uint8_t SearchNowRow = 0xFF;
+constexpr std::uint8_t SiteSearchRow = 0xFE;
 void fillRoamStatus(ListPicker &list)
 {
     radio::RoamingView &v = roamView;
@@ -532,6 +534,15 @@ void fillRoamStatus(ListPicker &list)
     const std::uint8_t at = list.empty() ? 0 : list.chosen();
     list.open("Roaming");
     list.add(0, "In use", roamStateText(v).view());
+    if (v.roaming && !v.searching && v.bursts != services::roaming::Listening::Bursts::None) {
+        lib::StaticString<10> when;
+        if (v.bursts == services::roaming::Listening::Bursts::Now) {
+            when << "now";
+        } else {
+            when << "in " << (v.burstInMs + 59'999) / 60'000 << " min";
+        }
+        list.add(SiteSearchRow, "Site search", when.view());
+    }
     const std::uint32_t now = os::nowMs();
     for (std::uint8_t k = 0; k < v.count; ++k) {
         const services::roaming::HeardList::Entry &e = v.entries[k];
@@ -555,7 +566,7 @@ void fillRoamStatus(ListPicker &list)
         const std::uint32_t age = (now - e.measuredMs) / 1000;
         lib::StaticString<12> value;
         if (e.samples > 0) {
-            value << e.levelDbm << ' ';
+            value << e.levelDbm() << ' ';
         } else {
             value << "--- ";
         }
@@ -925,7 +936,7 @@ void uiMain(void *)
                     const auto &e = roamView.entries[i];
                     if (e.position == roam.site && e.current(now)) {
                         r.signalKnown = true;
-                        r.signalDbm = e.levelDbm;
+                        r.signalDbm = e.levelDbm();
                     }
                 }
             }

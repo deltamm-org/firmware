@@ -22,19 +22,37 @@ using dmm::services::roaming::searchOrder;
 constexpr int Floor = -101;
 namespace roaming = dmm::services::roaming;
 
-TEST_CASE("the heard list keeps a smoothed level per repeater")
+TEST_CASE("a reading moves a current level by the time since the last")
 {
     HeardList h;
     h.heard(3, -80, Floor, 1000);
     REQUIRE(h.find(3) != nullptr);
-    CHECK(h.find(3)->levelDbm == -80);
-    h.heard(3, -90, Floor, 2000); // fresh: averaged
-    CHECK(h.find(3)->levelDbm == -85);
-    h.heard(3, -100, Floor, 2000 + HeardList::ValidMs); // stale: replaced
-    CHECK(h.find(3)->levelDbm == -100);
+    CHECK(h.find(3)->levelDbm() == -80);
+    h.heard(3, -90, Floor, 61'000); // a minute later: half way
+    CHECK(h.find(3)->levelDbm() == -85);
+    h.heard(3, -100, Floor, 61'000 + HeardList::ValidMs); // stale: replaced
+    CHECK(h.find(3)->levelDbm() == -100);
+    h.heard(5, -80, Floor, 1000);
+    h.heard(5, -94, Floor, 11'000); // 10 s later: 1/7 of the way
+    CHECK(h.find(5)->levelDbm() == -82);
     CHECK(h.find(4) == nullptr);
     h.heard(4, -300, Floor, 0); // beyond the range is held at its end
-    CHECK(h.find(4)->levelDbm == -128);
+    CHECK(h.find(4)->levelDbm() == -128);
+}
+
+TEST_CASE("a steady level is reached from either side")
+{
+    HeardList h;
+    h.heard(1, -94, Floor, 1000);
+    std::uint32_t t = 11'000;
+    for (; t < 300'000; t += 10'000) {
+        h.heard(1, -95, Floor, t);
+    }
+    CHECK(h.find(1)->levelDbm() == -95);
+    for (; t < 600'000; t += 10'000) {
+        h.heard(1, -94, Floor, t);
+    }
+    CHECK(h.find(1)->levelDbm() == -94);
 }
 
 TEST_CASE("a full heard list never drops the repeater in use")
@@ -70,7 +88,7 @@ TEST_CASE("a repeater that never answered leaves the heard list once another is 
     h.unanswered(1, 3000);
     h.keep(2);
     REQUIRE(h.find(1) != nullptr);
-    CHECK(h.find(1)->levelDbm == -70);
+    CHECK(h.find(1)->levelDbm() == -70);
 }
 
 TEST_CASE("a full heard list drops the repeater measured longest ago")
@@ -138,24 +156,26 @@ TEST_CASE("a search stops at the first good repeater, else takes the strongest, 
     CHECK(none.chosen() == -1);
 }
 
-TEST_CASE("the repeater in use: good, weak, quiet or lost")
+TEST_CASE("the repeater in use: strong, good, fair, quiet or lost")
 {
     const Levels l;
     HeardList h;
     CHECK(roaming::health(h, -1, l, 0) == Health::Quiet); // none in use
     CHECK(roaming::health(h, 2, l, 0) == Health::Quiet);  // not heard yet
-    h.heard(2, -80, Floor, 1000);
+    h.heard(2, -88, Floor, 1000);
     CHECK(roaming::health(h, 2, l, 1000) == Health::Good);
     h.heard(3, -100, Floor, 1000);
-    CHECK(roaming::health(h, 3, l, 1000) == Health::Weak);
+    CHECK(roaming::health(h, 3, l, 1000) == Health::Fair);
+    h.heard(4, -80, Floor, 1000);
+    CHECK(roaming::health(h, 4, l, 1000) == Health::Strong);
     // Silent after being heard well: quiet, not lost; it may just be idle.
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs - 1) == Health::Good);
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs) == Health::Quiet);
     CHECK(roaming::health(h, 2, l, 1000 + 100 * HeardList::ValidMs) == Health::Quiet);
-    // Silent after fading below the weak level: lost.
-    CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs - 1) == Health::Weak);
+    // Silent after fading below the fair level: lost.
+    CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs - 1) == Health::Fair);
     CHECK(roaming::health(h, 3, l, 1000 + HeardList::ValidMs) == Health::Lost);
-    h.heard(3, -80, Floor, 300'000); // heard well again
+    h.heard(3, -88, Floor, 300'000); // heard well again
     CHECK(roaming::health(h, 3, l, 300'000) == Health::Good);
 }
 
@@ -163,11 +183,11 @@ TEST_CASE("an unanswered wake-up makes the repeater in use lost, until it is hea
 {
     const Levels l;
     HeardList h;
-    h.heard(2, -80, Floor, 1000);
+    h.heard(2, -88, Floor, 1000);
     h.unanswered(2, 2000);
-    CHECK(roaming::health(h, 2, l, 2000) == Health::Weak); // heard lately: weak
+    CHECK(roaming::health(h, 2, l, 2000) == Health::Fair); // heard lately: fair
     CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs) == Health::Lost);
-    h.heard(2, -80, Floor, 200'000);
+    h.heard(2, -88, Floor, 200'000);
     CHECK(roaming::health(h, 2, l, 200'000) == Health::Good);
     // Never heard, then unanswered: lost.
     h.unanswered(5, 3000);
@@ -175,36 +195,105 @@ TEST_CASE("an unanswered wake-up makes the repeater in use lost, until it is hea
     CHECK(h.find(5)->samples == 0);
 }
 
-TEST_CASE("a repeater heard again without a new level stays current")
+TEST_CASE("a repeater still on the air stays current")
 {
     const Levels l;
     HeardList h;
-    h.heard(2, -80, Floor, 1000);
-    // Its bursts keep coming through a long run of calls.
-    h.stillHeard(2, 1000 + HeardList::ValidMs - 1);
-    CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs + 5000) == Health::Good);
-    CHECK(h.find(2)->levelDbm == -80);
+    h.heard(2, -88, Floor, 1000);
+    // Within ReadingMs of a reading its bursts only keep it current.
+    h.stillHeard(2, -70, Floor, 1500);
+    h.flush(1500 + HeardList::ReadingGapMs);
     CHECK(h.find(2)->samples == 1);
-    // An old level is not revived.
-    h.stillHeard(2, 1000 + 3 * HeardList::ValidMs);
-    CHECK(roaming::health(h, 2, l, 1000 + 3 * HeardList::ValidMs) == Health::Quiet);
-    h.stillHeard(7, 5000); // not in the list: nothing happens
-    CHECK(h.find(7) == nullptr);
+    h.stillHeard(2, -88, Floor, 1000 + HeardList::ValidMs - 1);
+    CHECK(roaming::health(h, 2, l, 1000 + HeardList::ValidMs + 5000) == Health::Good);
+    // That burst began a reading; one burst is too few for a current level.
+    h.flush(1000 + HeardList::ValidMs - 1 + HeardList::ReadingGapMs);
+    CHECK(h.find(2)->samples == 1);
+    CHECK(h.find(2)->levelDbm() == -88);
 }
 
-TEST_CASE("moves: never from good; from weak to a clearly better one; from quiet only to a good one")
+TEST_CASE("a reading is the mean of a transmission's bursts over its first 1.5 s")
+{
+    HeardList h;
+    h.heard(1, -80, Floor, 0);
+    const std::uint32_t t0 = 60'000;
+    h.started(1, -68, Floor, t0);
+    int k = 1;
+    std::uint32_t t = t0 + 60;
+    for (; t - t0 < HeardList::ReadingSpanMs; t += 60) {
+        h.stillHeard(1, (k++ % 2) != 0 ? -72 : -68, Floor, t);
+    }
+    CHECK(h.find(1)->samples == 1); // not yet
+    h.stillHeard(1, -72, Floor, t); // the span has passed: -70, half way after a minute
+    CHECK(h.find(1)->samples == 2);
+    CHECK(h.find(1)->levelDbm() == -75);
+    // The transmission goes on: no reading for ReadingMs.
+    const std::uint32_t read = t;
+    for (t += 60; t - read < HeardList::ReadingMs; t += 60) {
+        h.stillHeard(1, -100, Floor, t);
+    }
+    CHECK(h.find(1)->samples == 2);
+    // Then one, cut short by the end of the transmission: 8 bursts are enough.
+    for (int n = 0; n < HeardList::ReadingBursts; ++n, t += 60) {
+        h.stillHeard(1, -100, Floor, t);
+    }
+    h.flush(t + HeardList::ReadingGapMs);
+    CHECK(h.find(1)->samples == 3);
+    CHECK(h.find(1)->levelDbm() == -79);
+    // Fewer are dropped while the level is current.
+    h.started(1, -100, Floor, t + 1000);
+    h.stillHeard(1, -100, Floor, t + 1060);
+    h.flush(t + 1060 + HeardList::ReadingGapMs);
+    CHECK(h.find(1)->samples == 3);
+    // Not current: taken however short.
+    h.started(1, -90, Floor, t + 2000 + HeardList::ValidMs);
+    h.flush(t + 2000 + HeardList::ValidMs + HeardList::ReadingGapMs);
+    CHECK(h.find(1)->levelDbm() == -90);
+    // Bursts of one not listed begin a reading of it.
+    h.stillHeard(5, -77, Floor, t + 3000 + HeardList::ValidMs);
+    h.flush(t + 3000 + HeardList::ValidMs + HeardList::ReadingGapMs);
+    REQUIRE(h.find(5) != nullptr);
+    CHECK(h.find(5)->levelDbm() == -77);
+}
+
+TEST_CASE("a long call fading out turns fair in a minute or two, then poor")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(1, -63, Floor, 1000); // the call starts strong
+    // A burst every 60 ms while it has faded to -99 dBm.
+    std::uint32_t t = 1060;
+    for (; roaming::health(h, 1, l, t) != Health::Fair && t < 600'000; t += 60) {
+        h.stillHeard(1, -99, Floor, t);
+        h.flush(t);
+    }
+    CHECK(t > 60'000);
+    CHECK(t < 240'000);
+    // Below the fair level for as long as a level stays current: poor.
+    const std::uint32_t fair = t;
+    for (; t <= fair + HeardList::ValidMs; t += 60) {
+        h.stillHeard(1, -99, Floor, t);
+        h.flush(t);
+    }
+    CHECK(roaming::health(h, 1, l, t) == Health::Poor);
+}
+
+TEST_CASE("moves: never from strong; from good or fair to a clearly better one; from quiet only to a good one")
 {
     const Levels l;
     HeardList h;
     h.heard(0, -98, Floor, 1000); // in use: weak
     h.heard(1, -93, Floor, 1000); // 5 dB better, measured twice
     h.heard(1, -93, Floor, 2000);
-    h.heard(2, -80, Floor, 2000); // much better, measured once
+    h.heard(2, -88, Floor, 2000); // much better, measured once
+    CHECK(moveTo(h, 0, Health::Strong, l, 2000) == -1);
     CHECK(moveTo(h, 0, Health::Good, l, 2000) == -1);
-    CHECK(moveTo(h, 0, Health::Weak, l, 2000) == -1); // 1 needs 6 dB, 2 a second level
-    h.heard(2, -80, Floor, 3000);
-    CHECK(moveTo(h, 0, Health::Weak, l, 3000) == 2);
-    CHECK(moveTo(h, 0, Health::Weak, l, 3000 + HeardList::ValidMs) == -1); // old levels
+    CHECK(moveTo(h, 0, Health::Fair, l, 2000) == -1); // 1 needs 6 dB, 2 a second level
+    h.heard(2, -88, Floor, 3000);
+    CHECK(moveTo(h, 0, Health::Fair, l, 3000) == 2);
+    CHECK(moveTo(h, 0, Health::Good, l, 3000) == 2);
+    CHECK(moveTo(h, 0, Health::Strong, l, 3000) == -1);
+    CHECK(moveTo(h, 0, Health::Fair, l, 3000 + HeardList::ValidMs) == -1); // old levels
     // Quiet: only to a good one, even heard once; none in use counts as quiet.
     HeardList q;
     q.heard(3, Floor + 8, Floor, 5);
@@ -236,10 +325,10 @@ TEST_CASE("levels count in dB above each channel's floor")
     CHECK(h.find(0)->levelDb() == 11);
     CHECK(h.find(1)->levelDb() == 2);
     CHECK(roaming::health(h, 0, l, 1000) == Health::Good);
-    CHECK(roaming::health(h, 1, l, 1000) == Health::Weak);
+    CHECK(roaming::health(h, 1, l, 1000) == Health::Fair);
     // Moves compare levels above each repeater's own floor.
     h.heard(0, -90, -101, 2000);
-    CHECK(moveTo(h, 1, Health::Weak, l, 2000) == 0);
+    CHECK(moveTo(h, 1, Health::Fair, l, 2000) == 0);
 }
 
 TEST_CASE("the repeater in use's activity: busy on the air and between overs, idle in a beacon")
@@ -283,19 +372,19 @@ TEST_CASE("a call holds listening off until the gap between overs has passed fro
     CHECK(a.idle(12'000 + Activity::CallGapMs));
 }
 
-TEST_CASE("good or weak: one check at a time during the idle transmission, and only below the good level")
+TEST_CASE("good or fair: one check at a time during the idle transmission; none while strong")
 {
     const Levels l;
     HeardList h;
-    h.heard(0, Floor + 12, Floor, 1000); // clearly good: no listening
+    h.heard(0, Floor + 22, Floor, 1000); // strong: no listening
     Listening v;
     CHECK_FALSE(v.due(h, 0, l, true, 1000));
-    h.heard(1, Floor + 8, Floor, 1000); // good, below the good level
+    h.heard(1, Floor + 12, Floor, 1000); // good
     CHECK_FALSE(v.due(h, 1, l, false, 1000));
     CHECK(v.due(h, 1, l, true, 1000));
     v.done(1000);
     CHECK_FALSE(v.due(h, 1, l, true, 1000 + Listening::HopMs - 1));
-    h.heard(2, Floor + 3, Floor, 1000); // weak
+    h.heard(2, Floor + 3, Floor, 1000); // fair
     CHECK(v.due(h, 2, l, true, 1000 + Listening::HopMs));
 }
 
@@ -347,6 +436,174 @@ TEST_CASE("another zone: the heard list follows its repeaters to their new posit
     CHECK(h.find(0) != nullptr);
 }
 
+TEST_CASE("good: a burst of passes every ScanGoodMs, not started while busy; none while strong")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 12, Floor, 1000); // good
+    Listening v;
+    CHECK_FALSE(v.due(h, 0, l, false, 1000)); // not idle, no burst yet
+    CHECK_FALSE(v.passing());
+    const std::uint32_t b = 1000 + Listening::ScanGoodMs;
+    h.heard(0, Floor + 12, Floor, b - 1000);
+    CHECK_FALSE(v.due(h, 0, l, false, b, true)); // busy: the burst waits
+    CHECK(v.due(h, 0, l, false, b + 500));
+    CHECK(v.passing());
+    v.done(b + 1500); // a pass
+    CHECK_FALSE(v.due(h, 0, l, false, b + 1500 + Listening::DwellMs - 1));
+    CHECK(v.due(h, 0, l, false, b + 1500 + Listening::DwellMs));
+    CHECK_FALSE(v.due(h, 0, l, false, b + 2500, true)); // busy: no pass
+    CHECK(v.due(h, 0, l, false, b + 500 + Listening::BurstMs - 1));
+    CHECK_FALSE(v.due(h, 0, l, false, b + 500 + Listening::BurstMs)); // the burst is over
+    CHECK_FALSE(v.passing());
+    h.heard(0, Floor + 12, Floor, b + 500 + Listening::ScanGoodMs - 1000);
+    CHECK_FALSE(v.due(h, 0, l, false, b + 500 + Listening::ScanGoodMs - 1));
+    CHECK(v.due(h, 0, l, false, b + 500 + Listening::ScanGoodMs)); // the next one
+    // Strong: no bursts.
+    HeardList e;
+    e.heard(0, Floor + 22, Floor, 1000);
+    Listening w;
+    CHECK_FALSE(w.due(e, 0, l, false, 1000));
+    e.heard(0, Floor + 22, Floor, 1000 + Listening::ScanGoodMs);
+    CHECK_FALSE(w.due(e, 0, l, false, 1000 + Listening::ScanGoodMs));
+}
+
+TEST_CASE("fair: a burst every ScanFairMs, so turning fair brings the next one closer")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 12, Floor, 1000); // good
+    Listening v;
+    CHECK_FALSE(v.due(h, 0, l, false, 1000));
+    const std::uint32_t t = 1000 + Listening::ScanFairMs;
+    h.heard(0, Floor + 12, Floor, t - 61'000);
+    CHECK_FALSE(v.due(h, 0, l, false, t));  // still good: not yet
+    h.heard(0, Floor - 4, Floor, t - 1000); // half way to 4: fair
+    REQUIRE(roaming::health(h, 0, l, t) == Health::Fair);
+    CHECK(v.due(h, 0, l, false, t));
+    CHECK(v.passing());
+}
+
+TEST_CASE("bursts: the next one starts though the last was not seen to end; a move ends one")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 12, Floor, 1000);
+    Listening v;
+    CHECK_FALSE(v.due(h, 0, l, false, 1000));
+    const std::uint32_t b = 1000 + Listening::ScanGoodMs;
+    h.heard(0, Floor + 12, Floor, b - 1000);
+    CHECK(v.due(h, 0, l, false, b));
+    // Not asked again until the next burst is due: it still starts.
+    h.heard(0, Floor + 12, Floor, b + Listening::ScanGoodMs - 1000);
+    CHECK(v.due(h, 0, l, false, b + Listening::ScanGoodMs));
+    CHECK(v.passing());
+    // A move during a burst ends it.
+    h.heard(1, Floor + 12, Floor, b + Listening::ScanGoodMs + 1000);
+    CHECK_FALSE(v.due(h, 1, l, false, b + Listening::ScanGoodMs + 1000));
+    CHECK_FALSE(v.passing());
+}
+
+TEST_CASE("heard only below the fair level for as long as a level stays current: poor")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 8, Floor, 1000);
+    h.heard(0, Floor, Floor, 30'000); // moved below the fair level
+    CHECK(roaming::health(h, 0, l, 30'000) == Health::Fair);
+    h.heard(0, Floor + 2, Floor, 90'000);
+    CHECK(roaming::health(h, 0, l, 90'000) == Health::Fair);
+    h.heard(0, Floor + 2, Floor, 1000 + HeardList::ValidMs);
+    CHECK(roaming::health(h, 0, l, 1000 + HeardList::ValidMs) == Health::Poor);
+    h.heard(0, Floor + 22, Floor, 181'000); // back at the fair level or above
+    CHECK(roaming::health(h, 0, l, 181'000) == Health::Good);
+    // Silent after fading while poor: lost.
+    HeardList f;
+    f.heard(0, Floor + 2, Floor, 1000);
+    f.heard(0, Floor + 2, Floor, 61'000);
+    f.heard(0, Floor + 2, Floor, 121'000);
+    REQUIRE(roaming::health(f, 0, l, 121'000) == Health::Poor);
+    CHECK(roaming::health(f, 0, l, 121'000 + HeardList::ValidMs) == Health::Lost);
+}
+
+TEST_CASE("poor: to the strongest heard once, better by the margin")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 2, Floor, 1000);
+    h.heard(0, Floor + 2, Floor, 61'000);
+    const std::uint32_t t = 1000 + HeardList::ValidMs;
+    h.heard(0, Floor + 2, Floor, t);
+    REQUIRE(roaming::health(h, 0, l, t) == Health::Poor);
+    h.heard(1, Floor + 5, Floor, t); // 3 dB better
+    CHECK(moveTo(h, 0, Health::Poor, l, t) == -1);
+    h.heard(2, Floor + 8, Floor, t); // 6 dB better, heard once
+    CHECK(moveTo(h, 0, Health::Poor, l, t) == 2);
+}
+
+TEST_CASE("poor: passes in bursts, the gaps growing as while quiet")
+{
+    const Levels l;
+    HeardList h;
+    std::uint32_t last = 1000;
+    h.heard(0, Floor + 1, Floor, last);
+    // Heard below the fair level every 30 s, as from its beacons.
+    auto hearUntil = [&](std::uint32_t t) {
+        while (last + 30'000 <= t) {
+            last += 30'000;
+            h.heard(0, Floor + 1, Floor, last);
+        }
+    };
+    Listening v;
+    std::uint32_t t = 1000 + HeardList::ValidMs;
+    hearUntil(t);
+    REQUIRE(roaming::health(h, 0, l, t) == Health::Poor);
+    CHECK(v.due(h, 0, l, false, t));
+    CHECK(v.passing());
+    t += Listening::BurstMs;
+    std::uint32_t gap = Listening::FirstGapMs;
+    for (int k = 0; k < 3; ++k) {
+        hearUntil(t + gap - 1);
+        CHECK_FALSE(v.due(h, 0, l, false, t + gap - 1));
+        hearUntil(t + gap);
+        REQUIRE(roaming::health(h, 0, l, t + gap) == Health::Poor);
+        CHECK(v.due(h, 0, l, false, t + gap));
+        t += gap + Listening::BurstMs;
+        gap = std::min(gap * 2, Listening::MaxGapMs);
+    }
+    CHECK(gap == Listening::MaxGapMs);
+}
+
+TEST_CASE("bursts for display: none while strong, the next one while good or lost, now while one runs")
+{
+    const Levels l;
+    std::uint32_t next = 0;
+    HeardList e;
+    e.heard(0, Floor + 22, Floor, 1000);
+    Listening v;
+    v.due(e, 0, l, false, 1000);
+    CHECK(v.bursts(1000, next) == Listening::Bursts::None);
+    HeardList g;
+    g.heard(0, Floor + 12, Floor, 1000);
+    v.due(g, 0, l, false, 1000);
+    REQUIRE(v.bursts(1000, next) == Listening::Bursts::Later);
+    CHECK(next == 1000 + Listening::ScanGoodMs);
+    const std::uint32_t b = 1000 + Listening::ScanGoodMs;
+    g.heard(0, Floor + 12, Floor, b - 1000);
+    CHECK(v.due(g, 0, l, false, b));
+    CHECK(v.bursts(b, next) == Listening::Bursts::Now);
+    // Lost, not heard: bursts with gaps of FirstGapMs.
+    HeardList f;
+    f.heard(0, Floor + 3, Floor, 1000);
+    Listening u;
+    const std::uint32_t t0 = 1000 + HeardList::ValidMs;
+    CHECK(u.due(f, 0, l, false, t0));
+    CHECK(u.bursts(t0, next) == Listening::Bursts::Now);
+    u.due(f, 0, l, false, t0 + Listening::BurstMs);
+    REQUIRE(u.bursts(t0 + Listening::BurstMs, next) == Listening::Bursts::Later);
+    CHECK(next == t0 + Listening::BurstMs + Listening::FirstGapMs);
+}
+
 TEST_CASE("lost: the gaps between bursts stay at the first")
 {
     const Levels l;
@@ -363,6 +620,33 @@ TEST_CASE("lost: the gaps between bursts stay at the first")
         CHECK(v.due(h, 0, l, false, t + Listening::FirstGapMs));
         t += Listening::FirstGapMs + Listening::BurstMs;
     }
+}
+
+TEST_CASE("lost with nothing at all heard for SilentMs: the gaps grow")
+{
+    const Levels l;
+    HeardList h;
+    h.heard(0, Floor + 3, Floor, 1000); // faded below the fair level, then silent: lost
+    Listening v;
+    const std::uint32_t t0 = 1000 + HeardList::ValidMs;
+    REQUIRE(roaming::health(h, 0, l, t0) == Health::Lost);
+    // The start of each burst, asked every second for two hours and a half.
+    std::uint32_t starts[64] = {};
+    std::size_t n = 0;
+    bool was = false;
+    for (std::uint32_t t = t0; t < t0 + 2 * Listening::SilentMs + Listening::SilentMs / 2 && n < 64; t += 1000) {
+        const bool now = v.due(h, 0, l, false, t);
+        if (now && !was) {
+            starts[n++] = t;
+        }
+        was = now;
+    }
+    REQUIRE(n > 4);
+    // Within the first SilentMs: a burst every BurstMs + FirstGapMs.
+    CHECK(starts[1] - starts[0] == Listening::BurstMs + Listening::FirstGapMs);
+    CHECK(starts[2] - starts[1] == Listening::BurstMs + Listening::FirstGapMs);
+    // Later the gaps grow to MaxGapMs.
+    CHECK(starts[n - 1] - starts[n - 2] == Listening::BurstMs + Listening::MaxGapMs);
 }
 
 TEST_CASE("quiet or lost: passes in bursts, with a dwell on the repeater in use between them")
