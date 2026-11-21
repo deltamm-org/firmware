@@ -35,12 +35,16 @@ TEST_CASE("the level is the mean of the last three readings, none older than Val
     h.heard(3, -92, Floor, 16'000); // the first gives way
     CHECK(h.find(3)->levelDbm() == -91);
     CHECK(h.find(3)->readings == 3);
-    // Beacons a minute apart: the one two minutes old no longer counts.
+    // Beacons a minute apart: the one two minutes old still counts.
     h.heard(3, -70, Floor, 76'000);
     h.heard(3, -76, Floor, 136'000);
+    CHECK(h.find(3)->readings == 3);
+    CHECK(h.find(3)->levelDbm() == -79);
+    // A beacon missed: the one ValidMs old no longer counts.
+    h.heard(3, -82, Floor, 76'000 + HeardList::ValidMs);
     CHECK(h.find(3)->readings == 2);
-    CHECK(h.find(3)->levelDbm() == -73);
-    h.heard(3, -100, Floor, 136'000 + HeardList::ValidMs); // stale: replaced
+    CHECK(h.find(3)->levelDbm() == -79);
+    h.heard(3, -100, Floor, 211'000 + HeardList::ValidMs); // stale: replaced
     CHECK(h.find(3)->levelDbm() == -100);
     CHECK(h.find(3)->readings == 1);
     CHECK(h.find(4) == nullptr);
@@ -660,9 +664,9 @@ TEST_CASE("heard only below the fair level for as long as a level stays current:
     HeardList f;
     f.heard(0, Floor + 2, Floor, 1000);
     f.heard(0, Floor + 2, Floor, 61'000);
-    f.heard(0, Floor + 2, Floor, 121'000);
-    REQUIRE(roaming::health(f, 0, l, 121'000) == Health::Poor);
-    CHECK(roaming::health(f, 0, l, 121'000 + HeardList::ValidMs) == Health::Lost);
+    f.heard(0, Floor + 2, Floor, 1000 + HeardList::ValidMs);
+    REQUIRE(roaming::health(f, 0, l, 1000 + HeardList::ValidMs) == Health::Poor);
+    CHECK(roaming::health(f, 0, l, 1000 + 2 * HeardList::ValidMs) == Health::Lost);
 }
 
 TEST_CASE("poor: to the strongest heard once, better by the margin")

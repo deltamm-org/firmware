@@ -176,9 +176,9 @@ steer listening and moving; a call always wakes the repeater first.
 | Strong | heard lately at or above Strong, or not since 3 dB below it |
 | Good | heard lately, neither Strong nor Fair (by level) |
 | Fair | heard lately below Fair, or not since 3 dB above it; or heard lately but a wake-up went unanswered |
-| Poor | heard, but only below Fair for 2 minutes |
-| Quiet | not heard for 2 minutes, last heard at or above Fair; or none in use yet |
-| Lost | not heard for 2 minutes, and last heard below Fair or a wake-up went unanswered |
+| Poor | heard, but only below Fair for 135 s |
+| Quiet | not heard for 135 s, last heard at or above Fair; or none in use yet |
+| Lost | not heard for 135 s, and last heard below Fair or a wake-up went unanswered |
 
 Silence alone never makes it lost: a quiet repeater looks the same as one
 out of reach, and many repeaters never send beacons. How it was last heard
@@ -189,7 +189,11 @@ repeater in use, so that this stays known.
 ### 3.3 The heard list
 
 Up to 8 repeaters heard lately, each with its level, how many readings
-and when. A level is current for 2 minutes.
+and when. A level is current for 135 s, not a whole number of minutes:
+beacons a minute or two apart would put the oldest reading right on the
+limit. So three readings of beacons a minute apart, or two of beacons two
+minutes apart, fit within it, and one missed beacon a minute apart does
+not make the level old.
 
 A check or a search reads a repeater once. The repeater in use is read
 the same way whether it sends a beacon or a call: a reading is the mean
@@ -202,7 +206,7 @@ the level current; a carrier alone does neither, since it may be
 another signal or noise.
 
 The level is the mean of the last three readings, none older than
-2 minutes. So a repeater fading during a long call shows as fair within
+135 s. So a repeater fading during a long call shows as fair within
 about 15 s, while one faded reading moves the level only a third of the
 way. An old level is replaced.
 

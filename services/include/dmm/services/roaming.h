@@ -36,8 +36,12 @@ class HeardList
 public:
     static constexpr std::size_t Capacity = 8;
     /// A level is current for this long after it was measured or the
-    /// repeater was last heard.
-    static constexpr std::uint32_t ValidMs = 120'000;
+    /// repeater was last heard. Not a whole number of minutes: beacons a
+    /// minute or two apart would put the oldest reading right on the limit.
+    /// So three readings of beacons a minute apart, or two of beacons two
+    /// minutes apart, fit within it, and one missed beacon a minute apart
+    /// does not make the level old.
+    static constexpr std::uint32_t ValidMs = 135'000;
     /// A reading of the repeater in use is the mean of its bursts over
     /// ReadingSpanMs from the start of a transmission, then the next span
     /// while it goes on: a beacon gives one, a call one every ReadingSpanMs.
