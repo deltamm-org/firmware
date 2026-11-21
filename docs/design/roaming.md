@@ -217,11 +217,18 @@ leaves the list once another repeater is in use.
 ### 3.4 Busy and idle
 
 From the DMR heard on the repeater in use: **busy** while DMR came in the
-last 2 s, or during a call and for 10 s after its end (the gap between
-overs; a call that ends without a terminator ends when it is lost); **idle**
-while it has been on the air for 1.5 s with idle bursts only (a beacon,
-or hang time long after a call). A call starts with idle bursts too; its
-header follows well within 1.5 s.
+last 2 s, or during a call of interest and for 10 s after its end (the
+gap between overs; a call that ends without a terminator ends when it is
+lost); **idle** while it has been on the air for 1.5 s with idle bursts
+only (a beacon, or hang time long after a call). A call starts with idle
+bursts too; its header follows well within 1.5 s.
+
+A call of interest is one for this radio, or the radio's own
+transmission: a reply may follow it. A call for others counts as idle
+bursts: nothing for this radio plays during it or its replies, so
+listening goes on, and a repeater carrying other talkgroups' calls back
+to back is still checked. A call whose target is not known yet counts as
+of interest.
 
 ### 3.5 Listening (no transmitting)
 
@@ -234,8 +241,8 @@ read. An empty frequency costs about 0.1 s.
 
 - **The repeater in use is Strong:** no listening.
 - **Good or Fair:** single checks, only while the repeater in use is
-  idle, at most one every 400 ms; the radio hears nothing on its own
-  repeater then anyway. Repeaters that beacon at the same time as the one
+  idle (3.4), at most one every 400 ms; nothing for the radio comes on its
+  own repeater then anyway. Repeaters that beacon at the same time as the one
   in use are heard this way, others are not, as beacon times differ from
   area to area; so also a burst of passes, as below, 15 minutes after the
   last one while Good, 10 minutes while Fair, not started while the

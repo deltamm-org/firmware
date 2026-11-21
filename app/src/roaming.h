@@ -38,9 +38,12 @@ void show(bool searching);
 void slotTiming();
 void level(int dbm);
 void burst(std::uint8_t colourCode, bool call, int dbm);
-/// A call on the repeater in use goes on, or has just ended: no listening
-/// until the gap between overs has passed from then.
+/// A call of interest on the repeater in use (one for this radio, or this
+/// radio's own transmission) goes on, or has just ended: no listening until
+/// the gap between overs has passed from then.
 void callHeard();
+/// The call on the repeater in use is for others: listening goes on.
+void otherCall();
 
 /// The repeater in use did not answer a call's wake-ups.
 void unanswered();

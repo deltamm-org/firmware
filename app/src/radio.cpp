@@ -414,8 +414,8 @@ void fmReceive()
 void endCall(const char *why)
 {
     // The gap between overs counts from the call's end, also when it ends
-    // without a terminator.
-    if (inCall || callIgnored) {
+    // without a terminator; a call for others leaves none.
+    if (inCall) {
         roam::callHeard();
     }
     callIgnored = false;
@@ -1127,6 +1127,8 @@ void stopTransmit(const char *why)
     fm->endTransmit();
     withBaseband([](auto &b) { b.setMicrophone(false); });
     transmitting = false;
+    // A reply may follow: the gap between overs counts from here.
+    roam::callHeard();
     power::release(power::AwakeReason::Transmit);
     showTransmitting(false);
     log::info("fm") << "transmit off (" << why << ") after " << (os::nowMs() - transmitStarted) / 100 / 10 << "."
@@ -1446,8 +1448,12 @@ void radioMain(void *)
             pttTimed = false;
             stopTransmit("console PTT time");
         }
-        if (inCall || callIgnored) {
+        // Roaming holds back for a call for this radio and for its own
+        // transmission, not for a call for others.
+        if (inCall || transmitting) {
             roam::callHeard();
+        } else if (callIgnored) {
+            roam::otherCall();
         }
         roam::step();
         saveStep();

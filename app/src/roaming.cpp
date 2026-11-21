@@ -553,6 +553,13 @@ void callHeard()
     }
 }
 
+void otherCall()
+{
+    if (roamingChannel && !away) {
+        activity.otherCall(os::nowMs());
+    }
+}
+
 void level(int dbm)
 {
     if (roamingChannel && !away && site >= 0) {

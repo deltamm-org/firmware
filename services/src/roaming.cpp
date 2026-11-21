@@ -346,9 +346,9 @@ void Activity::heard(bool call, std::uint32_t nowMs)
     }
     m_heard = true;
     m_lastMs = nowMs;
-    if (call) {
-        m_call = true;
-        m_callMs = nowMs;
+    if (call && !otherLately(nowMs)) {
+        m_traffic = true;
+        m_trafficMs = nowMs;
     }
 }
 

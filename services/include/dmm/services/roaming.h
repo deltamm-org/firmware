@@ -194,8 +194,10 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
 int moveTo(const HeardList &heard, int site, Health state, const Levels &levels, std::uint32_t nowMs);
 
 /// The transmissions of the repeater in use, from the DMR heard on its
-/// output: whether it carries traffic, and whether it sends idle bursts
-/// only (a beacon, or the hang time after a call).
+/// output: whether it carries a call of interest (one for this radio, or
+/// this radio's own), and whether it sends idle bursts only (a beacon, or
+/// the hang time after a call) or a call for others, during which nothing
+/// for this radio is missed.
 class Activity
 {
 public:
@@ -206,21 +208,31 @@ public:
     /// The overs of a call follow each other within this.
     static constexpr std::uint32_t CallGapMs = 10'000;
 
-    /// DMR heard from it; @p call: a burst of a call, not an idle one.
+    /// DMR heard from it; @p call: a burst of a call, not an idle one. A
+    /// call not yet known to be for others counts as of interest.
     void heard(bool call, std::uint32_t nowMs);
-    /// A call on it goes on, or has just ended, also without a burst of it
-    /// lately: an over can run for many seconds between such bursts, and a
-    /// call can end without a terminator.
+    /// A call of interest on it goes on, or has just ended, also without a
+    /// burst of it lately: an over can run for many seconds between such
+    /// bursts, and a call can end without a terminator.
     void callHeard(std::uint32_t nowMs)
     {
         m_call = true;
         m_callMs = nowMs;
     }
+    /// The call on it is for others: its bursts count as idle ones.
+    void otherCall(std::uint32_t nowMs)
+    {
+        m_other = true;
+        m_otherMs = nowMs;
+        m_traffic = false;
+    }
     /// Nothing known: another repeater is in use.
     void clear() { *this = {}; }
-    /// On the air, or between the overs of a call.
-    bool busy(std::uint32_t nowMs) const { return onAir(nowMs) || callLately(nowMs); }
-    /// On the air for a while with idle bursts only, and no call lately.
+    /// On the air with no call for others, or between the overs of a call
+    /// of interest.
+    bool busy(std::uint32_t nowMs) const { return (onAir(nowMs) && !otherLately(nowMs)) || callLately(nowMs); }
+    /// On the air for a while with idle bursts or a call for others only,
+    /// and no call of interest lately.
     bool idle(std::uint32_t nowMs) const
     {
         return onAir(nowMs) && nowMs - m_startMs >= SettleMs && !callLately(nowMs);
@@ -228,13 +240,21 @@ public:
 
 private:
     bool onAir(std::uint32_t nowMs) const { return m_heard && nowMs - m_lastMs < OnAirMs; }
-    bool callLately(std::uint32_t nowMs) const { return m_call && nowMs - m_callMs < CallGapMs; }
+    bool otherLately(std::uint32_t nowMs) const { return m_other && nowMs - m_otherMs < OnAirMs; }
+    bool callLately(std::uint32_t nowMs) const
+    {
+        return (m_call && nowMs - m_callMs < CallGapMs) || (m_traffic && nowMs - m_trafficMs < CallGapMs);
+    }
 
     bool m_heard = false;
     bool m_call = false;
+    bool m_traffic = false;
+    bool m_other = false;
     std::uint32_t m_startMs = 0;
     std::uint32_t m_lastMs = 0;
     std::uint32_t m_callMs = 0;
+    std::uint32_t m_trafficMs = 0;
+    std::uint32_t m_otherMs = 0;
 };
 
 /// Listening to the zone's other repeaters without transmitting: when a

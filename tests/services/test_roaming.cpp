@@ -472,6 +472,36 @@ TEST_CASE("the repeater in use's activity: busy on the air and between overs, id
     CHECK_FALSE(a.busy(30'000));
 }
 
+TEST_CASE("a call for others: listening goes on during it and right after it")
+{
+    Activity a;
+    a.heard(true, 1000); // a call's header, its target not yet known
+    CHECK(a.busy(1000));
+    CHECK_FALSE(a.idle(1000 + Activity::SettleMs));
+    a.otherCall(1100); // the radio found it is for others
+    for (std::uint32_t t = 1200; t <= 20'000; t += 60) {
+        a.heard(true, t);
+        if (t % 1000 < 60) {
+            a.otherCall(t);
+        }
+    }
+    CHECK_FALSE(a.busy(20'000));
+    CHECK(a.idle(20'000)); // checks go on during it
+    // It ends; a beacon follows: no gap between overs to wait for.
+    a.heard(false, 25'000);
+    a.heard(false, 25'000 + Activity::SettleMs);
+    CHECK(a.idle(25'000 + Activity::SettleMs));
+    // A call of interest (for this radio, or its own transmission) holds
+    // listening back as before.
+    a.callHeard(30'000);
+    CHECK(a.busy(30'000 + Activity::CallGapMs - 1));
+    CHECK_FALSE(a.idle(30'000 + Activity::CallGapMs - 1));
+    CHECK_FALSE(a.busy(30'000 + Activity::CallGapMs));
+    // A new call whose target is not known yet counts as of interest.
+    a.heard(true, 50'000);
+    CHECK(a.busy(50'000 + Activity::CallGapMs - 1));
+}
+
 TEST_CASE("a call holds listening off until the gap between overs has passed from its end")
 {
     Activity a;
