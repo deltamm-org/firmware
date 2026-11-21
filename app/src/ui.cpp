@@ -523,8 +523,8 @@ lib::StaticString<10> roamStateText(const radio::RoamingView &v)
 }
 // Fills @p list with what roaming knows: the state of the repeater in
 // use, the site search running in the background, then each repeater heard
-// by its name with its level and the age of that level, the one in use
-// marked, and a row that searches now. The cursor stays on the same row.
+// by its name with its level while current and the age of that level, the
+// one in use marked, and a row that searches now. The cursor stays on the same row.
 constexpr std::uint8_t SearchNowRow = 0xFF;
 constexpr std::uint8_t SiteSearchRow = 0xFE;
 void fillRoamStatus(ListPicker &list)
@@ -561,13 +561,14 @@ void fillRoamStatus(ListPicker &list)
                 text << static_cast<char>('0' + frac % 10);
             }
         }
-        // "-35 12s": level and its age; "--- 12s" for one in use that has
-        // not answered and has no level.
+        // "-35 12s": a current level and its age; "3m" once the level is
+        // old, as roaming no longer uses it; "--- 12s" for one in use that
+        // has not answered and has no level.
         const std::uint32_t age = (now - e.measuredMs) / 1000;
         lib::StaticString<12> value;
-        if (e.samples > 0) {
+        if (e.current(now)) {
             value << e.levelDbm() << ' ';
-        } else {
+        } else if (e.samples == 0) {
             value << "--- ";
         }
         if (age < 100) {

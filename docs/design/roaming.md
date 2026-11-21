@@ -311,8 +311,8 @@ frequencies, as at the start. A pass starts afresh in the new order.
   name as in roaming (Strong, Good, Fair, Poor, Quiet, Lost);
   `Site search` with when the next burst of passes starts, or `now`,
   while bursts are planned; then each repeater heard by its name, with its
-  level and age, a pointer marking the one in use; on an FM channel
-  `DMR only`.
+  level while current and its age, or only its age once the level is old,
+  a pointer marking the one in use; on an FM channel `DMR only`.
 - Menu > Roaming > Automatic (auto roaming) and Roam zone take effect at
   once and are written to the codeplug. With auto roaming off the radio
   does nothing on its own: no listening and no moves. PTT, the roam key
