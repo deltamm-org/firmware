@@ -113,7 +113,7 @@ void noteHeard(int i, int dbm)
 {
     const int floorDbm = floorAt(i); // takes sitesLock itself
     sitesLock.lock();
-    heardList.heard(static_cast<std::uint8_t>(i), dbm, floorDbm, os::nowMs(), Levels.fairDb);
+    heardList.heard(static_cast<std::uint8_t>(i), dbm, floorDbm, os::nowMs(), Levels);
     sitesLock.unlock();
 }
 
@@ -559,7 +559,7 @@ void level(int dbm)
         // A reading of the repeater in use begins; its bursts make it.
         const int floorDbm = floorAt(site); // takes sitesLock itself
         sitesLock.lock();
-        heardList.started(static_cast<std::uint8_t>(site), dbm, floorDbm, os::nowMs(), Levels.fairDb);
+        heardList.started(static_cast<std::uint8_t>(site), dbm, floorDbm, os::nowMs(), Levels);
         sitesLock.unlock();
     }
 }
@@ -577,7 +577,7 @@ void burst(std::uint8_t colourCode, bool call, int dbm)
     if (site >= 0 && colourCode == tunedColourCode()) {
         const int floorDbm = floorAt(site); // takes sitesLock itself
         sitesLock.lock();
-        heardList.stillHeard(static_cast<std::uint8_t>(site), dbm, floorDbm, now, Levels.fairDb);
+        heardList.stillHeard(static_cast<std::uint8_t>(site), dbm, floorDbm, now, Levels);
         sitesLock.unlock();
     }
 }

@@ -14,6 +14,20 @@
 /// Times are milliseconds on a clock that may wrap.
 namespace dmm::services::roaming {
 
+/// Signal levels that steer roaming, in dB above each channel's floor. A
+/// repeater still decodes close to its floor, where the level can no
+/// longer be told from no signal.
+struct Levels
+{
+    int searchDb = 10; // a search stops here; a quiet repeater is left for one at this level
+    int fairDb = 6;    // below: look for a better repeater
+    int marginDb = 6;  // better by this to leave a good or fair repeater
+    int strongDb = 20; // at or above: no listening, no move
+    // Strong ends, and so does below fair, only this far back past the
+    // level, so that a level wavering about it does not flip the state.
+    int backDb = 3;
+};
+
 /// The repeaters of the roaming zone heard lately, a few at a time, with
 /// their level and the floor it is judged against, in dB above it: a
 /// reference the radio model sets per band.
@@ -48,10 +62,12 @@ public:
         std::uint8_t samples = 0;  // levels measured while current, up to 255; 0: none
         std::uint8_t readings = 0; // of reading16Dbm, newest first, that count
         bool unanswered = false;   // a wake-up went unanswered since it was last heard
+        bool strong = false;       // at the strong level, or not yet back below it by backDb since
+        bool belowFair = false;    // below the fair level, or not yet back above it by backDb since
         std::int16_t reading16Dbm[Readings] = {};
         std::uint32_t readingMs[Readings] = {};
         std::uint32_t measuredMs = 0; // when it was last heard
-        // When it was last at or above the fair level, or when its current
+        // When it was last not below the fair level, or when its current
         // levels began if it has not been since.
         std::uint32_t aboveFairMs = 0;
 
@@ -73,15 +89,15 @@ public:
     /// answering, goes once another is in use.
     void keep(int position);
     /// Repeater @p position read at @p levelDbm on a channel whose floor is
-    /// @p floorDbm; @p fairDb is the fair level it is judged against.
-    void heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    /// @p floorDbm, judged against @p levels.
+    void heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, const Levels &levels = {});
     /// A transmission of repeater @p position starts, its first burst at
     /// @p levelDbm: a reading begins, after an open one is taken.
-    void started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    void started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, const Levels &levels = {});
     /// A burst of repeater @p position at @p levelDbm, still on the air: a
     /// current level stays current, and the burst counts towards an open
     /// reading or begins the next.
-    void stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    void stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, const Levels &levels = {});
     /// The radio leaves the repeater in use for a moment (a check): an open
     /// reading only pauses, goes on with the transmission once back, and
     /// ends with its span. So a beacon stays one reading, however many
@@ -104,7 +120,7 @@ private:
     {
         int position = -1; // -1: no reading open
         int floorDbm = 0;
-        int fairDb = 0;
+        Levels levels;
         std::int32_t sumDbm = 0;
         int bursts = 0;
         std::uint32_t fromMs = 0;
@@ -113,7 +129,7 @@ private:
     };
 
     Entry &place(std::uint8_t position, std::uint32_t nowMs);
-    void read(std::uint8_t position, std::int32_t level16Dbm, int floorDbm, std::uint32_t nowMs, int fairDb);
+    void read(std::uint8_t position, std::int32_t level16Dbm, int floorDbm, std::uint32_t nowMs, const Levels &levels);
     void take();
 
     Entry m_entries[Capacity];
@@ -150,18 +166,6 @@ private:
     int m_bestDb = 0;
 };
 
-/// Signal levels that steer roaming, in dB above each channel's floor. A
-/// repeater still decodes close to its floor, where the level can no
-/// longer be told from no signal.
-struct Levels
-{
-    int searchDb = 10; // a search stops here; a quiet repeater is left for one at this level
-    int fairDb = 6;    // below: look for a better repeater
-    int marginDb = 6;  // better by this to leave a good or fair repeater
-    int strongDb = 20; // at or above: no listening, no move
-};
-static_assert(Levels{}.fairDb == 6, "HeardList::heard() takes the same fair level by default");
-
 /// How the repeater in use is doing.
 enum class Health : std::uint8_t
 {
@@ -173,7 +177,8 @@ enum class Health : std::uint8_t
     Lost,   // not heard lately, and a wake-up went unanswered or it was last heard below the fair level
 };
 
-/// The health of repeater @p site (-1: none in use).
+/// The health of repeater @p site (-1: none in use), by @p levels, the
+/// levels the heard list was given.
 Health health(const HeardList &heard, int site, const Levels &levels, std::uint32_t nowMs);
 
 /// The repeater to move to from @p site, or -1 to stay. Strong: none.

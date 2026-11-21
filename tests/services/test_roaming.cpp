@@ -187,6 +187,35 @@ TEST_CASE("the repeater in use: strong, good, fair, quiet or lost")
     CHECK(roaming::health(h, 3, l, 300'000) == Health::Good);
 }
 
+TEST_CASE("strong and below fair each end only backDb past their level")
+{
+    const Levels l;
+    HeardList h;
+    std::uint32_t t = 1000;
+    // Three readings at @p db: the level is @p db.
+    auto steady = [&](int db) {
+        for (int k = 0; k < 3; ++k) {
+            t += 5000;
+            h.heard(1, Floor + db, Floor, t, l);
+        }
+        return roaming::health(h, 1, l, t);
+    };
+    CHECK(steady(l.strongDb) == Health::Strong);
+    CHECK(steady(l.strongDb - l.backDb) == Health::Strong);
+    CHECK(steady(l.strongDb - l.backDb - 1) == Health::Good);
+    CHECK(steady(l.strongDb - 1) == Health::Good);
+    CHECK(steady(l.strongDb) == Health::Strong);
+    CHECK(steady(l.fairDb) == Health::Good);
+    CHECK(steady(l.fairDb - 1) == Health::Fair);
+    CHECK(steady(l.fairDb + l.backDb - 1) == Health::Fair);
+    CHECK(steady(l.fairDb + l.backDb) == Health::Good);
+    // An old level is judged afresh.
+    CHECK(steady(l.fairDb - 1) == Health::Fair);
+    t += HeardList::ValidMs;
+    h.heard(1, Floor + l.fairDb, Floor, t, l);
+    CHECK(roaming::health(h, 1, l, t) == Health::Good);
+}
+
 TEST_CASE("an unanswered wake-up makes the repeater in use lost, until it is heard again")
 {
     const Levels l;

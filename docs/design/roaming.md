@@ -157,6 +157,10 @@ The thresholds count from the floor:
 | Search | floor + 10 dB | a search stops here; a quiet repeater is left for one at this level |
 | Fair | floor + 6 dB | below it: fair |
 
+Strong ends only 3 dB below Strong, and below Fair only 3 dB above Fair,
+so that a level wavering about either does not flip the state of the
+repeater in use. A new level after one went old is judged afresh.
+
 These are fixed thresholds, as commercial DMR radios use: there the
 installer sets them per system after a coverage test. A floor learned on
 the air would measure the noise around the radio, but whether a
@@ -169,9 +173,9 @@ steer listening and moving; a call always wakes the repeater first.
 
 | State | When |
 |---|---|
-| Strong | heard lately at or above Strong |
-| Good | heard lately below Strong, at or above Fair |
-| Fair | heard lately below Fair, or heard lately but a wake-up went unanswered |
+| Strong | heard lately at or above Strong, or not since 3 dB below it |
+| Good | heard lately, neither Strong nor Fair (by level) |
+| Fair | heard lately below Fair, or not since 3 dB above it; or heard lately but a wake-up went unanswered |
 | Poor | heard, but only below Fair for 2 minutes |
 | Quiet | not heard for 2 minutes, last heard at or above Fair; or none in use yet |
 | Lost | not heard for 2 minutes, and last heard below Fair or a wake-up went unanswered |

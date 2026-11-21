@@ -86,12 +86,13 @@ void HeardList::keep(int position)
     m_count = kept;
 }
 
-void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, const Levels &levels)
 {
-    read(position, 16 * clampDbm(levelDbm), floorDbm, nowMs, fairDb);
+    read(position, 16 * clampDbm(levelDbm), floorDbm, nowMs, levels);
 }
 
-void HeardList::read(std::uint8_t position, std::int32_t level16Dbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+void HeardList::read(std::uint8_t position, std::int32_t level16Dbm, int floorDbm, std::uint32_t nowMs,
+    const Levels &levels)
 {
     Entry &e = place(position, nowMs);
     // The level is the mean of the last few readings; an old level is
@@ -116,7 +117,11 @@ void HeardList::read(std::uint8_t position, std::int32_t level16Dbm, int floorDb
     const auto count = static_cast<std::int32_t>(n);
     e.level16Dbm = static_cast<std::int16_t>((2 * sum + (sum < 0 ? -count : count)) / (2 * count));
     e.floorDbm = clampDbm(floorDbm);
-    if (!current || e.levelDb() >= fairDb) {
+    // Strong and below fair each end only backDb past their level.
+    const int db = e.levelDb();
+    e.strong = db >= levels.strongDb || (current && e.strong && db >= levels.strongDb - levels.backDb);
+    e.belowFair = db < levels.fairDb || (current && e.belowFair && db < levels.fairDb + levels.backDb);
+    if (!current || !e.belowFair) {
         e.aboveFairMs = nowMs;
     }
     e.unanswered = false;
@@ -138,10 +143,10 @@ void HeardList::take()
     // The mean in 1/16 dB, rounded to the nearest.
     const std::int32_t sum = 32 * p.sumDbm;
     const std::int32_t mean = (sum + (sum < 0 ? -p.bursts : p.bursts)) / (2 * p.bursts);
-    read(static_cast<std::uint8_t>(p.position), mean, p.floorDbm, p.lastMs, p.fairDb);
+    read(static_cast<std::uint8_t>(p.position), mean, p.floorDbm, p.lastMs, p.levels);
 }
 
-void HeardList::started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+void HeardList::started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, const Levels &levels)
 {
     if (m_pending.paused && m_pending.position == position && nowMs - m_pending.fromMs < ReadingSpanMs) {
         // Back from a check while it goes on: the same reading.
@@ -151,10 +156,11 @@ void HeardList::started(std::uint8_t position, int levelDbm, int floorDbm, std::
         return;
     }
     take();
-    m_pending = {position, floorDbm, fairDb, clampDbm(levelDbm), 1, nowMs, nowMs};
+    m_pending = {position, floorDbm, levels, clampDbm(levelDbm), 1, nowMs, nowMs};
 }
 
-void HeardList::stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+void HeardList::stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs,
+    const Levels &levels)
 {
     for (std::size_t i = 0; i < m_count; ++i) {
         if (m_entries[i].position == position && m_entries[i].current(nowMs)) {
@@ -169,7 +175,7 @@ void HeardList::stillHeard(std::uint8_t position, int levelDbm, int floorDbm, st
             take();
         }
     } else {
-        started(position, levelDbm, floorDbm, nowMs, fairDb);
+        started(position, levelDbm, floorDbm, nowMs, levels);
     }
 }
 
@@ -289,12 +295,12 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
     if (e->unanswered) {
         return Health::Fair;
     }
-    if (e->levelDb() < levels.fairDb) {
+    if (e->belowFair) {
         // Heard, but only below the fair level for as long as a level
         // stays current: close to the edge of decoding.
         return nowMs - e->aboveFairMs >= HeardList::ValidMs ? Health::Poor : Health::Fair;
     }
-    return e->levelDb() >= levels.strongDb ? Health::Strong : Health::Good;
+    return e->strong ? Health::Strong : Health::Good;
 }
 
 int moveTo(const HeardList &heard, int site, Health state, const Levels &levels, std::uint32_t nowMs)
