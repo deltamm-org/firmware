@@ -88,11 +88,33 @@ void HeardList::keep(int position)
 
 void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
 {
+    read(position, 16 * clampDbm(levelDbm), floorDbm, nowMs, fairDb);
+}
+
+void HeardList::read(std::uint8_t position, std::int32_t level16Dbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+{
     Entry &e = place(position, nowMs);
-    // A current level is smoothed; an old one is replaced.
+    // The level is the mean of the last few readings; an old level is
+    // replaced.
     const bool current = e.current(nowMs);
-    const int half = 2 * clampDbm(levelDbm);
-    e.levelHalfDbm = static_cast<std::int16_t>(current ? (e.levelHalfDbm + half) / 2 : half);
+    const std::size_t kept = current ? std::min<std::size_t>(e.readings, Readings - 1) : 0;
+    for (std::size_t k = kept; k > 0; --k) {
+        e.reading16Dbm[k] = e.reading16Dbm[k - 1];
+        e.readingMs[k] = e.readingMs[k - 1];
+    }
+    e.reading16Dbm[0] = static_cast<std::int16_t>(std::clamp<std::int32_t>(level16Dbm, -128 * 16, 127 * 16));
+    e.readingMs[0] = nowMs;
+    std::size_t n = kept + 1;
+    while (n > 1 && nowMs - e.readingMs[n - 1] >= ValidMs) {
+        --n;
+    }
+    e.readings = static_cast<std::uint8_t>(n);
+    std::int32_t sum = 0;
+    for (std::size_t k = 0; k < n; ++k) {
+        sum += e.reading16Dbm[k];
+    }
+    const auto count = static_cast<std::int32_t>(n);
+    e.level16Dbm = static_cast<std::int16_t>((2 * sum + (sum < 0 ? -count : count)) / (2 * count));
     e.floorDbm = clampDbm(floorDbm);
     if (!current || e.levelDb() >= fairDb) {
         e.aboveFairMs = nowMs;
@@ -102,12 +124,70 @@ void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::ui
     e.measuredMs = nowMs;
 }
 
-void HeardList::stillHeard(std::uint8_t position, std::uint32_t nowMs)
+void HeardList::take()
+{
+    const Pending p = m_pending;
+    m_pending = {};
+    if (p.position < 0 || p.bursts == 0) {
+        return;
+    }
+    const Entry *e = find(static_cast<std::uint8_t>(p.position));
+    if (p.bursts < ReadingBursts && e != nullptr && e->current(p.lastMs)) {
+        return;
+    }
+    // The mean in 1/16 dB, rounded to the nearest.
+    const std::int32_t sum = 32 * p.sumDbm;
+    const std::int32_t mean = (sum + (sum < 0 ? -p.bursts : p.bursts)) / (2 * p.bursts);
+    read(static_cast<std::uint8_t>(p.position), mean, p.floorDbm, p.lastMs, p.fairDb);
+}
+
+void HeardList::started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
+{
+    if (m_pending.paused && m_pending.position == position && nowMs - m_pending.fromMs < ReadingSpanMs) {
+        // Back from a check while it goes on: the same reading.
+        m_pending.sumDbm += clampDbm(levelDbm);
+        ++m_pending.bursts;
+        m_pending.lastMs = nowMs;
+        return;
+    }
+    take();
+    m_pending = {position, floorDbm, fairDb, clampDbm(levelDbm), 1, nowMs, nowMs};
+}
+
+void HeardList::stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb)
 {
     for (std::size_t i = 0; i < m_count; ++i) {
         if (m_entries[i].position == position && m_entries[i].current(nowMs)) {
             m_entries[i].measuredMs = nowMs;
         }
+    }
+    if (m_pending.position == position) {
+        m_pending.sumDbm += clampDbm(levelDbm);
+        ++m_pending.bursts;
+        m_pending.lastMs = nowMs;
+        if (nowMs - m_pending.fromMs >= ReadingSpanMs) {
+            take();
+        }
+    } else {
+        started(position, levelDbm, floorDbm, nowMs, fairDb);
+    }
+}
+
+void HeardList::pause()
+{
+    if (m_pending.position >= 0) {
+        m_pending.paused = true;
+    }
+}
+
+void HeardList::flush(std::uint32_t nowMs)
+{
+    if (m_pending.position < 0) {
+        return;
+    }
+    const bool stopped = !m_pending.paused && nowMs - m_pending.lastMs >= ReadingGapMs;
+    if (stopped || nowMs - m_pending.fromMs >= ReadingSpanMs) {
+        take();
     }
 }
 
@@ -131,6 +211,7 @@ void HeardList::renumber(std::span<const std::int16_t> moved)
     }
     m_count = kept;
     m_keep = to(m_keep);
+    m_pending = {}; // a reading of the old zone
 }
 
 const HeardList::Entry *HeardList::find(std::uint8_t position) const

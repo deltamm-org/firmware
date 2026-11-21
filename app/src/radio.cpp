@@ -492,7 +492,7 @@ void onDmrEvent(const services::dmr::Event &e)
         break;
     case Kind::Burst: {
         burstColourCode = e.colourCode;
-        roam::burst(e.colourCode, e.voice || e.type != DataType::Idle);
+        roam::burst(e.colourCode, e.voice || e.type != DataType::Idle, fm->status().rssiDbm);
         const bool lcBurst = e.voice || e.type == DataType::VoiceLcHeader || e.type == DataType::TerminatorWithLc;
         const auto lc = lcBurst ? services::dmr::FullLc::decode(e.payload()) : std::nullopt;
         // Idle bursts repeat the same fill; the first of each transmission

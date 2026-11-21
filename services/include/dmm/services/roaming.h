@@ -24,39 +24,71 @@ public:
     /// A level is current for this long after it was measured or the
     /// repeater was last heard.
     static constexpr std::uint32_t ValidMs = 120'000;
+    /// A reading of the repeater in use is the mean of its bursts over
+    /// ReadingSpanMs from the start of a transmission, then the next span
+    /// while it goes on: a beacon gives one, a call one every ReadingSpanMs.
+    /// Its bursts stopping for ReadingGapMs end it early, unless the radio
+    /// was away for a check during it. Of a current level, a reading of fewer
+    /// than ReadingBursts is dropped.
+    static constexpr std::uint32_t ReadingSpanMs = 5'000;
+    static constexpr std::uint32_t ReadingGapMs = 300;
+    static constexpr int ReadingBursts = 8;
+    /// The level is the mean of the last Readings readings, none older than
+    /// ValidMs: it follows a call within seconds, and beacons from one to
+    /// the next, while one faded reading moves it only part of the way.
+    static constexpr std::size_t Readings = 3;
 
     struct Entry
     {
         std::uint8_t position = 0;
-        // In half dB: smoothing in whole dB would stick a step short of a
-        // steady new level when coming from a stronger one.
-        std::int16_t levelHalfDbm = 0;
+        // In 1/16 dB: the mean of a few readings, which in whole dB would
+        // round to the stronger or weaker side.
+        std::int16_t level16Dbm = 0;
         std::int8_t floorDbm = 0;
-        std::uint8_t samples = 0; // levels measured while current, up to 255; 0: none
-        bool unanswered = false;  // a wake-up went unanswered since it was last heard
-        std::uint32_t measuredMs = 0;
+        std::uint8_t samples = 0;  // levels measured while current, up to 255; 0: none
+        std::uint8_t readings = 0; // of reading16Dbm, newest first, that count
+        bool unanswered = false;   // a wake-up went unanswered since it was last heard
+        std::int16_t reading16Dbm[Readings] = {};
+        std::uint32_t readingMs[Readings] = {};
+        std::uint32_t measuredMs = 0; // when it was last heard
         // When it was last at or above the fair level, or when its current
         // levels began if it has not been since.
         std::uint32_t aboveFairMs = 0;
 
-        // Rounded down, so that a steady level reads as itself from either side.
-        int levelDbm() const { return levelHalfDbm >> 1; }
+        // Rounded to the nearest dB, so that a steady level reads as itself
+        // from either side.
+        int levelDbm() const { return (level16Dbm + 8) >> 4; }
         int levelDb() const { return levelDbm() - floorDbm; }
         bool current(std::uint32_t nowMs) const { return samples > 0 && nowMs - measuredMs < ValidMs; }
     };
 
-    void clear() { m_count = 0; }
+    void clear()
+    {
+        m_count = 0;
+        m_pending = {};
+    }
     /// Repeater @p position (-1: none) is in use: a full list never drops
     /// it, so that how it was last heard stays known while others come and
     /// go. An entry with no level, which only marks the one in use as not
     /// answering, goes once another is in use.
     void keep(int position);
-    /// Repeater @p position heard at @p levelDbm on a channel whose floor is
+    /// Repeater @p position read at @p levelDbm on a channel whose floor is
     /// @p floorDbm; @p fairDb is the fair level it is judged against.
     void heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
-    /// Repeater @p position is heard again without a new level: a current
-    /// level stays current.
-    void stillHeard(std::uint8_t position, std::uint32_t nowMs);
+    /// A transmission of repeater @p position starts, its first burst at
+    /// @p levelDbm: a reading begins, after an open one is taken.
+    void started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    /// A burst of repeater @p position at @p levelDbm, still on the air: a
+    /// current level stays current, and the burst counts towards an open
+    /// reading or begins the next.
+    void stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, int fairDb = 6);
+    /// The radio leaves the repeater in use for a moment (a check): an open
+    /// reading only pauses, goes on with the transmission once back, and
+    /// ends with its span. So a beacon stays one reading, however many
+    /// checks come during it.
+    void pause();
+    /// Takes an open reading whose span has passed or whose bursts stopped.
+    void flush(std::uint32_t nowMs);
     /// Repeater @p position did not answer a wake-up: until it is heard
     /// again.
     void unanswered(std::uint8_t position, std::uint32_t nowMs);
@@ -68,11 +100,26 @@ public:
     std::span<const Entry> entries() const { return {m_entries, m_count}; }
 
 private:
+    struct Pending
+    {
+        int position = -1; // -1: no reading open
+        int floorDbm = 0;
+        int fairDb = 0;
+        std::int32_t sumDbm = 0;
+        int bursts = 0;
+        std::uint32_t fromMs = 0;
+        std::uint32_t lastMs = 0;
+        bool paused = false; // the radio was away during it: it ends with its span
+    };
+
     Entry &place(std::uint8_t position, std::uint32_t nowMs);
+    void read(std::uint8_t position, std::int32_t level16Dbm, int floorDbm, std::uint32_t nowMs, int fairDb);
+    void take();
 
     Entry m_entries[Capacity];
     std::size_t m_count = 0;
     int m_keep = -1;
+    Pending m_pending;
 };
 
 /// The order a search tries the zone's @p zoneSize repeaters in: @p current
