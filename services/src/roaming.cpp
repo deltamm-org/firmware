@@ -86,24 +86,114 @@ void HeardList::keep(int position)
     m_count = kept;
 }
 
-void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs)
+void HeardList::heard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, const Levels &levels)
+{
+    read(position, 16 * clampDbm(levelDbm), floorDbm, nowMs, levels);
+}
+
+void HeardList::read(std::uint8_t position, std::int32_t level16Dbm, int floorDbm, std::uint32_t nowMs,
+    const Levels &levels)
 {
     Entry &e = place(position, nowMs);
-    // A current level is smoothed; an old one is replaced.
+    // The level is the mean of the last few readings; an old level is
+    // replaced.
     const bool current = e.current(nowMs);
-    e.levelDbm = clampDbm(current ? (e.levelDbm + levelDbm) / 2 : levelDbm);
+    const std::size_t kept = current ? std::min<std::size_t>(e.readings, Readings - 1) : 0;
+    for (std::size_t k = kept; k > 0; --k) {
+        e.reading16Dbm[k] = e.reading16Dbm[k - 1];
+        e.readingMs[k] = e.readingMs[k - 1];
+    }
+    e.reading16Dbm[0] = static_cast<std::int16_t>(std::clamp<std::int32_t>(level16Dbm, -128 * 16, 127 * 16));
+    e.readingMs[0] = nowMs;
+    std::size_t n = kept + 1;
+    while (n > 1 && nowMs - e.readingMs[n - 1] >= ValidMs) {
+        --n;
+    }
+    e.readings = static_cast<std::uint8_t>(n);
+    std::int32_t sum = 0;
+    for (std::size_t k = 0; k < n; ++k) {
+        sum += e.reading16Dbm[k];
+    }
+    const auto count = static_cast<std::int32_t>(n);
+    e.level16Dbm = static_cast<std::int16_t>((2 * sum + (sum < 0 ? -count : count)) / (2 * count));
     e.floorDbm = clampDbm(floorDbm);
+    // Strong and below fair each end only backDb past their level.
+    const int db = e.levelDb();
+    e.strong = db >= levels.strongDb || (current && e.strong && db >= levels.strongDb - levels.backDb);
+    e.belowFair = db < levels.fairDb || (current && e.belowFair && db < levels.fairDb + levels.backDb);
+    if (!current || !e.belowFair) {
+        e.aboveFairMs = nowMs;
+    }
     e.unanswered = false;
     e.samples = current ? static_cast<std::uint8_t>(std::min(e.samples + 1, 255)) : 1;
     e.measuredMs = nowMs;
 }
 
-void HeardList::stillHeard(std::uint8_t position, std::uint32_t nowMs)
+void HeardList::take()
+{
+    const Pending p = m_pending;
+    m_pending = {};
+    if (p.position < 0 || p.bursts == 0) {
+        return;
+    }
+    const Entry *e = find(static_cast<std::uint8_t>(p.position));
+    if (p.bursts < ReadingBursts && e != nullptr && e->current(p.lastMs)) {
+        return;
+    }
+    // The mean in 1/16 dB, rounded to the nearest.
+    const std::int32_t sum = 32 * p.sumDbm;
+    const std::int32_t mean = (sum + (sum < 0 ? -p.bursts : p.bursts)) / (2 * p.bursts);
+    read(static_cast<std::uint8_t>(p.position), mean, p.floorDbm, p.lastMs, p.levels);
+}
+
+void HeardList::started(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs, const Levels &levels)
+{
+    if (m_pending.paused && m_pending.position == position && nowMs - m_pending.fromMs < ReadingSpanMs) {
+        // Back from a check while it goes on: the same reading.
+        m_pending.sumDbm += clampDbm(levelDbm);
+        ++m_pending.bursts;
+        m_pending.lastMs = nowMs;
+        return;
+    }
+    take();
+    m_pending = {position, floorDbm, levels, clampDbm(levelDbm), 1, nowMs, nowMs};
+}
+
+void HeardList::stillHeard(std::uint8_t position, int levelDbm, int floorDbm, std::uint32_t nowMs,
+    const Levels &levels)
 {
     for (std::size_t i = 0; i < m_count; ++i) {
         if (m_entries[i].position == position && m_entries[i].current(nowMs)) {
             m_entries[i].measuredMs = nowMs;
         }
+    }
+    if (m_pending.position == position) {
+        m_pending.sumDbm += clampDbm(levelDbm);
+        ++m_pending.bursts;
+        m_pending.lastMs = nowMs;
+        if (nowMs - m_pending.fromMs >= ReadingSpanMs) {
+            take();
+        }
+    } else {
+        started(position, levelDbm, floorDbm, nowMs, levels);
+    }
+}
+
+void HeardList::pause()
+{
+    if (m_pending.position >= 0) {
+        m_pending.paused = true;
+    }
+}
+
+void HeardList::flush(std::uint32_t nowMs)
+{
+    if (m_pending.position < 0) {
+        return;
+    }
+    const bool stopped = !m_pending.paused && nowMs - m_pending.lastMs >= ReadingGapMs;
+    if (stopped || nowMs - m_pending.fromMs >= ReadingSpanMs) {
+        take();
     }
 }
 
@@ -127,6 +217,7 @@ void HeardList::renumber(std::span<const std::int16_t> moved)
     }
     m_count = kept;
     m_keep = to(m_keep);
+    m_pending = {}; // a reading of the old zone
 }
 
 const HeardList::Entry *HeardList::find(std::uint8_t position) const
@@ -197,16 +288,24 @@ Health health(const HeardList &heard, int site, const Levels &levels, std::uint3
     }
     if (!e->current(nowMs)) {
         // Silent after being heard well: likely just idle. Silent after
-        // fading below the weak level: likely out of reach.
-        const bool faded = e->samples > 0 && e->levelDb() < levels.weakDb;
+        // fading below the fair level: likely out of reach.
+        const bool faded = e->samples > 0 && e->levelDb() < levels.fairDb;
         return e->unanswered || faded ? Health::Lost : Health::Quiet;
     }
-    return e->levelDb() >= levels.weakDb && !e->unanswered ? Health::Good : Health::Weak;
+    if (e->unanswered) {
+        return Health::Fair;
+    }
+    if (e->belowFair) {
+        // Heard, but only below the fair level for as long as a level
+        // stays current: close to the edge of decoding.
+        return nowMs - e->aboveFairMs >= HeardList::ValidMs ? Health::Poor : Health::Fair;
+    }
+    return e->strong ? Health::Strong : Health::Good;
 }
 
 int moveTo(const HeardList &heard, int site, Health state, const Levels &levels, std::uint32_t nowMs)
 {
-    if (state == Health::Good) {
+    if (state == Health::Strong) {
         return -1;
     }
     const HeardList::Entry *sorted[HeardList::Capacity];
@@ -214,15 +313,20 @@ int moveTo(const HeardList &heard, int site, Health state, const Levels &levels,
     for (std::size_t i = 0; i < n; ++i) {
         const HeardList::Entry &e = *sorted[i];
         switch (state) {
-        case Health::Weak: {
+        case Health::Good:
+        case Health::Fair: {
             const HeardList::Entry *own = heard.find(static_cast<std::uint8_t>(site));
             if (e.samples >= 2) {
                 return e.levelDb() >= own->levelDb() + levels.marginDb ? e.position : -1;
             }
             break; // measured once: the next strongest may do
         }
+        case Health::Poor: {
+            const HeardList::Entry *own = heard.find(static_cast<std::uint8_t>(site));
+            return e.levelDb() >= own->levelDb() + levels.marginDb ? e.position : -1;
+        }
         case Health::Quiet:
-            return e.levelDb() >= levels.goodDb ? e.position : -1;
+            return e.levelDb() >= levels.searchDb ? e.position : -1;
         default: {
             // Faded out: only to one stronger than it was last heard, so
             // that a weak repeater gone quiet is not left for a weaker one.
@@ -242,37 +346,91 @@ void Activity::heard(bool call, std::uint32_t nowMs)
     }
     m_heard = true;
     m_lastMs = nowMs;
-    if (call) {
-        m_call = true;
-        m_callMs = nowMs;
+    if (call && !otherLately(nowMs)) {
+        m_traffic = true;
+        m_trafficMs = nowMs;
     }
 }
 
-bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs)
+bool Listening::due(const HeardList &heard, int site, const Levels &levels, bool idle, std::uint32_t nowMs,
+    bool busy)
 {
     const Health state = health(heard, site, levels, nowMs);
-    if (state == Health::Good || state == Health::Weak) {
+    if (state == Health::Strong || state == Health::Good || state == Health::Fair) {
         m_scanning = false;
-        const bool below = state == Health::Weak || heard.find(static_cast<std::uint8_t>(site))->levelDb() < levels.goodDb;
-        return below && idle && (!m_any || nowMs - m_lastMs >= HopMs);
+        m_planned = state != Health::Strong;
+        if (state == Health::Strong) {
+            m_scanBurst = false;
+            return false;
+        }
+        // A burst of passes ScanGoodMs after the last one while good,
+        // ScanFairMs while fair; the first after it was first below
+        // strong. A move ends a burst.
+        if (!m_scanTimer) {
+            m_scanTimer = true;
+            m_scanLastMs = nowMs;
+        }
+        if (site != m_scanSite) {
+            m_scanSite = site;
+            m_scanBurst = false;
+        }
+        if (m_scanBurst && static_cast<std::int32_t>(nowMs - m_scanEndMs) >= 0) {
+            m_scanBurst = false;
+        }
+        const std::uint32_t period = state == Health::Good ? ScanGoodMs : ScanFairMs;
+        m_scanPeriodMs = period;
+        if (!m_scanBurst && !busy && nowMs - m_scanLastMs >= period) {
+            m_scanBurst = true;
+            m_scanEndMs = nowMs + BurstMs;
+            m_scanLastMs = nowMs;
+        }
+        if (m_scanBurst) {
+            return !busy && (!m_any || nowMs - m_lastMs >= DwellMs);
+        }
+        return idle && (!m_any || nowMs - m_lastMs >= HopMs);
     }
+    m_scanBurst = false;
+    m_planned = true;
     if (!m_scanning) {
         m_scanning = true;
         m_burstEndMs = nowMs + BurstMs;
+        burstStarted(nowMs);
         m_gapMs = FirstGapMs;
+        m_passesFromMs = nowMs;
+        m_fixedGap = state == Health::Lost;
     }
     if (static_cast<std::int32_t>(nowMs - m_burstEndMs) >= 0) {
-        // Lost: no call on the repeater in use to miss, so the gaps do not grow.
-        const bool lost = state == Health::Lost;
+        // Lost: no call on the repeater in use to miss, so the gaps do not
+        // grow; unless nothing at all was heard for SilentMs: out of reach
+        // for that long, a repeater is not likely to turn up any minute.
+        bool heardLately = nowMs - m_passesFromMs < SilentMs;
+        for (const HeardList::Entry &e : heard.entries()) {
+            heardLately = heardLately || (e.samples > 0 && nowMs - e.measuredMs < SilentMs);
+        }
+        const bool lost = state == Health::Lost && heardLately;
+        m_fixedGap = lost;
         if (nowMs - m_burstEndMs < (lost ? FirstGapMs : m_gapMs)) {
             return false;
         }
         m_burstEndMs = nowMs + BurstMs;
+        burstStarted(nowMs);
         if (!lost) {
             m_gapMs = std::min(m_gapMs * 2, MaxGapMs);
         }
     }
     return !m_any || nowMs - m_lastMs >= DwellMs;
+}
+
+Listening::Bursts Listening::bursts(std::uint32_t nowMs, std::uint32_t &nextMs) const
+{
+    if (!m_planned) {
+        return Bursts::None;
+    }
+    if (m_scanBurst || (m_scanning && static_cast<std::int32_t>(nowMs - m_burstEndMs) < 0)) {
+        return Bursts::Now;
+    }
+    nextMs = m_scanning ? m_burstEndMs + (m_fixedGap ? FirstGapMs : m_gapMs) : m_scanLastMs + m_scanPeriodMs;
+    return Bursts::Later;
 }
 
 int Listening::next(const HeardList &heard, std::span<const std::uint32_t> receiveHz, int site, std::uint32_t nowMs)

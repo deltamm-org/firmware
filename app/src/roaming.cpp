@@ -113,7 +113,7 @@ void noteHeard(int i, int dbm)
 {
     const int floorDbm = floorAt(i); // takes sitesLock itself
     sitesLock.lock();
-    heardList.heard(static_cast<std::uint8_t>(i), dbm, floorDbm, os::nowMs());
+    heardList.heard(static_cast<std::uint8_t>(i), dbm, floorDbm, os::nowMs(), Levels);
     sitesLock.unlock();
 }
 
@@ -293,7 +293,7 @@ lib::StaticString<12> seconds(std::uint32_t ms)
         line << "heard: repeater " << e.position + 1 << ", " << mhz(siteAt(e.position).receiveHz).view()
              << " MHz, ";
         if (e.samples > 0) {
-            line << e.levelDbm << " dBm ";
+            line << e.levelDbm() << " dBm ";
         } else {
             line << "no level, ";
         }
@@ -338,7 +338,7 @@ lib::StaticString<12> seconds(std::uint32_t ms)
     sitesLock.lock();
     const std::size_t n = roaming::searchOrder(heardList, skipCurrent ? -1 : site, count, os::nowMs(), order);
     sitesLock.unlock();
-    roaming::Pick pick(Levels.goodDb);
+    roaming::Pick pick(Levels.searchDb);
     std::size_t tried = 0;
     bool done = false;
     while (tried < n && !done && !searchInterrupted()) {
@@ -369,7 +369,7 @@ lib::StaticString<12> seconds(std::uint32_t ms)
 
 [[gnu::noinline]] void logMove(int to, roaming::Health state)
 {
-    constexpr const char *States[] = {"good", "weak", "quiet", "lost"};
+    constexpr const char *States[] = {"strong", "good", "fair", "poor", "quiet", "lost"};
     log::info("roam") << "moving from repeater " << site + 1 << " (" << States[static_cast<int>(state)]
                       << ") to repeater " << to + 1;
 }
@@ -394,6 +394,9 @@ lib::StaticString<12> seconds(std::uint32_t ms)
 [[gnu::noinline]] bool check(int i)
 {
     away = true;
+    sitesLock.lock();
+    heardList.pause();
+    sitesLock.unlock();
     tuneTo(i);
     const std::uint32_t hz = tunedHz();
     const Heard h = listenHere(CheckCarrierMs, CheckTimingMs, CheckBurstMs);
@@ -456,12 +459,14 @@ void roamStep()
     }
     const roaming::Health state = roaming::health(heardList, site, Levels, now);
     const bool busy = activity.busy(now);
-    const bool passes = state == roaming::Health::Quiet || state == roaming::Health::Lost;
+    const bool passes =
+        state == roaming::Health::Poor || state == roaming::Health::Quiet || state == roaming::Health::Lost;
     const int to = automatic && !busy ? roaming::moveTo(heardList, site, state, Levels, now) : -1;
     const bool listen = automatic && to < 0 && !(passes && busy) &&
-        listener.due(heardList, site, Levels, activity.idle(now), now);
+        listener.due(heardList, site, Levels, activity.idle(now), now, busy);
+    const bool pass = listen && listener.passing();
     int next = -1;
-    if (listen && !passes) {
+    if (listen && !pass) {
         for (std::size_t i = 0; i < siteCount; ++i) {
             hz[i] = sites[i].receiveHz;
         }
@@ -474,7 +479,7 @@ void roamStep()
     if (to >= 0) {
         logMove(to, state);
         useSite(to);
-    } else if (listen && passes) {
+    } else if (pass) {
         scanPass();
         listener.done(os::nowMs());
     } else if (next >= 0) {
@@ -548,25 +553,38 @@ void callHeard()
     }
 }
 
-void level(int dbm)
+void otherCall()
 {
-    if (roamingChannel && !away && site >= 0) {
-        noteHeard(site, dbm);
+    if (roamingChannel && !away) {
+        activity.otherCall(os::nowMs());
     }
 }
 
-void burst(std::uint8_t colourCode, bool call)
+void level(int dbm)
+{
+    if (roamingChannel && !away && site >= 0) {
+        // A reading of the repeater in use begins; its bursts make it.
+        const int floorDbm = floorAt(site); // takes sitesLock itself
+        sitesLock.lock();
+        heardList.started(static_cast<std::uint8_t>(site), dbm, floorDbm, os::nowMs(), Levels);
+        sitesLock.unlock();
+    }
+}
+
+void burst(std::uint8_t colourCode, bool call, int dbm)
 {
     if (!roamingChannel || away) {
         return;
     }
     const std::uint32_t now = os::nowMs();
     activity.heard(call, now);
-    // Its level is read when its slot timing is found, which stays locked
-    // through back-to-back calls: each burst keeps it current meanwhile.
+    // Its slot timing stays locked through back-to-back calls: meanwhile
+    // its bursts keep it current and are read every few seconds, so that
+    // a level changing during a long call is followed.
     if (site >= 0 && colourCode == tunedColourCode()) {
+        const int floorDbm = floorAt(site); // takes sitesLock itself
         sitesLock.lock();
-        heardList.stillHeard(static_cast<std::uint8_t>(site), now);
+        heardList.stillHeard(static_cast<std::uint8_t>(site), dbm, floorDbm, now, Levels);
         sitesLock.unlock();
     }
 }
@@ -639,6 +657,9 @@ void logStatus()
 
 void step()
 {
+    sitesLock.lock();
+    heardList.flush(os::nowMs());
+    sitesLock.unlock();
     roamStep();
 }
 
@@ -661,6 +682,10 @@ void roamingView(RoamingView &out)
         const std::uint8_t i = out.entries[k].position;
         out.receiveHz[k] = i < siteCount ? sites[i].receiveHz : 0;
     }
+    const std::uint32_t now = os::nowMs();
+    std::uint32_t next = now;
+    out.bursts = automatic ? listener.bursts(now, next) : services::roaming::Listening::Bursts::None;
+    out.burstInMs = static_cast<std::int32_t>(next - now) > 0 ? next - now : 0;
     sitesLock.unlock();
 }
 
